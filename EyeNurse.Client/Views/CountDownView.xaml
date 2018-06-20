@@ -20,7 +20,7 @@
     WindowStyle="None"
     mc:Ignorable="d">
     <Grid>
-        <ProgressBar x:Name="Percent" />
-        <TextBlock x:Name="Time" />
+        <ProgressBar Value="{Binding Services.CountdownPercent}" Maximum="100"/>
+        <TextBlock Text="{Binding Services.Countdown}" />
     </Grid>
 </Window>

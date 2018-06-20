@@ -77,6 +77,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Bootstrapper.cs" />
+    <Compile Include="Configs\AppSetting.cs" />
     <Compile Include="Configs\WindowPosition.cs" />
     <Compile Include="Helpers\JsonHelper.cs" />
     <Compile Include="Services\AppServices.cs" />

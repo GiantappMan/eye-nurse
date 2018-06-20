@@ -23,7 +23,7 @@ namespace EyeNurse.Client.ViewModels
 
         protected override async void OnInitialize()
         {
-            _windowPosition = await _services.LoadConfigAsync<WindowPosition>();
+            _windowPosition = await Services.LoadConfigAsync<WindowPosition>();
             if (_windowPosition == null)
             {
                 _windowPosition = new WindowPosition();
@@ -47,66 +47,14 @@ namespace EyeNurse.Client.ViewModels
 
         internal async void SavePosition()
         {
-            await _services.SaveConfigAsync(_windowPosition);
+            await Services.SaveConfigAsync(_windowPosition);
         }
 
         #endregion
 
         #region properties
 
-        #region Percent
-
-        /// <summary>
-        /// The <see cref="Percent" /> property's name.
-        /// </summary>
-        public const string PercentPropertyName = "Percent";
-
-        private double _Percent = 50;
-
-        /// <summary>
-        /// Percent
-        /// </summary>
-        public double Percent
-        {
-            get { return _Percent; }
-
-            set
-            {
-                if (_Percent == value) return;
-
-                _Percent = value;
-                NotifyOfPropertyChange(PercentPropertyName);
-            }
-        }
-
-        #endregion
-
-        #region Time
-
-        /// <summary>
-        /// The <see cref="Time" /> property's name.
-        /// </summary>
-        public const string TimePropertyName = "Time";
-
-        private TimeSpan _Time;
-
-        /// <summary>
-        /// Time
-        /// </summary>
-        public TimeSpan Time
-        {
-            get { return _Time; }
-
-            set
-            {
-                if (_Time == value) return;
-
-                _Time = value;
-                NotifyOfPropertyChange(TimePropertyName);
-            }
-        }
-
-        #endregion
+        public AppServices Services => _services;
 
         #region PositionLeft
 
