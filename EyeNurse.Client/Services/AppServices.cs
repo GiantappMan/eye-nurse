@@ -11,6 +11,18 @@ namespace EyeNurse.Client.Services
     {
         #region public methods
 
+        public void Start()
+        {
+
+        }
+
+        public void Pause()
+        {
+
+        }
+
+        #region config
+
         public async Task<T> LoadConfigAsync<T>(string path = null) where T : new()
         {
             try
@@ -42,6 +54,8 @@ namespace EyeNurse.Client.Services
             var rootDir = Environment.CurrentDirectory;
             return $"{rootDir}\\Config\\{typeof(T).Name}.json";
         }
+
+        #endregion
 
         #endregion
     }

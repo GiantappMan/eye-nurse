@@ -112,7 +112,11 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Content Include="Resources\Sounds\break.mid" />
+    <Content Include="Resources\Sounds\breakpre.mid" />
+    <Content Include="Resources\Sounds\unlock.mid" />
+  </ItemGroup>
   <ItemGroup>
     <Page Include="Views\CountDownView.xaml">
       <SubType>Designer</SubType>
