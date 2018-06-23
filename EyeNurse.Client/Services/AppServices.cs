@@ -25,7 +25,6 @@ namespace EyeNurse.Client.Services
             timer = new Timer();
             timer.Interval = 1000;
             timer.Elapsed += Timer_Elapsed;
-            Start();
             appSetting = await LoadConfigAsync<AppSetting>();
             if (appSetting == null)
             {
@@ -37,6 +36,7 @@ namespace EyeNurse.Client.Services
             }
 
             Countdown = appSetting.AlarmInterval;
+            Start();
         }
 
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
@@ -125,8 +125,6 @@ namespace EyeNurse.Client.Services
                     path = GetDefaultPath<T>();
 
                 var config = await JsonHelper.JsonDeserializeFromFileAsync<T>(path);
-                if (config == null)
-                    config = new T();
                 return config;
             }
             catch (Exception ex)

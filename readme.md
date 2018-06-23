@@ -1,5 +1,8 @@
 # [EyeNurse](https://github.com/MscoderStudio/EyeNurse)
 
+## 仍在开发中不可用
+
+
 ## 功能概要：
 * **强制定时休息**： 通过定时锁屏的功能养成使用电脑的好习惯。
 

@@ -62,6 +62,8 @@ namespace EyeNurse.Client.Helpers
         }
         public static T JsonDeserializeFromFile<T>(string path)
         {
+            if (!File.Exists(path))
+                return default(T);
             string json = File.ReadAllText(path);
             return JsonDeserialize<T>(json);
         }
