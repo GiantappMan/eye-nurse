@@ -6,21 +6,35 @@
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="CountDownView"
-    Width="148"
-    Height="56"
+    Width="60"
+    Height="20"
     MinWidth="0"
     HorizontalAlignment="Center"
     VerticalAlignment="Center"
     AllowsTransparency="True"
     BorderThickness="0"
+    ContextMenu="{StaticResource ContextMenu}"
     Left="{Binding PositionLeft, Mode=TwoWay}"
     Opacity="0.9"
+    ShowInTaskbar="False"
     Top="{Binding PositionTop, Mode=TwoWay}"
     Topmost="True"
     WindowStyle="None"
     mc:Ignorable="d">
+    <Window.Resources />
     <Grid>
-        <ProgressBar Value="{Binding Services.CountdownPercent}" Maximum="100"/>
-        <TextBlock Text="{Binding Services.Countdown}" />
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="菜单一">
+                    <MenuItem Header="子菜单" />
+                </MenuItem>
+                <MenuItem Header="菜单二" />
+            </ContextMenu>
+        </Grid.ContextMenu>
+        <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
+        <TextBlock
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Text="{Binding Services.Countdown, StringFormat=mm\\:ss}" />
     </Grid>
 </Window>

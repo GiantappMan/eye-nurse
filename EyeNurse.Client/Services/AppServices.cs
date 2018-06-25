@@ -81,7 +81,7 @@ namespace EyeNurse.Client.Services
         /// </summary>
         public const string CountdownPercentPropertyName = "CountdownPercent";
 
-        private double _CountdownPercent;
+        private double _CountdownPercent = 100;
 
         /// <summary>
         /// CountdownPercent

@@ -27,6 +27,7 @@ namespace EyeNurse.Client
             container.
                 Singleton<IWindowManager, WindowManager>().
                 Singleton<CountDownViewModel>().
+                Singleton<ContextMenuViewModel>(nameof(ContextMenuViewModel)).
                 Singleton<AppServices>();
         }
 
