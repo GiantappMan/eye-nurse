@@ -22,15 +22,7 @@
     WindowStyle="None"
     mc:Ignorable="d">
     <Window.Resources />
-    <Grid>
-        <Grid.ContextMenu>
-            <ContextMenu>
-                <MenuItem Header="菜单一">
-                    <MenuItem Header="子菜单" />
-                </MenuItem>
-                <MenuItem Header="菜单二" />
-            </ContextMenu>
-        </Grid.ContextMenu>
+    <Grid ContextMenu="{StaticResource ContextMenu}">
         <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
         <TextBlock
             HorizontalAlignment="Center"

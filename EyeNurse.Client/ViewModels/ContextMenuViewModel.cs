@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EyeNurse.Client.ViewModels
 {
-    public class ContextMenuViewModel : PropertyChangedBase
+    public class ContextMenuViewModel : Screen
     {
         public ContextMenuViewModel()
         {
@@ -16,7 +16,6 @@ namespace EyeNurse.Client.ViewModels
 
         #region properties
 
-
         #region Desc
 
         /// <summary>
@@ -24,7 +23,7 @@ namespace EyeNurse.Client.ViewModels
         /// </summary>
         public const string DescPropertyName = "Desc";
 
-        private string _Desc="tes\r\ntsetst";
+        private string _Desc = "tes\r\ntsetst";
 
         /// <summary>
         /// Desc
@@ -43,6 +42,41 @@ namespace EyeNurse.Client.ViewModels
         }
 
         #endregion
+
+        #endregion
+
+        #region methods
+
+        public void ExitApp()
+        {
+
+        }
+
+        #endregion
+
+        #region commands
+
+        //#region ExitAppCommand
+
+        //private DelegateCommand _ExitAppCommand;
+
+        ///// <summary>
+        ///// Gets the ExitAppCommand.
+        ///// </summary>
+        //public DelegateCommand ExitAppCommand
+        //{
+        //    get
+        //    {
+        //        return _ExitAppCommand ?? (_ExitAppCommand = new DelegateCommand(ExecuteExitAppCommand));
+        //    }
+        //}
+
+        //private void ExecuteExitAppCommand()
+        //{
+
+        //}
+
+        //#endregion
 
         #endregion
     }

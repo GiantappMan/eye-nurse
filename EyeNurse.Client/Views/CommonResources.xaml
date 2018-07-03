@@ -17,7 +17,8 @@
         </MenuItem>
         <MenuItem Command="{Binding HideWindowCommand}" Header="推迟" />
         <Separator />
-        <MenuItem Command="{Binding ExitApplicationCommand}" Header="退出" />
+        <MenuItem x:Name="ExitApp" Header="退出" />
+        <TextBox x:Name="Desc" Text="{Binding Desc}" />
     </ContextMenu>
 
     <tb:TaskbarIcon
