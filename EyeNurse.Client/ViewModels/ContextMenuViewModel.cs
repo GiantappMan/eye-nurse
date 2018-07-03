@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace EyeNurse.Client.ViewModels
 {
@@ -49,34 +50,8 @@ namespace EyeNurse.Client.ViewModels
 
         public void ExitApp()
         {
-
+            Application.Current.Shutdown();
         }
-
-        #endregion
-
-        #region commands
-
-        //#region ExitAppCommand
-
-        //private DelegateCommand _ExitAppCommand;
-
-        ///// <summary>
-        ///// Gets the ExitAppCommand.
-        ///// </summary>
-        //public DelegateCommand ExitAppCommand
-        //{
-        //    get
-        //    {
-        //        return _ExitAppCommand ?? (_ExitAppCommand = new DelegateCommand(ExecuteExitAppCommand));
-        //    }
-        //}
-
-        //private void ExecuteExitAppCommand()
-        //{
-
-        //}
-
-        //#endregion
 
         #endregion
     }
