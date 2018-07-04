@@ -1,5 +1,7 @@
-﻿using EyeNurse.Client.Configs;
+﻿using Caliburn.Micro;
+using EyeNurse.Client.Configs;
 using EyeNurse.Client.Helpers;
+using EyeNurse.Client.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -12,37 +14,67 @@ namespace EyeNurse.Client.Services
 {
     public class AppServices : INotifyPropertyChanged
     {
-        Timer timer;
-        AppSetting appSetting;
+        Timer _timer;
+        bool _isResting;
+        AppSetting _appSetting;
+        IWindowManager _windowManager;
 
-        public AppServices()
+        public AppServices(IWindowManager windowManager)
         {
+            _windowManager = windowManager;
             Init();
         }
 
         private async void Init()
         {
-            timer = new Timer();
-            timer.Interval = 1000;
-            timer.Elapsed += Timer_Elapsed;
-            appSetting = await LoadConfigAsync<AppSetting>();
-            if (appSetting == null)
+            _timer = new Timer();
+            _timer.Interval = 1000;
+            _timer.Elapsed += Timer_Elapsed;
+            _appSetting = await LoadConfigAsync<AppSetting>();
+            if (_appSetting == null)
             {
                 //默认值
-                appSetting = new AppSetting()
+                _appSetting = new AppSetting()
                 {
-                    AlarmInterval = new TimeSpan(0, 45, 0)
+                    //AlarmInterval = new TimeSpan(0, 45, 0)
+                    AlarmInterval = new TimeSpan(0, 0, 10),
+                    RestTime = new TimeSpan(0, 0, 10)
                 };
             }
 
-            Countdown = appSetting.AlarmInterval;
+            Countdown = _appSetting.AlarmInterval;
             Start();
         }
 
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
-            CountdownPercent = Countdown.TotalSeconds / appSetting.AlarmInterval.TotalSeconds * 100;
+            if (!_isResting)
+            {
+                Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
+                CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
+                if (Countdown.TotalSeconds <= 0)
+                {
+                    _timer.Stop();
+                    var lockScreen = IoC.Get<LockScreenViewModel>();
+                    Execute.OnUIThread(() =>
+                    {
+                        _windowManager.ShowWindow(lockScreen);
+                    });
+                    _isResting = true;
+                    _timer.Start();
+                }
+            }
+            else
+            {
+                RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
+                RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
+                if (RestTimeCountdown.TotalSeconds <= 0)
+                {
+                    _timer.Stop();
+                    _isResting = false;
+                    _timer.Start();
+                }
+            }
         }
 
         #region properties
@@ -101,18 +133,72 @@ namespace EyeNurse.Client.Services
 
         #endregion
 
+        #region RestTimeCountdown
+
+        /// <summary>
+        /// The <see cref="RestTimeCountdown" /> property's name.
+        /// </summary>
+        public const string RestTimeCountdownPropertyName = "RestTimeCountdown";
+
+        private TimeSpan _RestTimeCountdown;
+
+        /// <summary>
+        /// RestTimeCountdown
+        /// </summary>
+        public TimeSpan RestTimeCountdown
+        {
+            get { return _RestTimeCountdown; }
+
+            set
+            {
+                if (_RestTimeCountdown == value) return;
+
+                _RestTimeCountdown = value;
+                NotifyOfPropertyChange(RestTimeCountdownPropertyName);
+            }
+        }
+
+        #endregion
+
+        #region RestTimeCountdownPercent
+
+        /// <summary>
+        /// The <see cref="RestTimeCountdownPercent" /> property's name.
+        /// </summary>
+        public const string RestTimeCountdownPercentPropertyName = "RestTimeCountdownPercent";
+
+        private double _RestTimeCountdownPercent = 100;
+
+        /// <summary>
+        /// RestTimeCountdownPercent
+        /// </summary>
+        public double RestTimeCountdownPercent
+        {
+            get { return _RestTimeCountdownPercent; }
+
+            set
+            {
+                if (_RestTimeCountdownPercent == value) return;
+
+                _RestTimeCountdownPercent = value;
+                NotifyOfPropertyChange(RestTimeCountdownPercentPropertyName);
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region public methods
 
         public void Start()
         {
-            timer.Start();
+            _timer.Start();
         }
 
         public void Pause()
         {
-            timer.Stop();
+            _timer.Stop();
         }
 
         #region config
