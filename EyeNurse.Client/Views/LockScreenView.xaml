@@ -6,12 +6,20 @@
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="LockScreenView"
-    Width="800"
-    Height="450"
+    Topmost="True"
     WindowState="Maximized"
+    WindowStyle="None"
     mc:Ignorable="d">
     <Grid>
-        <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
+        <ProgressBar
+            VerticalAlignment="Center"
+            Maximum="100"
+            Value="{Binding Services.RestTimeCountdownPercent, FallbackValue=100}" />
+        <TextBlock
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Text="{Binding Services.RestTimeCountdown, StringFormat=mm\\:ss}" />
+        <!--<TextBlock Text="{Binding Services.IsResting}" />-->
         <Button
             x:Name="Exit"
             HorizontalAlignment="Right"

@@ -50,11 +50,6 @@ namespace EyeNurse.Client.ViewModels
             await Services.SaveConfigAsync(_windowPosition);
         }
 
-        public void Test()
-        {
-
-        }
-
         #endregion
 
         #region properties

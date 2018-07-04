@@ -96,6 +96,7 @@
     <Compile Include="ViewModels\CountDownViewModel.cs" />
     <Compile Include="ViewModels\ContextMenuViewModel.cs" />
     <Compile Include="ViewModels\LockScreenViewModel.cs" />
+    <Compile Include="Views\Converters\InverseBooleanConveter.cs" />
     <Compile Include="Views\CountDownView.xaml.cs">
       <DependentUpon>CountDownView.xaml</DependentUpon>
     </Compile>
@@ -151,5 +152,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

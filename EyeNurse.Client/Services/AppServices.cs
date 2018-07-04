@@ -15,9 +15,9 @@ namespace EyeNurse.Client.Services
     public class AppServices : INotifyPropertyChanged
     {
         Timer _timer;
-        bool _isResting;
         AppSetting _appSetting;
         IWindowManager _windowManager;
+        LockScreenViewModel _lastLockScreenViewModel;
 
         public AppServices(IWindowManager windowManager)
         {
@@ -30,6 +30,12 @@ namespace EyeNurse.Client.Services
             _timer = new Timer();
             _timer.Interval = 1000;
             _timer.Elapsed += Timer_Elapsed;
+            await ResetCountDownAsync();
+            Start();
+        }
+
+        private async Task ResetCountDownAsync()
+        {
             _appSetting = await LoadConfigAsync<AppSetting>();
             if (_appSetting == null)
             {
@@ -43,24 +49,25 @@ namespace EyeNurse.Client.Services
             }
 
             Countdown = _appSetting.AlarmInterval;
-            Start();
+            CountdownPercent = 100;
         }
 
-        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        private async void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            if (!_isResting)
+            if (!IsResting)
             {
                 Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
                 CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
                 if (Countdown.TotalSeconds <= 0)
                 {
                     _timer.Stop();
-                    var lockScreen = IoC.Get<LockScreenViewModel>();
+                    _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
+                    RestTimeCountdown = _appSetting.RestTime;
                     Execute.OnUIThread(() =>
                     {
-                        _windowManager.ShowWindow(lockScreen);
+                        _windowManager.ShowWindow(_lastLockScreenViewModel);
                     });
-                    _isResting = true;
+                    IsResting = true;
                     _timer.Start();
                 }
             }
@@ -70,14 +77,49 @@ namespace EyeNurse.Client.Services
                 RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
                 if (RestTimeCountdown.TotalSeconds <= 0)
                 {
+                    //休息结束
+                    if (_lastLockScreenViewModel != null)
+                    {
+                        _lastLockScreenViewModel.TryClose();
+                        _lastLockScreenViewModel = null;
+                    }
+
                     _timer.Stop();
-                    _isResting = false;
+                    IsResting = false;
+                    await ResetCountDownAsync();
                     _timer.Start();
                 }
             }
         }
 
         #region properties
+
+        #region IsResting
+
+        /// <summary>
+        /// The <see cref="IsResting" /> property's name.
+        /// </summary>
+        public const string IsRestingPropertyName = "IsResting";
+
+        private bool _IsResting;
+
+        /// <summary>
+        /// IsResting
+        /// </summary>
+        public bool IsResting
+        {
+            get { return _IsResting; }
+
+            set
+            {
+                if (_IsResting == value) return;
+
+                _IsResting = value;
+                NotifyOfPropertyChange(IsRestingPropertyName);
+            }
+        }
+
+        #endregion
 
         #region Countdown
 

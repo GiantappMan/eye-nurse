@@ -18,7 +18,7 @@
     Opacity="0.9"
     ShowInTaskbar="False"
     Top="{Binding PositionTop, Mode=TwoWay}"
-    Topmost="True"
+    Topmost="{Binding Services.IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
     WindowStyle="None"
     mc:Ignorable="d">
     <Window.Resources />
