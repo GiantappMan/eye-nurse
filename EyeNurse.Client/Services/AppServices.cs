@@ -31,11 +31,20 @@ namespace EyeNurse.Client.Services
             _timer.Interval = 1000;
             _timer.Elapsed += Timer_Elapsed;
             await ResetCountDownAsync();
-            Start();
         }
 
         private async Task ResetCountDownAsync()
         {
+            //休息结束
+            if (_lastLockScreenViewModel != null)
+            {
+                _lastLockScreenViewModel.TryClose();
+                _lastLockScreenViewModel = null;
+            }
+
+            _timer.Stop();
+            IsResting = false;
+
             _appSetting = await LoadConfigAsync<AppSetting>();
             if (_appSetting == null)
             {
@@ -50,7 +59,11 @@ namespace EyeNurse.Client.Services
 
             Countdown = _appSetting.AlarmInterval;
             CountdownPercent = 100;
+
+            _timer.Start();
         }
+
+
 
         private async void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
@@ -66,6 +79,7 @@ namespace EyeNurse.Client.Services
                     Execute.OnUIThread(() =>
                     {
                         _windowManager.ShowWindow(_lastLockScreenViewModel);
+                        _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
                     });
                     IsResting = true;
                     _timer.Start();
@@ -77,19 +91,16 @@ namespace EyeNurse.Client.Services
                 RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
                 if (RestTimeCountdown.TotalSeconds <= 0)
                 {
-                    //休息结束
-                    if (_lastLockScreenViewModel != null)
-                    {
-                        _lastLockScreenViewModel.TryClose();
-                        _lastLockScreenViewModel = null;
-                    }
-
-                    _timer.Stop();
-                    IsResting = false;
                     await ResetCountDownAsync();
-                    _timer.Start();
                 }
             }
+        }
+
+        private void _lastLockScreenViewModel_Deactivated(object sender, DeactivationEventArgs e)
+        {
+            var temp = sender as LockScreenViewModel;
+            temp.Deactivated -= _lastLockScreenViewModel_Deactivated;
+            RestTimeCountdown = new TimeSpan();
         }
 
         #region properties
