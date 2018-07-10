@@ -52,8 +52,8 @@ namespace EyeNurse.Client.Services
                 _appSetting = new AppSetting()
                 {
                     //AlarmInterval = new TimeSpan(0, 45, 0)
-                    AlarmInterval = new TimeSpan(0, 0, 10),
-                    RestTime = new TimeSpan(0, 0, 10)
+                    AlarmInterval = new TimeSpan(0, 45, 10),
+                    RestTime = new TimeSpan(0, 3, 10)
                 };
             }
 
@@ -67,31 +67,39 @@ namespace EyeNurse.Client.Services
 
         private async void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            if (!IsResting)
+            if (IsPaused)
             {
-                Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
-                CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
-                if (Countdown.TotalSeconds <= 0)
-                {
-                    _timer.Stop();
-                    _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
-                    RestTimeCountdown = _appSetting.RestTime;
-                    Execute.OnUIThread(() =>
-                    {
-                        _windowManager.ShowWindow(_lastLockScreenViewModel);
-                        _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
-                    });
-                    IsResting = true;
-                    _timer.Start();
-                }
+                PausedTime = PausedTime.Add(TimeSpan.FromMilliseconds(_timer.Interval));
             }
             else
             {
-                RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
-                RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
-                if (RestTimeCountdown.TotalSeconds <= 0)
+                PausedTime = new TimeSpan();
+                if (!IsResting)
                 {
-                    await ResetCountDownAsync();
+                    Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
+                    CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
+                    if (Countdown.TotalSeconds <= 0)
+                    {
+                        _timer.Stop();
+                        _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
+                        RestTimeCountdown = _appSetting.RestTime;
+                        Execute.OnUIThread(() =>
+                        {
+                            _windowManager.ShowWindow(_lastLockScreenViewModel);
+                            _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
+                        });
+                        IsResting = true;
+                        _timer.Start();
+                    }
+                }
+                else
+                {
+                    RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
+                    RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
+                    if (RestTimeCountdown.TotalSeconds <= 0)
+                    {
+                        await ResetCountDownAsync();
+                    }
                 }
             }
         }
@@ -240,6 +248,60 @@ namespace EyeNurse.Client.Services
 
         #endregion
 
+        #region IsPaused
+
+        /// <summary>
+        /// The <see cref="IsPaused" /> property's name.
+        /// </summary>
+        public const string IsPausedPropertyName = "IsPaused";
+
+        private bool _IsPaused;
+
+        /// <summary>
+        /// IsPaused
+        /// </summary>
+        public bool IsPaused
+        {
+            get { return _IsPaused; }
+
+            set
+            {
+                if (_IsPaused == value) return;
+
+                _IsPaused = value;
+                NotifyOfPropertyChange(IsPausedPropertyName);
+            }
+        }
+
+        #endregion
+
+        #region PausedTime
+
+        /// <summary>
+        /// The <see cref="PausedTime" /> property's name.
+        /// </summary>
+        public const string PausedTimePropertyName = "PausedTime";
+
+        private TimeSpan _PausedTime;
+
+        /// <summary>
+        /// PausedTime
+        /// </summary>
+        public TimeSpan PausedTime
+        {
+            get { return _PausedTime; }
+
+            set
+            {
+                if (_PausedTime == value) return;
+
+                _PausedTime = value;
+                NotifyOfPropertyChange(PausedTimePropertyName);
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region public methods
@@ -249,9 +311,19 @@ namespace EyeNurse.Client.Services
             _timer.Start();
         }
 
-        public void Pause()
+        public void Stop()
         {
             _timer.Stop();
+        }
+
+        public void Pause()
+        {
+            IsPaused = true;
+        }
+
+        public void Resum()
+        {
+            IsPaused = false;
         }
 
         #region config

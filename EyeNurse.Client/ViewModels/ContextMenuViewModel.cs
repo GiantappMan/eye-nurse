@@ -1,4 +1,5 @@
 ﻿using Caliburn.Micro;
+using EyeNurse.Client.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,43 +11,59 @@ namespace EyeNurse.Client.ViewModels
 {
     public class ContextMenuViewModel : Screen
     {
-        public ContextMenuViewModel()
+        readonly AppServices _services;
+        public ContextMenuViewModel(AppServices servcies)
         {
-
+            _services = servcies;
         }
 
         #region properties
 
-        #region Desc
+        public AppServices Services => _services;
+
+        #region IsPaused
 
         /// <summary>
-        /// The <see cref="Desc" /> property's name.
+        /// The <see cref="IsPaused" /> property's name.
         /// </summary>
-        public const string DescPropertyName = "Desc";
+        public const string IsPausedPropertyName = "IsPaused";
 
-        private string _Desc = "tes\r\ntsetst";
+        private bool _IsPaused;
 
         /// <summary>
-        /// Desc
+        /// IsPaused
         /// </summary>
-        public string Desc
+        public bool IsPaused
         {
-            get { return _Desc; }
+            get { return _IsPaused; }
 
             set
             {
-                if (_Desc == value) return;
+                if (_IsPaused == value) return;
 
-                _Desc = value;
-                NotifyOfPropertyChange(DescPropertyName);
+                _IsPaused = value;
+                NotifyOfPropertyChange(IsPausedPropertyName);
             }
         }
+
 
         #endregion
 
         #endregion
 
         #region methods
+
+        public void Pause()
+        {
+            IsPaused = true;
+            Services.Pause();
+        }
+
+        public void Resum()
+        {
+            IsPaused = false;
+            Services.Resum();
+        }
 
         public void ExitApp()
         {

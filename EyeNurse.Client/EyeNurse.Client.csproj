@@ -97,6 +97,7 @@
     <Compile Include="ViewModels\ContextMenuViewModel.cs" />
     <Compile Include="ViewModels\LockScreenViewModel.cs" />
     <Compile Include="Views\Converters\InverseBooleanConveter.cs" />
+    <Compile Include="Views\Converters\InverseBooleanToVisibilityConveter.cs" />
     <Compile Include="Views\CountDownView.xaml.cs">
       <DependentUpon>CountDownView.xaml</DependentUpon>
     </Compile>

@@ -7,6 +7,8 @@
     xmlns:tb="http://www.hardcodet.net/taskbar">
     <!--  Converters  -->
     <converters:InverseBooleanConveter x:Key="InverseBooleanConveter" />
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    <converters:InverseBooleanToVisibilityConveter x:Key="InverseBooleanToVisibilityConveter" />
     <ContextMenu
         x:Key="ContextMenu"
         cal:Action.Target="ContextMenuViewModel"
@@ -17,7 +19,16 @@
             <MenuItem Header="检查更新" />
             <MenuItem Header="分享" />
         </MenuItem>
-        <MenuItem Command="{Binding HideWindowCommand}" Header="推迟" />
+        <MenuItem
+            x:Name="Pause"
+            cal:Message.Attach="Pause()"
+            Header="暂停"
+            Visibility="{Binding IsPaused, Converter={StaticResource InverseBooleanToVisibilityConveter}}" />
+        <MenuItem cal:Message.Attach="Resum()" Visibility="{Binding IsPaused, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <MenuItem.Header>
+                <TextBlock Text="{Binding Services.PausedTime, StringFormat={}恢复 {0:mm\\:ss}}" />
+            </MenuItem.Header>
+        </MenuItem>
         <Separator />
         <MenuItem cal:Message.Attach="ExitApp()" Header="退出" />
     </ContextMenu>
