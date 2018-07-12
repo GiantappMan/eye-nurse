@@ -2,9 +2,11 @@
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.ViewModels;
+using Hardcodet.Wpf.TaskbarNotification;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,6 +20,8 @@ namespace EyeNurse.Client.Services
         AppSetting _appSetting;
         IWindowManager _windowManager;
         LockScreenViewModel _lastLockScreenViewModel;
+        TaskbarIcon _taskbarIcon;
+        Icon _sourceIcon;
 
         public AppServices(IWindowManager windowManager)
         {
@@ -63,13 +67,22 @@ namespace EyeNurse.Client.Services
             _timer.Start();
         }
 
-
-
         private async void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             if (IsPaused)
             {
                 PausedTime = PausedTime.Add(TimeSpan.FromMilliseconds(_timer.Interval));
+                if (_taskbarIcon == null)
+                {
+                    _taskbarIcon = IoC.Get<TaskbarIcon>();
+                    _sourceIcon = _taskbarIcon.Icon;
+                }
+         
+                using (Bitmap bm = new Bitmap(_taskbarIcon.Icon.ToBitmap()))
+                {
+                    var newIcon = Icon.FromHandle(bm.GetHicon());
+                    _taskbarIcon.Icon = newIcon;
+                }
             }
             else
             {

@@ -1,4 +1,5 @@
-﻿using Hardcodet.Wpf.TaskbarNotification;
+﻿using Caliburn.Micro;
+using Hardcodet.Wpf.TaskbarNotification;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -24,11 +25,13 @@ namespace EyeNurse.Client
 
             notifyIcon = (TaskbarIcon)FindResource("NotifyIcon");
             notifyIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+            var container = IoC.Get<SimpleContainer>();
+            container.Instance(notifyIcon);
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
-            notifyIcon.Dispose(); 
+            notifyIcon.Dispose();
             base.OnExit(e);
         }
     }
