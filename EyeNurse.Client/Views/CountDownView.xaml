@@ -3,10 +3,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="CountDownView"
-    Width="60"
+    Width="70"
     Height="20"
     MinWidth="0"
     HorizontalAlignment="Center"
@@ -21,12 +22,34 @@
     Topmost="{Binding Services.IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
     WindowStyle="None"
     mc:Ignorable="d">
+    <Window.Template>
+        <ControlTemplate>
+            <Grid ContextMenu="{StaticResource ContextMenu}">
+                <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
+                <TextBlock
+                    x:Name="txt"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Text="{Binding Services.Countdown, StringFormat=mm\\:ss}" />
+                <iconPacks:PackIconModern
+                    x:Name="icon"
+                    Width="15"
+                    Height="15"
+                    Margin="2,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    Background="Transparent"
+                    Foreground="Black"
+                    Kind="TimerPause"
+                    Visibility="Collapsed" />
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Services.IsPaused}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="{Binding Services.PausedTime, StringFormat=mm\\:ss}" />
+                    <Setter TargetName="icon" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </Window.Template>
     <Window.Resources />
-    <Grid ContextMenu="{StaticResource ContextMenu}">
-        <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
-        <TextBlock
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Text="{Binding Services.Countdown, StringFormat=mm\\:ss}" />
-    </Grid>
 </Window>
