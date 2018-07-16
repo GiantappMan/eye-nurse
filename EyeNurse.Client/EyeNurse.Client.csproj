@@ -105,6 +105,7 @@
     <Compile Include="ViewModels\CountDownViewModel.cs" />
     <Compile Include="ViewModels\ContextMenuViewModel.cs" />
     <Compile Include="ViewModels\LockScreenViewModel.cs" />
+    <Compile Include="ViewModels\SettingViewModel.cs" />
     <Compile Include="Views\Converters\InverseBooleanConveter.cs" />
     <Compile Include="Views\Converters\InverseBooleanToVisibilityConveter.cs" />
     <Compile Include="Views\CountDownView.xaml.cs">
@@ -112,6 +113,9 @@
     </Compile>
     <Compile Include="Views\LockScreenView.xaml.cs">
       <DependentUpon>LockScreenView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SettingView.xaml.cs">
+      <DependentUpon>SettingView.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -158,6 +162,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\LockScreenView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\SettingView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

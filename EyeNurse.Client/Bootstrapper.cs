@@ -30,6 +30,7 @@ namespace EyeNurse.Client
                 Singleton<ContextMenuViewModel>(nameof(ContextMenuViewModel)).
                 Singleton<AppServices>().
                 PerRequest<LockScreenViewModel>().
+                PerRequest<SettingViewModel>().
                 Instance<SimpleContainer>(container);
         }
 
