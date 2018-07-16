@@ -10,6 +10,8 @@
                     <local:Bootstrapper x:Key="Bootstrapper" />
                 </ResourceDictionary>
                 <ResourceDictionary Source="Views/CommonResources.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Colors.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

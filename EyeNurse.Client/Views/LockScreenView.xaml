@@ -3,23 +3,45 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loadin="clr-namespace:LoadingIndicators.WPF;assembly=LoadingIndicators.WPF"
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="LockScreenView"
+    Background="#141418"
+    Foreground="#EEEEF2"
     Topmost="True"
     WindowState="Maximized"
     WindowStyle="None"
     mc:Ignorable="d">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles/LoadingWave.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles/LoadingThreeDots.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles/LoadingFlipPlane.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles/LoadingPulse.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/LoadingIndicators.WPF;component/Styles/LoadingDoubleBounce.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
     <Grid>
-        <ProgressBar
+        <!--<ProgressBar
             VerticalAlignment="Center"
             Maximum="100"
-            Value="{Binding Services.RestTimeCountdownPercent, FallbackValue=100}" />
+            Value="{Binding Services.RestTimeCountdownPercent, FallbackValue=100}" />-->
+        <!--<StackPanel VerticalAlignment="Center">-->
+        <Viewbox Width="90" Height="90">
+            <loadin:LoadingIndicator
+                IsActive="True"
+                SpeedRatio="0.45"
+                Style="{StaticResource LoadingIndicatorRingStyle}" />
+        </Viewbox>
+
         <TextBlock
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Text="{Binding Services.RestTimeCountdown, StringFormat=mm\\:ss}" />
-        <!--<TextBlock Text="{Binding Services.IsResting}" />-->
+        <!--</StackPanel>-->
         <Button
             x:Name="Exit"
             HorizontalAlignment="Right"
