@@ -70,6 +70,11 @@ namespace EyeNurse.Client.ViewModels
             Application.Current.Shutdown();
         }
 
+        public void RestImmediately()
+        {
+            Services.RestImmediately();
+        }
+
         #endregion
     }
 }

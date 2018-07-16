@@ -77,12 +77,13 @@ namespace EyeNurse.Client.Services
                     _taskbarIcon = IoC.Get<TaskbarIcon>();
                     _sourceIcon = _taskbarIcon.Icon;
                 }
-         
-                using (Bitmap bm = new Bitmap(_taskbarIcon.Icon.ToBitmap()))
-                {
-                    var newIcon = Icon.FromHandle(bm.GetHicon());
-                    _taskbarIcon.Icon = newIcon;
-                }
+
+                //todo 托盘显示暂停时间 https://github.com/MscoderStudio/EyeNurse/issues/4
+                //using (Bitmap bm = new Bitmap(_taskbarIcon.Icon.ToBitmap()))
+                //{
+                //    var newIcon = Icon.FromHandle(bm.GetHicon());
+                //    _taskbarIcon.Icon = newIcon;
+                //}
             }
             else
             {
@@ -337,6 +338,11 @@ namespace EyeNurse.Client.Services
         public void Resum()
         {
             IsPaused = false;
+        }
+
+        public void RestImmediately()
+        {
+            Countdown = new TimeSpan(0, 0, 1);
         }
 
         #region config
