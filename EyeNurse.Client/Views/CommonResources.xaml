@@ -20,6 +20,12 @@
             <MenuItem Header="分享" />
         </MenuItem>
         <MenuItem
+            cal:Message.Attach="StartWithOS()"
+            Header="开机启动"
+            IsCheckable="True"
+            IsChecked="{Binding IsAutoLaunch, Mode=OneWay}" />
+        <Separator />
+        <MenuItem
             x:Name="Pause"
             cal:Message.Attach="Pause()"
             Header="暂停"

@@ -1,4 +1,5 @@
 ﻿using Caliburn.Micro;
+using EyeNurse.Client.Helpers;
 using EyeNurse.Client.Services;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ namespace EyeNurse.Client.ViewModels
         public ContextMenuViewModel(AppServices servcies)
         {
             _services = servcies;
+            IsAutoLaunch = AutoStartup.Check();
         }
 
         #region properties
@@ -49,9 +51,42 @@ namespace EyeNurse.Client.ViewModels
 
         #endregion
 
+        #region IsAutoLaunch
+
+        /// <summary>
+        /// The <see cref="IsAutoLaunch" /> property's name.
+        /// </summary>
+        public const string IsAutoLaunchPropertyName = "IsAutoLaunch";
+
+        private bool _IsAutoLaunch;
+
+        /// <summary>
+        /// IsAutoLaunch
+        /// </summary>
+        public bool IsAutoLaunch
+        {
+            get { return _IsAutoLaunch; }
+
+            set
+            {
+                if (_IsAutoLaunch == value) return;
+
+                _IsAutoLaunch = value;
+                NotifyOfPropertyChange(IsAutoLaunchPropertyName);
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region methods
+        public void StartWithOS()
+        {
+            IsAutoLaunch = !IsAutoLaunch;
+            AutoStartup.Set(IsAutoLaunch);
+            IsAutoLaunch = AutoStartup.Check();
+        }
 
         public void Pause()
         {
