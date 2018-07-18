@@ -2,6 +2,7 @@
     x:Class="EyeNurse.Client.Views.CountDownView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:EyeNurse.Client.Views.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
@@ -22,10 +23,27 @@
     Topmost="{Binding Services.IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
     WindowStyle="None"
     mc:Ignorable="d">
+    <Window.Resources>
+        <!--  8分钟  -->
+        <converters:TimeSpanToColorBrushConveter
+            x:Key="progreeBGConverter"
+            DurationSecond="480"
+            From="#ECC071"
+            To="#3E0D0D" />
+        <converters:TimeSpanToColorBrushConveter
+            x:Key="timeBGConverter"
+            DurationSecond="480"
+            From="#080808"
+            To="#F40000" />
+    </Window.Resources>
     <Window.Template>
         <ControlTemplate>
             <Grid ContextMenu="{StaticResource ContextMenu}">
-                <ProgressBar Maximum="100" Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
+                <ProgressBar
+                    Background="Beige"
+                    x:Name="progressBar"
+                    Maximum="100"
+                    Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
                 <TextBlock
                     x:Name="txt"
                     HorizontalAlignment="Center"
@@ -39,7 +57,7 @@
                     HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
                     Background="Transparent"
-                    Foreground="Black"
+                    Foreground="{Binding ElementName=txt, Path=Foreground}"
                     Kind="TimerPause"
                     Visibility="Collapsed" />
             </Grid>
@@ -47,9 +65,10 @@
                 <DataTrigger Binding="{Binding Services.IsPaused}" Value="True">
                     <Setter TargetName="txt" Property="Text" Value="{Binding Services.PausedTime, StringFormat=mm\\:ss}" />
                     <Setter TargetName="icon" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="progressBar" Property="Foreground" Value="{Binding Services.PausedTime, Converter={StaticResource progreeBGConverter}}" />
+                    <Setter TargetName="txt" Property="Foreground" Value="{Binding Services.PausedTime, Converter={StaticResource timeBGConverter}}" />
                 </DataTrigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>
     </Window.Template>
-    <Window.Resources />
 </Window>

@@ -109,6 +109,7 @@
     <Compile Include="ViewModels\SettingViewModel.cs" />
     <Compile Include="Views\Converters\InverseBooleanConveter.cs" />
     <Compile Include="Views\Converters\InverseBooleanToVisibilityConveter.cs" />
+    <Compile Include="Views\Converters\TimeSpanToColorBrushConveter.cs" />
     <Compile Include="Views\CountDownView.xaml.cs">
       <DependentUpon>CountDownView.xaml</DependentUpon>
     </Compile>
