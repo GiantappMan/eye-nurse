@@ -40,8 +40,8 @@
         <ControlTemplate>
             <Grid ContextMenu="{StaticResource ContextMenu}">
                 <ProgressBar
-                    Background="Beige"
                     x:Name="progressBar"
+                    Background="Beige"
                     Maximum="100"
                     Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
                 <TextBlock
@@ -60,6 +60,7 @@
                     Foreground="{Binding ElementName=txt, Path=Foreground}"
                     Kind="TimerPause"
                     Visibility="Collapsed" />
+                <MediaElement Loaded="media_Loaded" x:Name="media" />
             </Grid>
             <ControlTemplate.Triggers>
                 <DataTrigger Binding="{Binding Services.IsPaused}" Value="True">

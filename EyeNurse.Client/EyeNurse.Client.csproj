@@ -100,6 +100,7 @@
     <Compile Include="Bootstrapper.cs" />
     <Compile Include="Configs\AppSetting.cs" />
     <Compile Include="Configs\WindowPosition.cs" />
+    <Compile Include="Events\PlayAudioEvent.cs" />
     <Compile Include="Helpers\AutoStartup.cs" />
     <Compile Include="Helpers\JsonHelper.cs" />
     <Compile Include="Services\AppServices.cs" />
@@ -150,9 +151,15 @@
   <ItemGroup>
     <Resource Include="Resources\Images\logo.png" />
     <Resource Include="logo.ico" />
-    <Content Include="Resources\Sounds\break.mid" />
-    <Content Include="Resources\Sounds\breakpre.mid" />
-    <Content Include="Resources\Sounds\unlock.mid" />
+    <Content Include="Resources\Sounds\break.mid">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Sounds\breakpre.mid">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Sounds\unlock.mid">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Page Include="Views\CountDownView.xaml">

@@ -25,6 +25,7 @@ namespace EyeNurse.Client
             container = new SimpleContainer();
 
             container.
+                Singleton<IEventAggregator, EventAggregator>().
                 Singleton<IWindowManager, WindowManager>().
                 Singleton<CountDownViewModel>().
                 Singleton<ContextMenuViewModel>(nameof(ContextMenuViewModel)).

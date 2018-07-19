@@ -1,5 +1,6 @@
 ﻿using Caliburn.Micro;
 using EyeNurse.Client.Configs;
+using EyeNurse.Client.Events;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.ViewModels;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -22,9 +23,11 @@ namespace EyeNurse.Client.Services
         LockScreenViewModel _lastLockScreenViewModel;
         TaskbarIcon _taskbarIcon;
         Icon _sourceIcon;
+        readonly IEventAggregator _eventAggregator;
 
-        public AppServices(IWindowManager windowManager)
+        public AppServices(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
+            _eventAggregator = eventAggregator;
             _windowManager = windowManager;
             Init();
         }
@@ -148,6 +151,12 @@ namespace EyeNurse.Client.Services
                 if (_IsResting == value) return;
 
                 _IsResting = value;
+
+                //if (value)
+                _eventAggregator.PublishOnBackgroundThread(new PlayAudioEvent()
+                {
+                    Source = @"Resources\Sounds\break.mid"
+                });
                 NotifyOfPropertyChange(IsRestingPropertyName);
             }
         }
@@ -333,6 +342,10 @@ namespace EyeNurse.Client.Services
         public void Pause()
         {
             IsPaused = true;
+            _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+            {
+                Source = @"Resources\Sounds\break.mid"
+            });
         }
 
         public void Resum()

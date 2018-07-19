@@ -1,4 +1,6 @@
-﻿using EyeNurse.Client.ViewModels;
+﻿using Caliburn.Micro;
+using EyeNurse.Client.Events;
+using EyeNurse.Client.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,14 +22,24 @@ namespace EyeNurse.Client.Views
     /// <summary>
     /// Interaction logic for CountDownView.xaml
     /// </summary>
-    public partial class CountDownView : Window
+    public partial class CountDownView : Window, IHandle<PlayAudioEvent>
     {
+        private readonly IEventAggregator _eventAggregator;
+        private MediaElement _media;
         public CountDownView()
         {
             InitializeComponent();
+
+            _eventAggregator = IoC.Get<IEventAggregator>();
             MouseDown += CountDownView_MouseDown;
             MouseUp += CountDownView_MouseUp;
             Loaded += CountDownView_Loaded;
+            _eventAggregator.Subscribe(this);
+        }
+
+        public void Handle(PlayAudioEvent message)
+        {
+            _media.Source = new Uri(message.Source, UriKind.Relative);
         }
 
         private void CountDownView_Loaded(object sender, RoutedEventArgs e)
@@ -120,6 +132,13 @@ namespace EyeNurse.Client.Views
 
         [DllImport("kernel32.dll", EntryPoint = "SetLastError")]
         public static extern void SetLastError(int dwErrorCode);
+
+
         #endregion
+
+        private void media_Loaded(object sender, RoutedEventArgs e)
+        {
+            _media = sender as MediaElement;
+        }
     }
 }

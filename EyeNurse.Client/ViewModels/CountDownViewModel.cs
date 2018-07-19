@@ -1,5 +1,6 @@
 ﻿using Caliburn.Micro;
 using EyeNurse.Client.Configs;
+using EyeNurse.Client.Events;
 using EyeNurse.Client.Services;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,7 @@ namespace EyeNurse.Client.ViewModels
     {
         readonly AppServices _services;
         WindowPosition _windowPosition;
+
         public CountDownViewModel(AppServices servcies)
         {
             _services = servcies;
