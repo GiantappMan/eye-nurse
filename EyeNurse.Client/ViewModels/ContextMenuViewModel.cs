@@ -1,8 +1,10 @@
 ﻿using Caliburn.Micro;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.Services;
+using NLog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +15,7 @@ namespace EyeNurse.Client.ViewModels
     public class ContextMenuViewModel : Screen
     {
         readonly AppServices _services;
+        private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         public ContextMenuViewModel(AppServices servcies)
         {
             _services = servcies;
@@ -108,6 +111,18 @@ namespace EyeNurse.Client.ViewModels
         public void RestImmediately()
         {
             Services.RestImmediately();
+        }
+
+        public void About()
+        {
+            try
+            {
+                Process.Start("https://github.com/MscoderStudio/EyeNurse");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
         }
 
         #endregion
