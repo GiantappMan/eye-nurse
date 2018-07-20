@@ -1,4 +1,4 @@
-# [EyeNurse](https://github.com/MscoderStudio/EyeNurse)
+# [眼睛护士](https://github.com/MscoderStudio/EyeNurse)
 
 ## 用意：
 * 一个小软件用来提醒长期伏案的电脑使用者保护爱眼
