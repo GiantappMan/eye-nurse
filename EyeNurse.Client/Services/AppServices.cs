@@ -24,6 +24,7 @@ namespace EyeNurse.Client.Services
         TaskbarIcon _taskbarIcon;
         Icon _sourceIcon;
         readonly IEventAggregator _eventAggregator;
+        bool warned;
 
         public AppServices(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
@@ -95,6 +96,14 @@ namespace EyeNurse.Client.Services
                 {
                     Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
                     CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
+                    if (!warned && Countdown.TotalSeconds <= 30)
+                    {
+                        warned = true;
+                        _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+                        {
+                            Source = @"Resources\Sounds\breakpre.mid"
+                        });
+                    }
                     if (Countdown.TotalSeconds <= 0)
                     {
                         _timer.Stop();
@@ -111,6 +120,7 @@ namespace EyeNurse.Client.Services
                 }
                 else
                 {
+                    warned = false;
                     RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
                     RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
                     if (RestTimeCountdown.TotalSeconds <= 0)
@@ -152,11 +162,16 @@ namespace EyeNurse.Client.Services
 
                 _IsResting = value;
 
-                //if (value)
-                _eventAggregator.PublishOnBackgroundThread(new PlayAudioEvent()
-                {
-                    Source = @"Resources\Sounds\break.mid"
-                });
+                if (value)
+                    _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+                    {
+                        Source = @"Resources\Sounds\break.mid"
+                    });
+                else
+                    _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+                    {
+                        Source = @"Resources\Sounds\unlock.mid"
+                    });
                 NotifyOfPropertyChange(IsRestingPropertyName);
             }
         }
@@ -342,10 +357,6 @@ namespace EyeNurse.Client.Services
         public void Pause()
         {
             IsPaused = true;
-            _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
-            {
-                Source = @"Resources\Sounds\break.mid"
-            });
         }
 
         public void Resum()
