@@ -387,7 +387,8 @@ namespace EyeNurse.Client.Services
         public string GetDefaultPath<T>() where T : new()
         {
             var rootDir = Environment.CurrentDirectory;
-            return $"{rootDir}\\Configs\\{typeof(T).Name}.json";
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return $"{appData}\\EyeNurse\\Configs\\{typeof(T).Name}.json";
         }
 
         #endregion
