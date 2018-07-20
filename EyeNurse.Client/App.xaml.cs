@@ -18,9 +18,14 @@ namespace EyeNurse.Client
     public partial class App : Application
     {
         private TaskbarIcon notifyIcon;
+        private static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            logger.Info("testst");
             base.OnStartup(e);
 
             notifyIcon = (TaskbarIcon)FindResource("NotifyIcon");
@@ -28,7 +33,17 @@ namespace EyeNurse.Client
             var container = IoC.Get<SimpleContainer>();
             container.Instance(notifyIcon);
         }
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            var ex = e.ExceptionObject as Exception;
+            MessageBox.Show(ex.Message);
+        }
 
+        void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            var ex = e.Exception;
+            MessageBox.Show(ex.Message);
+        }
         protected override void OnExit(ExitEventArgs e)
         {
             notifyIcon.Dispose();
