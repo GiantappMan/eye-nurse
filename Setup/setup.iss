@@ -1,7 +1,7 @@
 #define AppEnName "EyeNurse"
-#define OutputPath="..\EyeNurse.Client\bin\Debug\"
+#define OutputPath="..\EyeNurse.Client\bin\Release\"
 #define ProcessName="EyeNurse"
-#define AppVersion=GetFileVersion("..\EyeNurse.Client\bin\Debug\EyeNurse.exe")
+#define AppVersion=GetFileVersion("..\EyeNurse.Client\bin\Release\EyeNurse.exe")
 
 [Setup]
 AppName={cm:AppName}                                
@@ -44,6 +44,7 @@ end;
 [Files]
 Source:{#OutputPath}*.exe;DestDir: "{app}" ;Flags: ignoreversion; BeforeInstall: TaskKill('{#ProcessName}.exe')
 Source:{#OutputPath}*.dll;DestDir: "{app}"
+Source:{#OutputPath}Resources\* ;DestDir: "{app}\Resources"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\{cm:AppName}"; Filename: "{app}\EyeNurse.exe"
