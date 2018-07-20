@@ -10,5 +10,4 @@
 * 希望保护眼睛的人
 
 
-[GitHub](https://github.com/MscoderStudio/EyeNurse)
 [安装包](https://github.com/MscoderStudio/EyeNurse/releases)
