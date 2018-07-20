@@ -5,6 +5,7 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -121,7 +122,21 @@ namespace EyeNurse.Client.ViewModels
             }
             catch (Exception ex)
             {
-                logger.Error(ex);
+                logger.Error(ex, "About Ex");
+            }
+        }
+
+        public void OpenConfigFolder()
+        {
+            try
+            {
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                appData = Path.Combine(appData, "EyeNurse");
+                Process.Start(appData);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "OpenConfigFolder Ex");
             }
         }
 

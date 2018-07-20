@@ -19,6 +19,7 @@
             <MenuItem Header="检查更新" />
             <MenuItem Header="分享" />-->
         </MenuItem>
+        <MenuItem cal:Message.Attach="OpenConfigFolder()" Header="配置目录" />
         <MenuItem
             cal:Message.Attach="StartWithOS()"
             Header="开机启动"
