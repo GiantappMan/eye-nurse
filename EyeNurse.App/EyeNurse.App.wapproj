@@ -38,26 +38,38 @@
     <TargetPlatformVersion>10.0.17134.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.14393.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <PackageCertificateKeyFile>Win10Setup_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile>EyeNurse.App_StoreKey.pfx</PackageCertificateKeyFile>
     <EntryPointProjectUniqueName>..\EyeNurse.Client\EyeNurse.Client.csproj</EntryPointProjectUniqueName>
+    <PackageCertificateThumbprint>24E7D15524DCBE9B6FF6D4A3F7ED4782FB393B7E</PackageCertificateThumbprint>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
+    <AppxBundlePlatforms>neutral</AppxBundlePlatforms>
+    <AppInstallerUpdateFrequency>1</AppInstallerUpdateFrequency>
+    <AppInstallerCheckForUpdateFrequency>OnApplicationRun</AppInstallerCheckForUpdateFrequency>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <DefaultLanguage>zh</DefaultLanguage>
+    <DefaultLanguage>zh-cn</DefaultLanguage>
+    <AppxBundle>Always</AppxBundle>
   </PropertyGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -65,7 +77,7 @@
     </AppxManifest>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="EyeNurse.App_TemporaryKey.pfx" />
+    <None Include="EyeNurse.App_StoreKey.pfx" />
     <Content Include="Images\AppList\AppList.scale-100.png" />
     <Content Include="Images\AppList\AppList.scale-125.png" />
     <Content Include="Images\AppList\AppList.scale-150.png" />
@@ -116,6 +128,7 @@
     <Content Include="Images\Wide\Wide310x150Logo.scale-150.png" />
     <Content Include="Images\Wide\Wide310x150Logo.scale-200.png" />
     <Content Include="Images\Wide\Wide310x150Logo.scale-400.png" />
+    <None Include="Package.StoreAssociation.xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EyeNurse.Client\EyeNurse.Client.csproj" />
