@@ -2,4 +2,4 @@
 bin
 obj
 packages
-/EyeNurse.Client/*.user
+*.user
