@@ -9,5 +9,10 @@
 * 长期使用电脑离不开凳子的人
 * 希望保护眼睛的人
 
+## 另外:
+* 强烈建议做事专注的码农们使用此软件，一座就是一天起来动一动身体要紧
+
+  <img src="https://raw.githubusercontent.com/MscoderStudio/EyeNurse/master/readme.jpg"/>
+* 可以胖但是不能瞎
 
 [安装包](https://github.com/MscoderStudio/EyeNurse/releases)
