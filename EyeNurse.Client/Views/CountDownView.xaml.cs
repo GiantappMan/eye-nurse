@@ -67,8 +67,15 @@ namespace EyeNurse.Client.Views
 
         private void CountDownView_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
-                DragMove();
+            try
+            {
+                if (e.ChangedButton == MouseButton.Left)
+                    DragMove();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString());
+            }
         }
 
         #region Window styles

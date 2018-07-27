@@ -118,7 +118,7 @@ namespace EyeNurse.Client.ViewModels
         {
             try
             {
-                Process.Start("https://mscoder.cn/categories/products/");
+                Process.Start("https://mscoder.cn/products/EyeNurse.html");
             }
             catch (Exception ex)
             {

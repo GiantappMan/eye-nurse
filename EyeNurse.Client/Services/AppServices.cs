@@ -59,10 +59,10 @@ namespace EyeNurse.Client.Services
                 //默认值
                 _appSetting = new AppSetting()
                 {
-                    //AlarmInterval = new TimeSpan(0, 45, 0)
-                    AlarmInterval = new TimeSpan(0, 45, 10),
-                    RestTime = new TimeSpan(0, 3, 10)
+                    AlarmInterval = new TimeSpan(0, 45, 0),
+                    RestTime = new TimeSpan(0, 3, 0)
                 };
+                await SaveConfigAsync(_appSetting);
             }
 
             Countdown = _appSetting.AlarmInterval;
