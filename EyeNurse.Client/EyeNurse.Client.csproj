@@ -136,6 +136,9 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Content Include="Resources\Sounds\break.mp3" />
+    <Content Include="Resources\Sounds\breakpre.mp3" />
+    <Content Include="Resources\Sounds\unlock.mp3" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -158,15 +161,6 @@
   <ItemGroup>
     <Resource Include="Resources\Images\logo.png" />
     <Resource Include="logo.ico" />
-    <Content Include="Resources\Sounds\break.mid">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Sounds\breakpre.mid">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Sounds\unlock.mid">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <Page Include="Views\CountDownView.xaml">

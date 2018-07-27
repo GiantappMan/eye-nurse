@@ -101,7 +101,7 @@ namespace EyeNurse.Client.Services
                         warned = true;
                         _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
                         {
-                            Source = @"Resources\Sounds\breakpre.mid"
+                            Source = @"Resources\Sounds\breakpre.mp3"
                         });
                     }
                     if (Countdown.TotalSeconds <= 0)
@@ -165,12 +165,12 @@ namespace EyeNurse.Client.Services
                 if (value)
                     _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
                     {
-                        Source = @"Resources\Sounds\break.mid"
+                        Source = @"Resources\Sounds\break.mp3"
                     });
                 else
                     _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
                     {
-                        Source = @"Resources\Sounds\unlock.mid"
+                        Source = @"Resources\Sounds\unlock.mp3"
                     });
                 NotifyOfPropertyChange(IsRestingPropertyName);
             }
