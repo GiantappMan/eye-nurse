@@ -1,4 +1,5 @@
 #define AppEnName "EyeNurse"
+#define AppDescription "保护重度电脑使用者的氪金*眼"
 #define OutputPath="..\EyeNurse.Client\bin\Release\"
 #define ProcessName="EyeNurse"
 #define AppVersion=GetFileVersion("..\EyeNurse.Client\bin\Release\EyeNurse.exe")
@@ -11,8 +12,9 @@ DefaultDirName={pf}\{#AppEnName}
 DefaultGroupName={cm:AppName}
 CloseApplications=force
 UninstallDisplayIcon={app}\EyeNurse.exe
-VersionInfoDescription={cm:Description}
-VersionInfoProductName={cm:AppName}
+VersionInfoDescription={#AppDescription}
+VersionInfoProductName={#AppEnName}
+VersionInfoVersion={#AppVersion}
 OutputDir={#SourcePath}
 OutputBaseFilename={#AppEnName}Setup_{#AppVersion}
 
@@ -25,10 +27,8 @@ en.BeveledLabel=English
 chs.BeveledLabel=中文
 
 [CustomMessages]
-en.Description=Eye care for PC user
 en.AppName={#AppEnName}
 en.LaunchApp="Launch application"
-chs.Description=保护重度电脑使用者的氪金*眼
 chs.AppName=眼睛护士
 chs.LaunchApp=启动程序
 
