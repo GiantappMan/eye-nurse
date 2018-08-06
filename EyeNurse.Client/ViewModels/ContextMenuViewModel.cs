@@ -20,7 +20,12 @@ namespace EyeNurse.Client.ViewModels
         public ContextMenuViewModel(AppServices servcies)
         {
             _services = servcies;
-            IsAutoLaunch = AutoStartup.Check();
+            Init();
+        }
+
+        private async void Init()
+        {
+            IsAutoLaunch = await AutoStartup.Instance.Check();
         }
 
         #region properties
@@ -85,11 +90,11 @@ namespace EyeNurse.Client.ViewModels
         #endregion
 
         #region methods
-        public void StartWithOS()
+        public async void StartWithOS()
         {
             IsAutoLaunch = !IsAutoLaunch;
-            AutoStartup.Set(IsAutoLaunch);
-            IsAutoLaunch = AutoStartup.Check();
+            await AutoStartup.Instance.Set(IsAutoLaunch);
+            IsAutoLaunch = await AutoStartup.Instance.Check();
         }
 
         public void Pause()
