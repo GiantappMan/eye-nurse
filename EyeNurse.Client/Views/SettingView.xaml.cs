@@ -22,6 +22,10 @@ namespace EyeNurse.Client.Views
         public SettingView()
         {
             InitializeComponent();
+
+#if UWP
+            OpenConfigFolder.Visibility = Visibility.Collapsed;
+#endif
         }
     }
 }

@@ -139,29 +139,10 @@ namespace EyeNurse.Client.ViewModels
                 return;
 
             _settingVM = IoC.Get<SettingViewModel>();
-            _windowManager.ShowWindow(_settingVM);
-            _settingVM.Deactivated += _settingVM_Deactivated;
-        }
-
-        private void _settingVM_Deactivated(object sender, DeactivationEventArgs e)
-        {
-            _settingVM.Deactivated -= _settingVM_Deactivated;
+            bool? isOk = _windowManager.ShowDialog(_settingVM);
             _settingVM = null;
         }
 
-        //public void OpenConfigFolder()
-        //{
-        //    try
-        //    {
-        //        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        //        appData = Path.Combine(appData, "EyeNurse");
-        //        Process.Start(appData);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        logger.Error(ex, "OpenConfigFolder Ex");
-        //    }
-        //}
 
         #endregion
     }

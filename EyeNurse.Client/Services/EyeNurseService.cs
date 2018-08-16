@@ -62,7 +62,7 @@ namespace EyeNurse.Client.Services
             IsResting = false;
 
             _setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
-            if (_setting == null)
+            if (_setting == null || _setting.App == null)
             {
                 //默认值
                 _setting = new Setting()

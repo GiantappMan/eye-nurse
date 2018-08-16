@@ -4,8 +4,10 @@ using EyeNurse.Client.Services;
 using JsonConfiger;
 using JsonConfiger.Models;
 using JsonConfiger.Utils;
+using NLog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -15,6 +17,7 @@ namespace EyeNurse.Client.ViewModels
 {
     public class SettingViewModel : Screen
     {
+        private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         JCrService _jcrService = new JCrService();
         EyeNurseService _appServices;
 
@@ -32,14 +35,33 @@ namespace EyeNurse.Client.ViewModels
             base.OnInitialize();
         }
 
-        public void Save()
+        public async void Save()
         {
-
+            var data = _jcrService.GetData(JsonConfierViewModel.Nodes);
+            var result = await JsonHelper.JsonSerializeAsync(data, _appServices.ConfigFilePath);
+            await Execute.OnUIThreadAsync(() =>
+            {
+                TryClose(true);
+            });
         }
         public void Cancel()
         {
-
+            TryClose(false);
         }
+        public void OpenConfigFolder()
+        {
+            try
+            {
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                appData = Path.Combine(appData, "EyeNurse");
+                Process.Start(appData);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "OpenConfigFolder Ex");
+            }
+        }
+
 
         #region JsonConfierViewModel
 

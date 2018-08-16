@@ -26,9 +26,10 @@ namespace EyeNurse.Client.ViewModels
         protected override async void OnInitialize()
         {
             var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
-            _windowPosition = setting == null ? new WindowPosition() : setting.WindowPosition;
+            _windowPosition = setting == null ? null : setting.WindowPosition;
             if (_windowPosition == null)
             {
+                //默认位置
                 _windowPosition = new WindowPosition();
                 _windowPosition.X = SystemParameters.WorkArea.Width - 120;
                 _windowPosition.Y = SystemParameters.WorkArea.Height / 3;
