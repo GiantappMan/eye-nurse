@@ -104,6 +104,9 @@
     <Reference Include="Hardcodet.Wpf.TaskbarNotification, Version=1.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
     </Reference>
+    <Reference Include="JsonConfiger.WPF, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\JsonConfiger.1.0.0.8\lib\net46\JsonConfiger.WPF.dll</HintPath>
+    </Reference>
     <Reference Include="LoadingIndicators.WPF, Version=0.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\LoadingIndicators.WPF.0.0.1\lib\LoadingIndicators.WPF.dll</HintPath>
     </Reference>
@@ -151,10 +154,13 @@
     </Compile>
     <Compile Include="Bootstrapper.cs" />
     <Compile Include="Configs\AppSetting.cs" />
+    <Compile Include="Configs\Setting.cs" />
     <Compile Include="Configs\WindowPosition.cs" />
     <Compile Include="Events\PlayAudioEvent.cs" />
     <Compile Include="Helpers\AutoStartup.cs" />
-    <Compile Include="Helpers\JsonHelper.cs" />
+    <Content Include="Configs\setting.desc.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="NLog.xsd">
       <SubType>Designer</SubType>
     </None>
@@ -162,7 +168,7 @@
     <Compile Include="Helpers\StartupManager\DesktopBridgeStartupManager.cs" />
     <Compile Include="Helpers\StartupManager\DesktopStartupManager.cs" />
     <Compile Include="Helpers\StartupManager\IStartupManager.cs" />
-    <Compile Include="Services\AppServices.cs" />
+    <Compile Include="Services\EyeNurseService.cs" />
     <Compile Include="ViewModels\CountDownViewModel.cs" />
     <Compile Include="ViewModels\ContextMenuViewModel.cs" />
     <Compile Include="ViewModels\LockScreenViewModel.cs" />

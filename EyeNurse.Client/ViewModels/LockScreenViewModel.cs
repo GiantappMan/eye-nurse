@@ -10,15 +10,15 @@ namespace EyeNurse.Client.ViewModels
 {
     public class LockScreenViewModel : Screen
     {
-        AppServices _services;
-        public LockScreenViewModel(AppServices servcies)
+        EyeNurseService _services;
+        public LockScreenViewModel(EyeNurseService servcies)
         {
             _services = servcies;
         }
 
         #region properties
 
-        public AppServices Services => _services;
+        public EyeNurseService Services => _services;
 
         #endregion
 

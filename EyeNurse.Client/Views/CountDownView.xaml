@@ -20,7 +20,7 @@
     Opacity="0.9"
     ShowInTaskbar="False"
     Top="{Binding PositionTop, Mode=TwoWay}"
-    Topmost="{Binding Services.IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
+    Topmost="{Binding AppService.IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
     WindowStyle="None"
     mc:Ignorable="d">
     <Window.Resources>
@@ -43,12 +43,12 @@
                     x:Name="progressBar"
                     Background="Beige"
                     Maximum="100"
-                    Value="{Binding Services.CountdownPercent, FallbackValue=100}" />
+                    Value="{Binding AppService.CountdownPercent, FallbackValue=100}" />
                 <TextBlock
                     x:Name="txt"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Text="{Binding Services.Countdown, StringFormat=mm\\:ss}" />
+                    Text="{Binding AppService.Countdown, StringFormat=mm\\:ss}" />
                 <iconPacks:PackIconModern
                     x:Name="icon"
                     Width="15"
@@ -63,11 +63,11 @@
                 <MediaElement Loaded="media_Loaded" x:Name="media" />
             </Grid>
             <ControlTemplate.Triggers>
-                <DataTrigger Binding="{Binding Services.IsPaused}" Value="True">
-                    <Setter TargetName="txt" Property="Text" Value="{Binding Services.PausedTime, StringFormat=mm\\:ss}" />
+                <DataTrigger Binding="{Binding AppService.IsPaused}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="{Binding AppService.PausedTime, StringFormat=mm\\:ss}" />
                     <Setter TargetName="icon" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="progressBar" Property="Foreground" Value="{Binding Services.PausedTime, Converter={StaticResource progreeBGConverter}}" />
-                    <Setter TargetName="txt" Property="Foreground" Value="{Binding Services.PausedTime, Converter={StaticResource timeBGConverter}}" />
+                    <Setter TargetName="progressBar" Property="Foreground" Value="{Binding AppService.PausedTime, Converter={StaticResource progreeBGConverter}}" />
+                    <Setter TargetName="txt" Property="Foreground" Value="{Binding AppService.PausedTime, Converter={StaticResource timeBGConverter}}" />
                 </DataTrigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>

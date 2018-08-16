@@ -29,10 +29,10 @@ namespace EyeNurse.Client
                 Singleton<IWindowManager, WindowManager>().
                 Singleton<CountDownViewModel>().
                 Singleton<ContextMenuViewModel>(nameof(ContextMenuViewModel)).
-                Singleton<AppServices>().
+                Singleton<EyeNurseService>().
                 PerRequest<LockScreenViewModel>().
                 PerRequest<SettingViewModel>().
-                Instance<SimpleContainer>(container);
+                Instance(container);
         }
 
         protected override void OnStartup(object sender, StartupEventArgs e)

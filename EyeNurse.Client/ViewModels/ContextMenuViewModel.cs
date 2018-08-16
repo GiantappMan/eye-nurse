@@ -15,11 +15,13 @@ namespace EyeNurse.Client.ViewModels
 {
     public class ContextMenuViewModel : Screen
     {
-        readonly AppServices _services;
         private Logger logger = NLog.LogManager.GetCurrentClassLogger();
-        public ContextMenuViewModel(AppServices servcies)
+        private IWindowManager _windowManager = null;
+        private SettingViewModel _settingVM;
+        public ContextMenuViewModel(EyeNurseService servcies, IWindowManager windowManager)
         {
-            _services = servcies;
+            _windowManager = windowManager;
+            Services = servcies;
             Init();
         }
 
@@ -30,7 +32,7 @@ namespace EyeNurse.Client.ViewModels
 
         #region properties
 
-        public AppServices Services => _services;
+        public EyeNurseService Services { get; }
 
         #region IsPaused
 
@@ -131,19 +133,35 @@ namespace EyeNurse.Client.ViewModels
             }
         }
 
-        public void OpenConfigFolder()
+        public void OpenConfig()
         {
-            try
-            {
-                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                appData = Path.Combine(appData, "EyeNurse");
-                Process.Start(appData);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "OpenConfigFolder Ex");
-            }
+            if (_settingVM != null)
+                return;
+
+            _settingVM = IoC.Get<SettingViewModel>();
+            _windowManager.ShowWindow(_settingVM);
+            _settingVM.Deactivated += _settingVM_Deactivated;
         }
+
+        private void _settingVM_Deactivated(object sender, DeactivationEventArgs e)
+        {
+            _settingVM.Deactivated -= _settingVM_Deactivated;
+            _settingVM = null;
+        }
+
+        //public void OpenConfigFolder()
+        //{
+        //    try
+        //    {
+        //        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        //        appData = Path.Combine(appData, "EyeNurse");
+        //        Process.Start(appData);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        logger.Error(ex, "OpenConfigFolder Ex");
+        //    }
+        //}
 
         #endregion
     }

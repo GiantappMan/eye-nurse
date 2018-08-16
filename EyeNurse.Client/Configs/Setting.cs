@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace EyeNurse.Client.Configs
 {
-    public class WindowPosition
+    public class Setting
     {
-        public double X { get; set; }
-        public double Y { get; set; }
+        public AppSetting App { get; set; }
+        public WindowPosition WindowPosition { get; set; }
     }
 }

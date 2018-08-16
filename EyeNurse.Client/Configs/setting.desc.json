@@ -1,0 +1,24 @@
+﻿{
+  "App": {
+    "lan": "设置",
+    "AlarmInterval": {
+      "type": "timespan",
+      "lan": "执行间隔"
+    },
+    "RestTime": {
+      "type": "timespan",
+      "lan": "休息时间"
+    }
+  },
+  "WindowPosition": {
+    "lan": "窗口",
+    "X": {
+      "type": "Float",
+      "lan": "窗体X坐标"
+    },
+    "Y": {
+      "type": "Float",
+      "lan": "窗体Y坐标"
+    }
+  }
+}

@@ -4,10 +4,12 @@ using EyeNurse.Client.Events;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.ViewModels;
 using Hardcodet.Wpf.TaskbarNotification;
+using JsonConfiger.Utils;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,10 +17,10 @@ using System.Timers;
 
 namespace EyeNurse.Client.Services
 {
-    public class AppServices : INotifyPropertyChanged
+    public class EyeNurseService : INotifyPropertyChanged
     {
         Timer _timer;
-        AppSetting _appSetting;
+        Setting _setting;
         IWindowManager _windowManager;
         LockScreenViewModel _lastLockScreenViewModel;
         TaskbarIcon _taskbarIcon;
@@ -26,7 +28,7 @@ namespace EyeNurse.Client.Services
         readonly IEventAggregator _eventAggregator;
         bool warned;
 
-        public AppServices(IWindowManager windowManager, IEventAggregator eventAggregator)
+        public EyeNurseService(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
             _eventAggregator = eventAggregator;
             _windowManager = windowManager;
@@ -38,6 +40,12 @@ namespace EyeNurse.Client.Services
             _timer = new Timer();
             _timer.Interval = 1000;
             _timer.Elapsed += Timer_Elapsed;
+
+            //var rootDir = Environment.CurrentDirectory;
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            ConfigFilePath = $"{appData}\\EyeNurse\\Configs\\setting.json";
+            //DefaultConfigFilePath = Path.Combine(Environment.CurrentDirectory, "Configs\\default_config.json");
+
             await ResetCountDownAsync();
         }
 
@@ -53,19 +61,22 @@ namespace EyeNurse.Client.Services
             _timer.Stop();
             IsResting = false;
 
-            _appSetting = await LoadConfigAsync<AppSetting>();
-            if (_appSetting == null)
+            _setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+            if (_setting == null)
             {
                 //默认值
-                _appSetting = new AppSetting()
+                _setting = new Setting()
                 {
-                    AlarmInterval = new TimeSpan(0, 45, 0),
-                    RestTime = new TimeSpan(0, 3, 0)
+                    App = new AppSetting()
+                    {
+                        AlarmInterval = new TimeSpan(0, 45, 0),
+                        RestTime = new TimeSpan(0, 3, 0)
+                    }
                 };
-                await SaveConfigAsync(_appSetting);
+                await JsonHelper.JsonSerializeAsync(_setting, ConfigFilePath);
             }
 
-            Countdown = _appSetting.AlarmInterval;
+            Countdown = _setting.App.AlarmInterval;
             CountdownPercent = 100;
 
             _timer.Start();
@@ -95,7 +106,7 @@ namespace EyeNurse.Client.Services
                 if (!IsResting)
                 {
                     Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
-                    CountdownPercent = Countdown.TotalSeconds / _appSetting.AlarmInterval.TotalSeconds * 100;
+                    CountdownPercent = Countdown.TotalSeconds / _setting.App.AlarmInterval.TotalSeconds * 100;
                     if (!warned && Countdown.TotalSeconds <= 30)
                     {
                         warned = true;
@@ -108,7 +119,7 @@ namespace EyeNurse.Client.Services
                     {
                         _timer.Stop();
                         _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
-                        RestTimeCountdown = _appSetting.RestTime;
+                        RestTimeCountdown = _setting.App.RestTime;
                         Execute.OnUIThread(() =>
                         {
                             _windowManager.ShowWindow(_lastLockScreenViewModel);
@@ -122,7 +133,7 @@ namespace EyeNurse.Client.Services
                 {
                     warned = false;
                     RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
-                    RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _appSetting.RestTime.TotalSeconds * 100;
+                    RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _setting.App.RestTime.TotalSeconds * 100;
                     if (RestTimeCountdown.TotalSeconds <= 0)
                     {
                         await ResetCountDownAsync();
@@ -371,36 +382,39 @@ namespace EyeNurse.Client.Services
 
         #region config
 
-        public async Task<T> LoadConfigAsync<T>(string path = null) where T : new()
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(path))
-                    path = GetDefaultPath<T>();
+        //public async Task<T> LoadConfigAsync<T>(string path = null) where T : new()
+        //{
+        //    try
+        //    {
+        //        if (string.IsNullOrEmpty(path))
+        //            path = GetConfigSavePath<T>();
 
-                var config = await JsonHelper.JsonDeserializeFromFileAsync<T>(path);
-                return config;
-            }
-            catch (Exception ex)
-            {
-                return default(T);
-            }
-        }
+        //        var config = await JsonHelper.JsonDeserializeFromFileAsync<T>(path);
+        //        return config;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return default(T);
+        //    }
+        //}
 
-        public async Task SaveConfigAsync<T>(T data, string path = null) where T : new()
-        {
-            if (string.IsNullOrEmpty(path))
-                path = GetDefaultPath<T>();
+        //public async Task SaveConfigAsync<T>(T data, string path = null) where T : new()
+        //{
+        //    if (string.IsNullOrEmpty(path))
+        //        path = GetConfigSavePath<T>();
 
-            var json = await JsonHelper.JsonSerializeAsync(data, path);
-        }
+        //    var json = await JsonHelper.JsonSerializeAsync(data, path);
+        //}
 
-        public string GetDefaultPath<T>() where T : new()
-        {
-            var rootDir = Environment.CurrentDirectory;
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            return $"{appData}\\EyeNurse\\Configs\\{typeof(T).Name}.json";
-        }
+        //public string GetConfigSavePath<T>() where T : new()
+        //{
+        //    var rootDir = Environment.CurrentDirectory;
+        //    var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        //    return $"{appData}\\EyeNurse\\Configs\\{typeof(T).Name}.json";
+        //}
+
+        public string ConfigFilePath { get; private set; }
+        public string DefaultConfigFilePath { get; private set; }
 
         #endregion
 

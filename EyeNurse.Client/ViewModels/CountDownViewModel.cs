@@ -2,6 +2,7 @@
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.Services;
+using JsonConfiger.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +14,19 @@ namespace EyeNurse.Client.ViewModels
 {
     public class CountDownViewModel : Screen
     {
-        readonly AppServices _services;
         WindowPosition _windowPosition;
 
-        public CountDownViewModel(AppServices servcies)
+        public CountDownViewModel(EyeNurseService servcies)
         {
-            _services = servcies;
+            AppService = servcies;
         }
 
         #region override
 
         protected override async void OnInitialize()
         {
-            _windowPosition = await Services.LoadConfigAsync<WindowPosition>();
+            var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
+            _windowPosition = setting == null ? new WindowPosition() : setting.WindowPosition;
             if (_windowPosition == null)
             {
                 _windowPosition = new WindowPosition();
@@ -49,14 +50,16 @@ namespace EyeNurse.Client.ViewModels
 
         internal async void SavePosition()
         {
-            await Services.SaveConfigAsync(_windowPosition);
+            var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
+            setting.WindowPosition = _windowPosition;
+            await JsonHelper.JsonSerializeAsync(setting, AppService.ConfigFilePath);
         }
 
         #endregion
 
         #region properties
 
-        public AppServices Services => _services;
+        public EyeNurseService AppService { get; }
 
         #region PositionLeft
 
