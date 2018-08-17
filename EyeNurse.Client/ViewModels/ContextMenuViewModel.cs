@@ -1,4 +1,5 @@
 ﻿using Caliburn.Micro;
+using EyeNurse.Client.Events;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.Services;
 using NLog;
@@ -18,8 +19,10 @@ namespace EyeNurse.Client.ViewModels
         private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         private IWindowManager _windowManager = null;
         private SettingViewModel _settingVM;
-        public ContextMenuViewModel(EyeNurseService servcies, IWindowManager windowManager)
+        readonly IEventAggregator _eventAggregator;
+        public ContextMenuViewModel(EyeNurseService servcies, IWindowManager windowManager, IEventAggregator eventAggregator)
         {
+            _eventAggregator = eventAggregator;
             _windowManager = windowManager;
             Services = servcies;
             Init();
@@ -140,6 +143,10 @@ namespace EyeNurse.Client.ViewModels
 
             _settingVM = IoC.Get<SettingViewModel>();
             bool? isOk = _windowManager.ShowDialog(_settingVM);
+            if (isOk != null && isOk.Value)
+            {
+                _eventAggregator.PublishOnUIThread(new AppSettingChangedEvent());
+            }
             _settingVM = null;
         }
 

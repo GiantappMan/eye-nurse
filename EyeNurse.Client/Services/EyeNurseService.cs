@@ -17,7 +17,7 @@ using System.Timers;
 
 namespace EyeNurse.Client.Services
 {
-    public class EyeNurseService : INotifyPropertyChanged
+    public class EyeNurseService : INotifyPropertyChanged, IHandle<AppSettingChangedEvent>
     {
         Timer _timer;
         Setting _setting;
@@ -37,6 +37,7 @@ namespace EyeNurse.Client.Services
 
         private async void Init()
         {
+            _eventAggregator.Subscribe(this);
             _timer = new Timer();
             _timer.Interval = 1000;
             _timer.Elapsed += Timer_Elapsed;
@@ -429,6 +430,12 @@ namespace EyeNurse.Client.Services
                 return;
             handle(this, new PropertyChangedEventArgs(propertyName));
         }
+
         #endregion
+
+        public async void Handle(AppSettingChangedEvent message)
+        {
+            _setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+        }
     }
 }

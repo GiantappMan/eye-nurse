@@ -12,18 +12,34 @@ using System.Windows;
 
 namespace EyeNurse.Client.ViewModels
 {
-    public class CountDownViewModel : Screen
+    public class CountDownViewModel : Screen, IHandle<AppSettingChangedEvent>
     {
         WindowPosition _windowPosition;
 
-        public CountDownViewModel(EyeNurseService servcies)
+        public CountDownViewModel(EyeNurseService servcies, IEventAggregator eventAggregator)
         {
+            eventAggregator.Subscribe(this);
             AppService = servcies;
         }
 
         #region override
 
         protected override async void OnInitialize()
+        {
+            base.OnInitialize();
+            await RefreshConfig();
+        }
+
+        protected override void OnDeactivate(bool close)
+        {
+            base.OnDeactivate(close);
+        }
+
+        #endregion
+
+        #region public methods
+
+        public async Task RefreshConfig()
         {
             var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
             _windowPosition = setting == null ? null : setting.WindowPosition;
@@ -36,24 +52,18 @@ namespace EyeNurse.Client.ViewModels
             }
             PositionLeft = _windowPosition.X;
             PositionTop = _windowPosition.Y;
-
-            base.OnInitialize();
         }
-
-        protected override void OnDeactivate(bool close)
-        {
-            base.OnDeactivate(close);
-        }
-
-        #endregion
-
-        #region public methods
 
         internal async void SavePosition()
         {
             var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
             setting.WindowPosition = _windowPosition;
             await JsonHelper.JsonSerializeAsync(setting, AppService.ConfigFilePath);
+        }
+
+        public async void Handle(AppSettingChangedEvent message)
+        {
+            await RefreshConfig();
         }
 
         #endregion

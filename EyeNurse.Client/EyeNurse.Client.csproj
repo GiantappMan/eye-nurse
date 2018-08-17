@@ -105,7 +105,7 @@
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
     </Reference>
     <Reference Include="JsonConfiger.WPF, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\JsonConfiger.1.0.0.10\lib\net46\JsonConfiger.WPF.dll</HintPath>
+      <HintPath>..\packages\JsonConfiger.1.0.0.11\lib\net46\JsonConfiger.WPF.dll</HintPath>
     </Reference>
     <Reference Include="LoadingIndicators.WPF, Version=0.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\LoadingIndicators.WPF.0.0.1\lib\LoadingIndicators.WPF.dll</HintPath>
@@ -156,6 +156,7 @@
     <Compile Include="Configs\AppSetting.cs" />
     <Compile Include="Configs\Setting.cs" />
     <Compile Include="Configs\WindowPosition.cs" />
+    <Compile Include="Events\AppSettingChangedEvent.cs" />
     <Compile Include="Events\PlayAudioEvent.cs" />
     <Compile Include="Helpers\AutoStartup.cs" />
     <Content Include="Configs\setting.desc.json">
