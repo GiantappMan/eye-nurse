@@ -13,12 +13,9 @@
         x:Key="ContextMenu"
         cal:Action.Target="ContextMenuViewModel"
         x:Shared="false">
-        <MenuItem cal:Message.Attach="About()" Header="关于">
-            <!--<MenuItem Header="官网" />
-            <MenuItem Header="反馈" />
-            <MenuItem Header="检查更新" />
-            <MenuItem Header="分享" />-->
-        </MenuItem>
+        <MenuItem cal:Message.Attach="About()" Header="关于" />
+        <MenuItem cal:Message.Attach="Donate()" Header="捐赠" />
+        <Separator />
         <MenuItem cal:Message.Attach="OpenConfig()" Header="配置" />
         <MenuItem
             cal:Message.Attach="StartWithOS()"

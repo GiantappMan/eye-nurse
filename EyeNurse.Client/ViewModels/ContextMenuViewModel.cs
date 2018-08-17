@@ -8,9 +8,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using Windows.Services.Store;
 
 namespace EyeNurse.Client.ViewModels
 {
@@ -150,6 +152,20 @@ namespace EyeNurse.Client.ViewModels
             _settingVM = null;
         }
 
+        [ComImport]
+        [Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        public interface IInitializeWithWindow
+        {
+            void Initialize(IntPtr hwnd);
+        }
+
+        public void Donate()
+        {
+            StoreContext context = StoreContext.GetDefault();
+            IInitializeWithWindow initWindow = (IInitializeWithWindow)(object)context;
+            initWindow.Initialize(Process.GetCurrentProcess().MainWindowHandle);
+        }
 
         #endregion
     }
