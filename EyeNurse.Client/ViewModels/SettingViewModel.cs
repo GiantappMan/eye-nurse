@@ -1,17 +1,12 @@
 ﻿using Caliburn.Micro;
-using EyeNurse.Client.Configs;
+using DZY.DotNetUtil.Helpers;
 using EyeNurse.Client.Services;
 using JsonConfiger;
 using JsonConfiger.Models;
-using JsonConfiger.Utils;
 using NLog;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EyeNurse.Client.ViewModels
 {

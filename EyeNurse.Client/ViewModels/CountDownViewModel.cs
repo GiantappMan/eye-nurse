@@ -1,12 +1,8 @@
 ﻿using Caliburn.Micro;
+using DZY.DotNetUtil.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.Services;
-using JsonConfiger.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 

@@ -1,17 +1,12 @@
 ﻿using Caliburn.Micro;
+using DZY.DotNetUtil.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
-using EyeNurse.Client.Helpers;
 using EyeNurse.Client.ViewModels;
 using Hardcodet.Wpf.TaskbarNotification;
-using JsonConfiger.Utils;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
 
