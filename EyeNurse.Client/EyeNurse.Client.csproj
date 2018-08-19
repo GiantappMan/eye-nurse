@@ -165,7 +165,7 @@
     <Compile Include="Events\AppSettingChangedEvent.cs" />
     <Compile Include="Events\PlayAudioEvent.cs" />
     <Compile Include="Helpers\AutoStartup.cs" />
-    <Content Include="Configs\setting.desc.json">
+    <Content Include="Resources\Configs\setting.desc.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="NLog.xsd">

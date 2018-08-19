@@ -24,7 +24,7 @@ namespace EyeNurse.Client.ViewModels
         protected async override void OnInitialize()
         {
             var config = await JsonHelper.JsonDeserializeFromFileAsync<dynamic>(_appServices.ConfigFilePath);
-            string descPath = Path.Combine(AppDomain.CurrentDomain.SetupInformation.ApplicationBase, "Configs\\setting.desc.json");
+            string descPath = Path.Combine(AppDomain.CurrentDomain.SetupInformation.ApplicationBase, "Resources\\Configs\\setting.desc.json");
             var descConfig = await JsonHelper.JsonDeserializeFromFileAsync<dynamic>(descPath);
             JsonConfierViewModel = _jcrService.GetVM(config, descConfig);
             base.OnInitialize();
