@@ -160,11 +160,71 @@ namespace EyeNurse.Client.ViewModels
             void Initialize(IntPtr hwnd);
         }
 
-        public void Donate()
+        public async void Donate()
         {
-            StoreContext context = StoreContext.GetDefault();
-            IInitializeWithWindow initWindow = (IInitializeWithWindow)(object)context;
-            initWindow.Initialize(Process.GetCurrentProcess().MainWindowHandle);
+            await PurchaseAddOn("9PPHPFT7Q3XK");
+        }
+
+        private StoreContext context = null;
+        public async Task<string> PurchaseAddOn(string storeId)
+        {
+            string msg = null;
+            if (context == null)
+            {
+                ////UWP
+                //context = StoreContext.GetDefault();
+
+                //desktopbridge
+                //await Execute.OnUIThreadAsync(() =>
+                //{
+                context = StoreContext.GetDefault();
+                IInitializeWithWindow initWindow = (IInitializeWithWindow)(object)context;
+                IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
+                initWindow.Initialize(mainHandler);
+                //});
+            }
+
+            StorePurchaseResult result = await context.RequestPurchaseAsync(storeId);
+
+            // Capture the error message for the operation, if any.
+            string extendedError = string.Empty;
+            if (result.ExtendedError != null)
+            {
+                extendedError = result.ExtendedError.Message;
+            }
+
+            switch (result.Status)
+            {
+                case StorePurchaseStatus.AlreadyPurchased:
+                    msg = "The user has already purchased the product.";
+                    break;
+
+                case StorePurchaseStatus.Succeeded:
+                    msg = "The purchase was successful.";
+                    break;
+
+                case StorePurchaseStatus.NotPurchased:
+                    msg = "The purchase did not complete. " +
+                        "The user may have cancelled the purchase. ExtendedError: " + extendedError;
+                    break;
+
+                case StorePurchaseStatus.NetworkError:
+                    msg = "The purchase was unsuccessful due to a network error. " +
+                        "ExtendedError: " + extendedError;
+                    break;
+
+                case StorePurchaseStatus.ServerError:
+                    msg = "The purchase was unsuccessful due to a server error. " +
+                        "ExtendedError: " + extendedError;
+                    break;
+
+                default:
+                    msg = "The purchase was unsuccessful due to an unknown error. " +
+                        "ExtendedError: " + extendedError;
+                    break;
+            }
+
+            return msg;
         }
 
         #endregion

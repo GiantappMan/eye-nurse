@@ -37,6 +37,14 @@ namespace EyeNurse.Client.Views
             _eventAggregator.Subscribe(this);
         }
 
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var handle = (new WindowInteropHelper(this)).Handle;
+            var container = IoC.Get<SimpleContainer>();
+            container.RegisterInstance(typeof(IntPtr), "MainHandler", handle);
+        }
+
         public void Handle(PlayAudioEvent message)
         {
             _media.Source = new Uri(message.Source, UriKind.Relative);
