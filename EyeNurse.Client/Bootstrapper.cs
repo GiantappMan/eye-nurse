@@ -21,6 +21,10 @@ namespace EyeNurse.Client
 
         protected override void Configure()
         {
+            string view = "EyeNurse.Client.Views";
+            string dzyViewModel = "DZY.DotNetUtil.ViewModels";
+            ViewLocator.AddSubNamespaceMapping(dzyViewModel, view);
+
             //自定义消息拦截
             container = new SimpleContainer();
 

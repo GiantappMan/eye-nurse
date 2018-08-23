@@ -101,8 +101,11 @@
     <Reference Include="ControlzEx, Version=3.0.2.4, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\ControlzEx.3.0.2.4\lib\net462\ControlzEx.dll</HintPath>
     </Reference>
-    <Reference Include="DZY.DotNetUtil, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DZY.DotNetUtil.1.0.0\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
+    <Reference Include="DZY.DotNetUtil, Version=1.0.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.DotNetUtil.1.0.1\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
+    </Reference>
+    <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.DotNetUtil.WPF.1.0.0\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
     </Reference>
     <Reference Include="Hardcodet.Wpf.TaskbarNotification, Version=1.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
@@ -186,6 +189,9 @@
     <Compile Include="Views\CountDownView.xaml.cs">
       <DependentUpon>CountDownView.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\DonateView.xaml.cs">
+      <DependentUpon>DonateView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Views\LockScreenView.xaml.cs">
       <DependentUpon>LockScreenView.xaml</DependentUpon>
     </Compile>
@@ -242,6 +248,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\CommonResources.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\DonateView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
