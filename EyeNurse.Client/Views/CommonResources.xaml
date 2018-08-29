@@ -14,6 +14,7 @@
         cal:Action.Target="ContextMenuViewModel"
         x:Shared="false">
         <MenuItem cal:Message.Attach="About()" Header="关于" />
+        <MenuItem cal:Message.Attach="QQ()" Header="产品交流群（641405255）" />
         <MenuItem cal:Message.Attach="Donate()" Header="捐赠" />
         <Separator />
         <MenuItem cal:Message.Attach="OpenConfig()" Header="配置" />

@@ -6,7 +6,7 @@
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF;assembly=DZY.DotNetUtil.WPF"
-    Title="感谢支持"
+    Title="感谢支持，捐赠后请加入VIP交流群"
     Width="800"
     Height="450"
     WindowStartupLocation="CenterScreen"

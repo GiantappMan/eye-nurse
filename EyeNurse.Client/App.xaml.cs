@@ -28,9 +28,18 @@ namespace EyeNurse.Client
             base.OnStartup(e);
 
             notifyIcon = (TaskbarIcon)FindResource("NotifyIcon");
+            notifyIcon.TrayMouseDoubleClick += NotifyIcon_TrayMouseDoubleClick;
             notifyIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
             var container = IoC.Get<SimpleContainer>();
             container.Instance(notifyIcon);
+        }
+
+        private void NotifyIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e)
+        {
+            //重置到最顶层
+            Current.MainWindow.Topmost = false;
+            Current.MainWindow.Topmost = true;
+            Current.MainWindow.Show();
         }
 
         private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)

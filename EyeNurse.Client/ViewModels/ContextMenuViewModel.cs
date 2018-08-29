@@ -167,6 +167,18 @@ namespace EyeNurse.Client.ViewModels
             _windowManager.ShowDialog(vm);
         }
 
+        public void QQ()
+        {
+            try
+            {
+                Process.Start("https://shang.qq.com/wpa/qunwpa?idkey=e8d8e46fa4067c16110376db53d51065bdce6abb943e08f09736317527bfbf45");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "About Ex");
+            }
+        }
+
         #endregion
     }
 }
