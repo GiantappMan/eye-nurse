@@ -7,6 +7,7 @@ using NLog;
 using System;
 using System.Diagnostics;
 using System.IO;
+using Windows.Storage;
 
 namespace EyeNurse.Client.ViewModels
 {
@@ -47,8 +48,13 @@ namespace EyeNurse.Client.ViewModels
         {
             try
             {
+#if UWP
+                //https://stackoverflow.com/questions/48849076/uwp-app-does-not-copy-file-to-appdata-folder
+                var appData = Path.Combine(ApplicationData.Current.LocalCacheFolder.Path, "Roaming\\EyeNurse");
+#else
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 appData = Path.Combine(appData, "EyeNurse");
+#endif
                 Process.Start(appData);
             }
             catch (Exception ex)
@@ -56,7 +62,6 @@ namespace EyeNurse.Client.ViewModels
                 logger.Error(ex, "OpenConfigFolder Ex");
             }
         }
-
 
         #region JsonConfierViewModel
 
