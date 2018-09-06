@@ -59,7 +59,7 @@ namespace EyeNurse.Client.Helpers.StartupManager
                 }
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }

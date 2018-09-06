@@ -1,0 +1,30 @@
+﻿<Window
+    x:Class="EyeNurse.Client.Views.PurchaseTipsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:EyeNurse.Client.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF;assembly=DZY.DotNetUtil.WPF"
+    Title="DuangDuangDuang"
+    Width="800"
+    Height="450"
+    ResizeMode="NoResize"
+    WindowStartupLocation="CenterScreen"
+    mc:Ignorable="d">
+    <Grid>
+        <wpf:PurchaseTipsControl
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            BGM="Resources//Sounds//PurchaseTipsBg.mp3" />
+        <Grid Background="Gray" Opacity="0.99">
+            <TextBlock
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                FontSize="14"
+                Foreground="White">
+                感谢你的支持！
+            </TextBlock>
+        </Grid>
+    </Grid>
+</Window>

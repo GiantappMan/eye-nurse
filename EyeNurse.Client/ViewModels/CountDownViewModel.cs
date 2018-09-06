@@ -38,13 +38,15 @@ namespace EyeNurse.Client.ViewModels
         public async Task RefreshConfig()
         {
             var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
-            _windowPosition = setting == null ? null : setting.WindowPosition;
+            _windowPosition = setting?.WindowPosition;
             if (_windowPosition == null)
             {
                 //默认位置
-                _windowPosition = new WindowPosition();
-                _windowPosition.X = SystemParameters.WorkArea.Width - 120;
-                _windowPosition.Y = SystemParameters.WorkArea.Height / 3;
+                _windowPosition = new WindowPosition
+                {
+                    X = SystemParameters.WorkArea.Width - 120,
+                    Y = SystemParameters.WorkArea.Height / 3
+                };
             }
             PositionLeft = _windowPosition.X;
             PositionTop = _windowPosition.Y;

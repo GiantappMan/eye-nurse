@@ -8,7 +8,8 @@ namespace EyeNurse.Client.Configs
 {
     public class AppData
     {
-        public int LanuchCounter { get; set; }
         public bool Purchased { get; set; }
+        public bool Reviewed { get; set; }
+        public DateTime LastTipsDate { get; set; }
     }
 }

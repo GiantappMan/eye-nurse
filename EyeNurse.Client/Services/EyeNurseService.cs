@@ -37,8 +37,10 @@ namespace EyeNurse.Client.Services
         private async void Init()
         {
             _eventAggregator.Subscribe(this);
-            _timer = new Timer();
-            _timer.Interval = 1000;
+            _timer = new Timer
+            {
+                Interval = 1000
+            };
             _timer.Elapsed += Timer_Elapsed;
 
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -56,7 +58,8 @@ namespace EyeNurse.Client.Services
             var vm = GetPurchaseViewModel();
             await vm.LoadProducts();
 
-            CheckVIP(vm);
+            await CheckVIP(vm);
+            await ShowPurchaseTips();
         }
 
         private void ResetCountDown()
@@ -139,7 +142,20 @@ namespace EyeNurse.Client.Services
 
         #endregion
 
-        public async void CheckVIP(PurchaseViewModel vm)
+        public async Task ShowPurchaseTips()
+        {
+            var ts = DateTime.Now - AppData.LastTipsDate;
+            if (ts.TotalDays >= 10 && (!AppData.Purchased || !AppData.Reviewed))
+            {
+                AppData.LastTipsDate = DateTime.Now;
+                await SaveAppData();
+
+                var tipsVM = GetPurchaseTipVM();
+                _windowManager.ShowWindow(tipsVM);
+            }
+        }
+
+        public async Task CheckVIP(PurchaseViewModel vm)
         {
             try
             {
@@ -162,7 +178,6 @@ namespace EyeNurse.Client.Services
             {
                 AppData = new AppData();
             }
-            AppData.LanuchCounter += 1;
             await SaveAppData();
         }
 
@@ -197,6 +212,11 @@ namespace EyeNurse.Client.Services
             var vm = new PurchaseViewModel();
             vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
             return vm;
+        }
+
+        public PurchaseTipsViewModel GetPurchaseTipVM()
+        {
+            return new PurchaseTipsViewModel();
         }
 
         #region properties

@@ -162,7 +162,9 @@ namespace EyeNurse.Client.ViewModels
             vm.LoadProducts();
             _windowManager.ShowDialog(vm);
 
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             Services.CheckVIP(vm);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
         }
 
         public void QQ()
