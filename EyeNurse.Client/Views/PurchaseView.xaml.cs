@@ -17,9 +17,9 @@ namespace EyeNurse.Client.Views
     /// <summary>
     /// Interaction logic for DonateView.xaml
     /// </summary>
-    public partial class DonateView : Window
+    public partial class PurchaseView : Window
     {
-        public DonateView()
+        public PurchaseView()
         {
             InitializeComponent();
         }

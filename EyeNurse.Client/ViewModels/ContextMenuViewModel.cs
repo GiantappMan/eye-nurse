@@ -155,12 +155,12 @@ namespace EyeNurse.Client.ViewModels
             _settingVM = null;
         }
 
-        public void Donate()
+        public void Purchase()
         {
             IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
 
             StoreHelper store = new StoreHelper(mainHandler);
-            var vm = new DonateViewModel();
+            var vm = new PurchaseViewModel();
             vm.Initlize(store);
             vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
             vm.LoadProducts(new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
