@@ -1,9 +1,11 @@
 ﻿using Caliburn.Micro;
 using DZY.DotNetUtil.Helpers;
+using DZY.DotNetUtil.ViewModels;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.ViewModels;
 using Hardcodet.Wpf.TaskbarNotification;
+using NLog;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -14,8 +16,8 @@ namespace EyeNurse.Client.Services
 {
     public class EyeNurseService : INotifyPropertyChanged, IHandle<AppSettingChangedEvent>
     {
+        private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         Timer _timer;
-        Setting _setting;
         IWindowManager _windowManager;
         LockScreenViewModel _lastLockScreenViewModel;
         TaskbarIcon _taskbarIcon;
@@ -30,6 +32,8 @@ namespace EyeNurse.Client.Services
             Init();
         }
 
+        #region private methods
+
         private async void Init()
         {
             _eventAggregator.Subscribe(this);
@@ -37,15 +41,25 @@ namespace EyeNurse.Client.Services
             _timer.Interval = 1000;
             _timer.Elapsed += Timer_Elapsed;
 
-            //var rootDir = Environment.CurrentDirectory;
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             ConfigFilePath = $"{appData}\\EyeNurse\\Configs\\setting.json";
-            //DefaultConfigFilePath = Path.Combine(Environment.CurrentDirectory, "Configs\\default_config.json");
+            AppDataFilePath = $"{appData}\\EyeNurse\\appData.json";
 
-            await ResetCountDownAsync();
+            //读取 Setting
+            await ReloadSetting();
+
+            //读取AppData
+            await ReloadAppData();
+
+            ResetCountDown();
+
+            var vm = GetPurchaseViewModel();
+            await vm.LoadProducts();
+
+            CheckVIP(vm);
         }
 
-        private async Task ResetCountDownAsync()
+        private void ResetCountDown()
         {
             //休息结束
             if (_lastLockScreenViewModel != null)
@@ -57,28 +71,13 @@ namespace EyeNurse.Client.Services
             _timer.Stop();
             IsResting = false;
 
-            _setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
-            if (_setting == null || _setting.App == null)
-            {
-                //默认值
-                _setting = new Setting()
-                {
-                    App = new AppSetting()
-                    {
-                        AlarmInterval = new TimeSpan(0, 45, 0),
-                        RestTime = new TimeSpan(0, 3, 0)
-                    }
-                };
-                await JsonHelper.JsonSerializeAsync(_setting, ConfigFilePath);
-            }
-
-            Countdown = _setting.App.AlarmInterval;
+            Countdown = Setting.App.AlarmInterval;
             CountdownPercent = 100;
 
             _timer.Start();
         }
 
-        private async void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             if (IsPaused)
             {
@@ -88,13 +87,6 @@ namespace EyeNurse.Client.Services
                     _taskbarIcon = IoC.Get<TaskbarIcon>();
                     _sourceIcon = _taskbarIcon.Icon;
                 }
-
-                //todo 托盘显示暂停时间 https://github.com/MscoderStudio/EyeNurse/issues/4
-                //using (Bitmap bm = new Bitmap(_taskbarIcon.Icon.ToBitmap()))
-                //{
-                //    var newIcon = Icon.FromHandle(bm.GetHicon());
-                //    _taskbarIcon.Icon = newIcon;
-                //}
             }
             else
             {
@@ -102,7 +94,7 @@ namespace EyeNurse.Client.Services
                 if (!IsResting)
                 {
                     Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
-                    CountdownPercent = Countdown.TotalSeconds / _setting.App.AlarmInterval.TotalSeconds * 100;
+                    CountdownPercent = Countdown.TotalSeconds / Setting.App.AlarmInterval.TotalSeconds * 100;
                     if (!warned && Countdown.TotalSeconds <= 30)
                     {
                         warned = true;
@@ -115,7 +107,7 @@ namespace EyeNurse.Client.Services
                     {
                         _timer.Stop();
                         _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
-                        RestTimeCountdown = _setting.App.RestTime;
+                        RestTimeCountdown = Setting.App.RestTime;
                         Execute.OnUIThread(() =>
                         {
                             _windowManager.ShowWindow(_lastLockScreenViewModel);
@@ -129,10 +121,10 @@ namespace EyeNurse.Client.Services
                 {
                     warned = false;
                     RestTimeCountdown = RestTimeCountdown.Subtract(new TimeSpan(0, 0, 1));
-                    RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / _setting.App.RestTime.TotalSeconds * 100;
+                    RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / Setting.App.RestTime.TotalSeconds * 100;
                     if (RestTimeCountdown.TotalSeconds <= 0)
                     {
-                        await ResetCountDownAsync();
+                        ResetCountDown();
                     }
                 }
             }
@@ -143,6 +135,68 @@ namespace EyeNurse.Client.Services
             var temp = sender as LockScreenViewModel;
             temp.Deactivated -= _lastLockScreenViewModel_Deactivated;
             RestTimeCountdown = new TimeSpan();
+        }
+
+        #endregion
+
+        public async void CheckVIP(PurchaseViewModel vm)
+        {
+            try
+            {
+                if (AppData.Purchased != vm.IsVIP)
+                {
+                    AppData.Purchased = vm.IsVIP;
+                    await SaveAppData();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("CheckVIP EX:" + ex);
+            }
+        }
+
+        public async Task ReloadAppData()
+        {
+            AppData = await JsonHelper.JsonDeserializeFromFileAsync<AppData>(AppDataFilePath);
+            if (AppData == null)
+            {
+                AppData = new AppData();
+            }
+            AppData.LanuchCounter += 1;
+            await SaveAppData();
+        }
+
+        public async Task SaveAppData()
+        {
+            await JsonHelper.JsonSerializeAsync(AppData, AppDataFilePath);
+        }
+
+        public async Task ReloadSetting()
+        {
+            Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+            if (Setting == null || Setting.App == null)
+            {
+                //默认值
+                Setting = new Setting()
+                {
+                    App = new AppSetting()
+                    {
+                        AlarmInterval = new TimeSpan(0, 45, 0),
+                        RestTime = new TimeSpan(0, 3, 0)
+                    }
+                };
+                await JsonHelper.JsonSerializeAsync(Setting, ConfigFilePath);
+            }
+        }
+
+        public PurchaseViewModel GetPurchaseViewModel()
+        {
+            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
+
+            StoreHelper store = new StoreHelper(mainHandler);
+            var vm = new PurchaseViewModel();
+            vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
+            return vm;
         }
 
         #region properties
@@ -378,39 +432,10 @@ namespace EyeNurse.Client.Services
 
         #region config
 
-        //public async Task<T> LoadConfigAsync<T>(string path = null) where T : new()
-        //{
-        //    try
-        //    {
-        //        if (string.IsNullOrEmpty(path))
-        //            path = GetConfigSavePath<T>();
-
-        //        var config = await JsonHelper.JsonDeserializeFromFileAsync<T>(path);
-        //        return config;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return default(T);
-        //    }
-        //}
-
-        //public async Task SaveConfigAsync<T>(T data, string path = null) where T : new()
-        //{
-        //    if (string.IsNullOrEmpty(path))
-        //        path = GetConfigSavePath<T>();
-
-        //    var json = await JsonHelper.JsonSerializeAsync(data, path);
-        //}
-
-        //public string GetConfigSavePath<T>() where T : new()
-        //{
-        //    var rootDir = Environment.CurrentDirectory;
-        //    var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        //    return $"{appData}\\EyeNurse\\Configs\\{typeof(T).Name}.json";
-        //}
-
         public string ConfigFilePath { get; private set; }
-        public string DefaultConfigFilePath { get; private set; }
+        public string AppDataFilePath { get; private set; }
+        public AppData AppData { get; private set; }
+        public Setting Setting { get; private set; }
 
         #endregion
 
@@ -430,7 +455,7 @@ namespace EyeNurse.Client.Services
 
         public async void Handle(AppSettingChangedEvent message)
         {
-            _setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+            Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
         }
     }
 }
