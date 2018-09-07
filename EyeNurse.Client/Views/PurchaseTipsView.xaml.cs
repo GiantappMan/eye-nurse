@@ -23,5 +23,10 @@ namespace EyeNurse.Client.Views
         {
             InitializeComponent();
         }
+
+        private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+
+        }
     }
 }

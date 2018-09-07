@@ -5,11 +5,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF;assembly=DZY.DotNetUtil.WPF"
+    xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF.Views;assembly=DZY.DotNetUtil.WPF"
     Title="VIP"
     Width="800"
     Height="450"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">
-    <wpf:PurchaseControl x:Name="control" />
+    <wpf:PurchaseView x:Name="control" />
 </Window>

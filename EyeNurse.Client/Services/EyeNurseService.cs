@@ -1,6 +1,7 @@
 ﻿using Caliburn.Micro;
 using DZY.DotNetUtil.Helpers;
 using DZY.DotNetUtil.ViewModels;
+using DZY.DotNetUtil.WPF.ViewModels;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.ViewModels;
@@ -9,8 +10,12 @@ using NLog;
 using System;
 using System.ComponentModel;
 using System.Drawing;
+using System.Dynamic;
 using System.Threading.Tasks;
 using System.Timers;
+using System.Windows;
+using System.Windows.Controls;
+using static DZY.DotNetUtil.WPF.ViewModels.PurchaseTipsViewModel;
 
 namespace EyeNurse.Client.Services
 {
@@ -151,10 +156,26 @@ namespace EyeNurse.Client.Services
                 await SaveAppData();
 
                 var tipsVM = GetPurchaseTipVM();
-                _windowManager.ShowWindow(tipsVM);
+                tipsVM.DisplayName = "Duang Duang Duang ! ! !";
+                dynamic setting = new ExpandoObject();
+                setting.Width = 800;
+                setting.Height = 450;
+                setting.ResizeMode = ResizeMode.NoResize;
+                setting.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                _windowManager.ShowWindow(tipsVM, null, setting);
             }
         }
 
+        public void Purchase()
+        {
+            var vm = GetPurchaseViewModel();
+            vm.LoadProducts();
+            _windowManager.ShowDialog(vm);
+
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            CheckVIP(vm);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+        }
         public async Task CheckVIP(PurchaseViewModel vm)
         {
             try
@@ -211,12 +232,21 @@ namespace EyeNurse.Client.Services
             StoreHelper store = new StoreHelper(mainHandler);
             var vm = new PurchaseViewModel();
             vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
+            vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
             return vm;
         }
 
         public PurchaseTipsViewModel GetPurchaseTipVM()
         {
-            return new PurchaseTipsViewModel();
+            var tipsVM = new PurchaseTipsViewModel
+            {
+                BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute)
+            };
+            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
+
+            StoreHelper store = new StoreHelper(mainHandler);
+            tipsVM.Initlize(store, GetPurchaseViewModel(), _windowManager);
+            return tipsVM;
         }
 
         #region properties

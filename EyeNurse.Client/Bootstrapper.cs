@@ -4,6 +4,7 @@ using EyeNurse.Client.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,10 +22,13 @@ namespace EyeNurse.Client
 
         protected override void Configure()
         {
-            string view = "EyeNurse.Client.Views";
-            string dzyViewModel = "DZY.DotNetUtil.ViewModels";
-            ViewLocator.AddSubNamespaceMapping(dzyViewModel, view);
+            //string view = "EyeNurse.Client.Views";
+            string dzyView = "DZY.DotNetUtil.WPF.Views";
+            string dzyViewModel = "DZY.DotNetUtil.WPF.ViewModels";
+            //ViewLocator.AddNamespaceMapping(dzyViewModel, dzyView);
+            ViewLocator.AddSubNamespaceMapping(dzyViewModel, dzyView, "Control");
 
+            ViewModelLocator.AddSubNamespaceMapping(dzyView, dzyViewModel);
             //自定义消息拦截
             container = new SimpleContainer();
 
@@ -37,6 +41,14 @@ namespace EyeNurse.Client
                 PerRequest<LockScreenViewModel>().
                 PerRequest<SettingViewModel>().
                 Instance(container);
+        }
+
+        protected override IEnumerable<Assembly> SelectAssemblies()
+        {
+            return new[] {
+                Assembly.GetExecutingAssembly(),
+                Assembly.Load(new AssemblyName("DZY.DotNetUtil.WPF")),
+            };
         }
 
         protected override void OnStartup(object sender, StartupEventArgs e)

@@ -101,11 +101,11 @@
     <Reference Include="ControlzEx, Version=3.0.2.4, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\ControlzEx.3.0.2.4\lib\net462\ControlzEx.dll</HintPath>
     </Reference>
-    <Reference Include="DZY.DotNetUtil, Version=1.0.10.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DZY.DotNetUtil.1.0.10\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
+    <Reference Include="DZY.DotNetUtil, Version=1.0.18.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.DotNetUtil.1.0.18\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
     </Reference>
-    <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.10, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DZY.DotNetUtil.WPF.1.0.0.10\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
+    <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.DotNetUtil.WPF.1.0.0.16\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
     </Reference>
     <Reference Include="Hardcodet.Wpf.TaskbarNotification, Version=1.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
@@ -202,12 +202,6 @@
     <Compile Include="Views\CountDownView.xaml.cs">
       <DependentUpon>CountDownView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Views\PurchaseTipsView.xaml.cs">
-      <DependentUpon>PurchaseTipsView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Views\PurchaseView.xaml.cs">
-      <DependentUpon>PurchaseView.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Views\LockScreenView.xaml.cs">
       <DependentUpon>LockScreenView.xaml</DependentUpon>
     </Compile>
@@ -267,14 +261,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\CommonResources.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Views\PurchaseTipsView.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Views\PurchaseView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

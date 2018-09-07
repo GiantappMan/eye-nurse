@@ -157,14 +157,7 @@ namespace EyeNurse.Client.ViewModels
 
         public void Purchase()
         {
-            var vm = Services.GetPurchaseViewModel();
-            vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
-            vm.LoadProducts();
-            _windowManager.ShowDialog(vm);
-
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            Services.CheckVIP(vm);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            Services.Purchase();
         }
 
         public void QQ()

@@ -5,26 +5,25 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:EyeNurse.Client.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF;assembly=DZY.DotNetUtil.WPF"
+    xmlns:wpf="clr-namespace:DZY.DotNetUtil.WPF.Views;assembly=DZY.DotNetUtil.WPF"
     Title="DuangDuangDuang"
     Width="800"
     Height="450"
     ResizeMode="NoResize"
     WindowStartupLocation="CenterScreen"
-    mc:Ignorable="d">
+    mc:Ignorable="d" DataContextChanged="Window_DataContextChanged">
     <Grid>
-        <wpf:PurchaseTipsControl
+        <wpf:PurchaseTipsView
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             BGM="Resources//Sounds//PurchaseTipsBg.mp3" />
-        <Grid Background="Gray" Opacity="0.99">
-            <TextBlock
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                FontSize="14"
-                Foreground="White">
-                感谢你的支持！
-            </TextBlock>
+        <Grid
+            Width="150"
+            Height="100"
+            VerticalAlignment="Bottom"
+            Background="Gray"
+            Opacity="0.99">
+         
         </Grid>
     </Grid>
 </Window>
