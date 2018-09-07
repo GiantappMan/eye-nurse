@@ -29,6 +29,7 @@ namespace EyeNurse.Client.Services
         Icon _sourceIcon;
         readonly IEventAggregator _eventAggregator;
         bool warned;
+        private PurchaseTipsViewModel _tipsVM;
 
         public EyeNurseService(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
@@ -64,7 +65,24 @@ namespace EyeNurse.Client.Services
             await vm.LoadProducts();
 
             await CheckVIP(vm);
-            await ShowPurchaseTips();
+            var ts = DateTime.Now - AppData.LastTipsDate;
+
+            bool showTips = false;
+
+            if (!AppData.Purchased)
+            {
+                if (!AppData.Reviewed && ts.TotalDays >= 5)
+                    showTips = true;
+                else if (AppData.Reviewed && ts.TotalDays >= 10)
+                    showTips = true;
+            }
+
+            if (showTips)
+            {
+                AppData.LastTipsDate = DateTime.Now;
+                await SaveAppData();
+                await ShowPurchaseTip();
+            }
         }
 
         private void ResetCountDown()
@@ -138,6 +156,58 @@ namespace EyeNurse.Client.Services
             }
         }
 
+        public void ActionUI(object ui)
+        {
+            var window = ui as Window;
+            if (window != null)
+                window.Activate();
+        }
+
+        System.Threading.SemaphoreSlim semaphoreSlim = new System.Threading.SemaphoreSlim(0, 1);
+        public async Task ShowPurchaseTip()
+        {
+            if (_tipsVM != null)
+            {
+                ActionUI(_tipsVM.GetView());
+                return;
+            }
+
+            _tipsVM = new PurchaseTipsViewModel
+            {
+                BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute)
+            };
+            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
+
+            StoreHelper store = new StoreHelper(mainHandler);
+            _tipsVM.Initlize(store, GetPurchaseViewModel(), _windowManager);
+            _tipsVM.DisplayName = "Duang Duang Duang ! ! !";
+            _tipsVM.Deactivated += _tipsVM_Deactivated;
+
+            dynamic setting = new ExpandoObject();
+            setting.Width = 800;
+            setting.Height = 450;
+            setting.ResizeMode = ResizeMode.NoResize;
+            setting.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            _windowManager.ShowWindow(_tipsVM, null, setting);
+            await semaphoreSlim.WaitAsync();
+
+        }
+
+        private async void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
+        {
+            var temp = sender as PurchaseTipsViewModel;
+            temp.Deactivated -= _tipsVM_Deactivated;
+
+            AppData.Purchased = _tipsVM.Purchased || AppData.Purchased;
+            AppData.Reviewed = _tipsVM.Rated || AppData.Reviewed;
+            await SaveAppData();
+
+            _tipsVM = null;
+
+            if (semaphoreSlim.CurrentCount == 0)
+                semaphoreSlim.Release();
+        }
+
         private void _lastLockScreenViewModel_Deactivated(object sender, DeactivationEventArgs e)
         {
             var temp = sender as LockScreenViewModel;
@@ -146,25 +216,6 @@ namespace EyeNurse.Client.Services
         }
 
         #endregion
-
-        public async Task ShowPurchaseTips()
-        {
-            var ts = DateTime.Now - AppData.LastTipsDate;
-            if (ts.TotalDays >= 10 && (!AppData.Purchased || !AppData.Reviewed))
-            {
-                AppData.LastTipsDate = DateTime.Now;
-                await SaveAppData();
-
-                var tipsVM = GetPurchaseTipVM();
-                tipsVM.DisplayName = "Duang Duang Duang ! ! !";
-                dynamic setting = new ExpandoObject();
-                setting.Width = 800;
-                setting.Height = 450;
-                setting.ResizeMode = ResizeMode.NoResize;
-                setting.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                _windowManager.ShowWindow(tipsVM, null, setting);
-            }
-        }
 
         public void Purchase()
         {
@@ -176,6 +227,7 @@ namespace EyeNurse.Client.Services
             CheckVIP(vm);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
         }
+
         public async Task CheckVIP(PurchaseViewModel vm)
         {
             try
@@ -231,22 +283,10 @@ namespace EyeNurse.Client.Services
 
             StoreHelper store = new StoreHelper(mainHandler);
             var vm = new PurchaseViewModel();
+            vm.DisplayName = "感谢您的支持~~";
             vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
             vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
             return vm;
-        }
-
-        public PurchaseTipsViewModel GetPurchaseTipVM()
-        {
-            var tipsVM = new PurchaseTipsViewModel
-            {
-                BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute)
-            };
-            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
-
-            StoreHelper store = new StoreHelper(mainHandler);
-            tipsVM.Initlize(store, GetPurchaseViewModel(), _windowManager);
-            return tipsVM;
         }
 
         #region properties

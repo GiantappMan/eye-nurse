@@ -8,6 +8,7 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -141,12 +142,17 @@ namespace EyeNurse.Client.ViewModels
             }
         }
 
-        public void OpenConfig()
+        public async void OpenConfig()
         {
             if (_settingVM != null)
                 return;
 
             _settingVM = IoC.Get<SettingViewModel>();
+            if (!Services.AppData.Purchased)
+            {
+                await Services.ShowPurchaseTip();
+            }
+
             bool? isOk = _windowManager.ShowDialog(_settingVM);
             if (isOk != null && isOk.Value)
             {
