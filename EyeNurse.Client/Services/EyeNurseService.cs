@@ -65,6 +65,9 @@ namespace EyeNurse.Client.Services
             await vm.LoadProducts();
 
             await CheckVIP(vm);
+
+            if (AppData.LastTipsDate == new DateTime())
+                AppData.LastTipsDate = DateTime.Now;
             var ts = DateTime.Now - AppData.LastTipsDate;
 
             bool showTips = false;
