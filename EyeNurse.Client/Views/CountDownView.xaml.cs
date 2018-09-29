@@ -80,9 +80,8 @@ namespace EyeNurse.Client.Views
                 if (e.ChangedButton == MouseButton.Left)
                     DragMove();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                MessageBox.Show(ex.ToString());
             }
         }
 
