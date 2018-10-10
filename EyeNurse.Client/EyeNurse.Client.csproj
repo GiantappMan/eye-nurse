@@ -180,6 +180,7 @@
     <Compile Include="Configs\WindowPosition.cs" />
     <Compile Include="Events\AppSettingChangedEvent.cs" />
     <Compile Include="Events\PlayAudioEvent.cs" />
+    <Compile Include="Events\ServiceInitEvent.cs" />
     <Compile Include="Helpers\AutoStartup.cs" />
     <Content Include="Resources\Configs\setting.desc.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

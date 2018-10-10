@@ -42,7 +42,16 @@ namespace EyeNurse.Client.Services
 
         private async void Init()
         {
+            if (Initialized || IsInitializing)
+                return;
+
             _eventAggregator.Subscribe(this);
+
+            Initialized = false;
+            IsInitializing = true;
+
+            _eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
+
             _timer = new Timer
             {
                 Interval = 1000
@@ -86,6 +95,10 @@ namespace EyeNurse.Client.Services
                 await SaveAppData();
                 await ShowPurchaseTip();
             }
+
+            Initialized = true;
+            IsInitializing = false;
+            _eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
         }
 
         private void ResetCountDown()
@@ -159,6 +172,30 @@ namespace EyeNurse.Client.Services
             }
         }
 
+        private async void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
+        {
+            var temp = sender as PurchaseTipsViewModel;
+            temp.Deactivated -= _tipsVM_Deactivated;
+
+            AppData.Purchased = _tipsVM.Purchased || AppData.Purchased;
+            AppData.Reviewed = _tipsVM.Rated || AppData.Reviewed;
+            await SaveAppData();
+
+            _tipsVM = null;
+
+            if (semaphoreSlim.CurrentCount == 0)
+                semaphoreSlim.Release();
+        }
+
+        private void _lastLockScreenViewModel_Deactivated(object sender, DeactivationEventArgs e)
+        {
+            var temp = sender as LockScreenViewModel;
+            temp.Deactivated -= _lastLockScreenViewModel_Deactivated;
+            RestTimeCountdown = new TimeSpan();
+        }
+
+        #endregion
+
         public void ActionUI(object ui)
         {
             var window = ui as Window;
@@ -195,30 +232,6 @@ namespace EyeNurse.Client.Services
             await semaphoreSlim.WaitAsync();
 
         }
-
-        private async void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
-        {
-            var temp = sender as PurchaseTipsViewModel;
-            temp.Deactivated -= _tipsVM_Deactivated;
-
-            AppData.Purchased = _tipsVM.Purchased || AppData.Purchased;
-            AppData.Reviewed = _tipsVM.Rated || AppData.Reviewed;
-            await SaveAppData();
-
-            _tipsVM = null;
-
-            if (semaphoreSlim.CurrentCount == 0)
-                semaphoreSlim.Release();
-        }
-
-        private void _lastLockScreenViewModel_Deactivated(object sender, DeactivationEventArgs e)
-        {
-            var temp = sender as LockScreenViewModel;
-            temp.Deactivated -= _lastLockScreenViewModel_Deactivated;
-            RestTimeCountdown = new TimeSpan();
-        }
-
-        #endregion
 
         public void Purchase()
         {
@@ -292,7 +305,66 @@ namespace EyeNurse.Client.Services
             return vm;
         }
 
+        public async void Handle(AppSettingChangedEvent message)
+        {
+            Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+        }
+
         #region properties
+
+        #region Initialized
+
+        /// <summary>
+        /// The <see cref="Initialized" /> property's name.
+        /// </summary>
+        public const string InitializedPropertyName = "Initialized";
+
+        private bool _Initialized;
+
+        /// <summary>
+        /// Initialized
+        /// </summary>
+        public bool Initialized
+        {
+            get { return _Initialized; }
+
+            set
+            {
+                if (_Initialized == value) return;
+
+                _Initialized = value;
+                NotifyOfPropertyChange(InitializedPropertyName);
+            }
+        }
+
+        #endregion
+
+        #region IsInitializing
+
+        /// <summary>
+        /// The <see cref="IsInitializing" /> property's name.
+        /// </summary>
+        public const string IsInitializingPropertyName = "IsInitializing";
+
+        private bool _IsInitializing;
+
+        /// <summary>
+        /// IsInitializing
+        /// </summary>
+        public bool IsInitializing
+        {
+            get { return _IsInitializing; }
+
+            set
+            {
+                if (_IsInitializing == value) return;
+
+                _IsInitializing = value;
+                NotifyOfPropertyChange(IsInitializingPropertyName);
+            }
+        }
+
+        #endregion
 
         #region IsResting
 
@@ -546,9 +618,5 @@ namespace EyeNurse.Client.Services
 
         #endregion
 
-        public async void Handle(AppSettingChangedEvent message)
-        {
-            Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
-        }
     }
 }
