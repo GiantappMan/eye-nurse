@@ -60,7 +60,7 @@
                     Foreground="{Binding ElementName=txt, Path=Foreground}"
                     Kind="TimerPause"
                     Visibility="Collapsed" />
-                <MediaElement x:Name="media" Loaded="media_Loaded" />
+                <MediaElement x:Name="media" Loaded="Media_Loaded" />
             </Grid>
             <ControlTemplate.Triggers>
                 <DataTrigger Binding="{Binding AppService.IsPaused}" Value="True">

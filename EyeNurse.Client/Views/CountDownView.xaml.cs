@@ -150,7 +150,7 @@ namespace EyeNurse.Client.Views
 
         #endregion
 
-        private void media_Loaded(object sender, RoutedEventArgs e)
+        private void Media_Loaded(object sender, RoutedEventArgs e)
         {
             _media = sender as MediaElement;
         }

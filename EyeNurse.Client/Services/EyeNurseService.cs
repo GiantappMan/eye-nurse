@@ -198,8 +198,7 @@ namespace EyeNurse.Client.Services
 
         public void ActionUI(object ui)
         {
-            var window = ui as Window;
-            if (window != null)
+            if (ui is Window window)
                 window.Activate();
         }
 
@@ -233,15 +232,17 @@ namespace EyeNurse.Client.Services
 
         }
 
-        public void Purchase()
+        public async void Purchase()
         {
             var vm = GetPurchaseViewModel();
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            //不用等待加载完成
             vm.LoadProducts();
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             _windowManager.ShowDialog(vm);
 
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            CheckVIP(vm);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            await vm.LoadProducts();
+            await CheckVIP(vm);
         }
 
         public async Task CheckVIP(PurchaseViewModel vm)
@@ -298,8 +299,10 @@ namespace EyeNurse.Client.Services
             IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
 
             StoreHelper store = new StoreHelper(mainHandler);
-            var vm = new PurchaseViewModel();
-            vm.DisplayName = "感谢您的支持~~";
+            var vm = new PurchaseViewModel
+            {
+                DisplayName = "感谢您的支持~~"
+            };
             vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
             vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
             return vm;

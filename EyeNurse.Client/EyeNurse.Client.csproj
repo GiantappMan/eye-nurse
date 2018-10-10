@@ -101,8 +101,8 @@
     <Reference Include="ControlzEx, Version=3.0.2.4, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\ControlzEx.3.0.2.4\lib\net462\ControlzEx.dll</HintPath>
     </Reference>
-    <Reference Include="DZY.DotNetUtil, Version=1.0.18.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DZY.DotNetUtil.1.0.18\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
+    <Reference Include="DZY.DotNetUtil, Version=1.0.21.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.DotNetUtil.1.0.21\lib\netstandard2.0\DZY.DotNetUtil.dll</HintPath>
     </Reference>
     <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\DZY.DotNetUtil.WPF.1.0.0.16\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
@@ -111,7 +111,7 @@
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
     </Reference>
     <Reference Include="JsonConfiger.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\JsonConfiger.1.0.0.17\lib\net46\JsonConfiger.WPF.dll</HintPath>
+      <HintPath>..\packages\JsonConfiger.1.0.0.19\lib\net46\JsonConfiger.WPF.dll</HintPath>
     </Reference>
     <Reference Include="LoadingIndicators.WPF, Version=0.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\LoadingIndicators.WPF.0.0.1\lib\LoadingIndicators.WPF.dll</HintPath>
@@ -129,7 +129,7 @@
       <HintPath>..\packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <HintPath>..\packages\NLog.4.5.9\lib\net45\NLog.dll</HintPath>
+      <HintPath>..\packages\NLog.4.5.10\lib\net45\NLog.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
@@ -140,8 +140,8 @@
     <Reference Include="System.Security.AccessControl, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Security.AccessControl.4.5.0\lib\net461\System.Security.AccessControl.dll</HintPath>
     </Reference>
-    <Reference Include="System.Security.Principal.Windows, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Security.Principal.Windows.4.5.0\lib\net461\System.Security.Principal.Windows.dll</HintPath>
+    <Reference Include="System.Security.Principal.Windows, Version=4.1.1.1, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Principal.Windows.4.5.1\lib\net461\System.Security.Principal.Windows.dll</HintPath>
     </Reference>
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Transactions" />
