@@ -5,6 +5,7 @@ using EyeNurse.Client.Events;
 using EyeNurse.Client.Services;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Interop;
 
 namespace EyeNurse.Client.ViewModels
 {
@@ -16,28 +17,21 @@ namespace EyeNurse.Client.ViewModels
         {
             eventAggregator.Subscribe(this);
             AppService = servcies;
+            ApplyConfig();
         }
-
-        #region override
-
-        protected override async void OnInitialize()
-        {
-            base.OnInitialize();
-            await RefreshConfig();
-        }
-
-        protected override void OnDeactivate(bool close)
-        {
-            base.OnDeactivate(close);
-        }
-
-        #endregion
 
         #region public methods
 
-        public async Task RefreshConfig()
+        public async void SourceInitialized()
         {
-            var setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(AppService.ConfigFilePath);
+            var handle = (new WindowInteropHelper(Application.Current.MainWindow)).Handle;
+            await AppService.Init(handle);
+        }
+
+        public void ApplyConfig()
+        {
+            AppService.ReloadSetting();
+            var setting = AppService.Setting;
             _windowPosition = setting?.WindowPosition;
             if (_windowPosition == null)
             {
@@ -59,9 +53,9 @@ namespace EyeNurse.Client.ViewModels
             await JsonHelper.JsonSerializeAsync(setting, AppService.ConfigFilePath);
         }
 
-        public async void Handle(AppSettingChangedEvent message)
+        public void Handle(AppSettingChangedEvent message)
         {
-            await RefreshConfig();
+            ApplyConfig();
         }
 
         #endregion

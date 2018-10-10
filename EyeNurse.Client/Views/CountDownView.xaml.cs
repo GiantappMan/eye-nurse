@@ -40,9 +40,8 @@ namespace EyeNurse.Client.Views
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            var handle = (new WindowInteropHelper(this)).Handle;
-            var container = IoC.Get<SimpleContainer>();
-            container.RegisterInstance(typeof(IntPtr), "MainHandler", handle);
+            var vm = DataContext as CountDownViewModel;
+            vm.SourceInitialized();
         }
 
         public void Handle(PlayAudioEvent message)

@@ -5,10 +5,12 @@ using DZY.DotNetUtil.WPF.ViewModels;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.ViewModels;
+using EyeNurse.Client.Views;
 using Hardcodet.Wpf.TaskbarNotification;
 using NLog;
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Dynamic;
 using System.Threading.Tasks;
@@ -25,32 +27,25 @@ namespace EyeNurse.Client.Services
         Timer _timer;
         IWindowManager _windowManager;
         LockScreenViewModel _lastLockScreenViewModel;
+
         TaskbarIcon _taskbarIcon;
         Icon _sourceIcon;
         readonly IEventAggregator _eventAggregator;
+
         bool warned;
         private PurchaseTipsViewModel _tipsVM;
+        private IntPtr _mainHandler;
 
         public EyeNurseService(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
             _eventAggregator = eventAggregator;
-            _windowManager = windowManager;
-            Init();
-        }
-
-        #region private methods
-
-        private async void Init()
-        {
-            if (Initialized || IsInitializing)
-                return;
-
             _eventAggregator.Subscribe(this);
 
-            Initialized = false;
-            IsInitializing = true;
+            _windowManager = windowManager;
 
-            _eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            ConfigFilePath = $"{appData}\\EyeNurse\\Configs\\setting.json";
+            AppDataFilePath = $"{appData}\\EyeNurse\\appData.json";
 
             _timer = new Timer
             {
@@ -58,48 +53,14 @@ namespace EyeNurse.Client.Services
             };
             _timer.Elapsed += Timer_Elapsed;
 
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            ConfigFilePath = $"{appData}\\EyeNurse\\Configs\\setting.json";
-            AppDataFilePath = $"{appData}\\EyeNurse\\appData.json";
-
             //读取 Setting
-            await ReloadSetting();
+            ReloadSetting();
 
             //读取AppData
-            await ReloadAppData();
-
-            ResetCountDown();
-
-            var vm = GetPurchaseViewModel();
-            await vm.LoadProducts();
-
-            await CheckVIP(vm);
-
-            if (AppData.LastTipsDate == new DateTime())
-                AppData.LastTipsDate = DateTime.Now;
-            var ts = DateTime.Now - AppData.LastTipsDate;
-
-            bool showTips = false;
-
-            if (!AppData.Purchased)
-            {
-                if (!AppData.Reviewed && ts.TotalDays >= 5)
-                    showTips = true;
-                else if (AppData.Reviewed && ts.TotalDays >= 10)
-                    showTips = true;
-            }
-
-            if (showTips)
-            {
-                AppData.LastTipsDate = DateTime.Now;
-                await SaveAppData();
-                await ShowPurchaseTip();
-            }
-
-            Initialized = true;
-            IsInitializing = false;
-            _eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
+            ReloadAppData();
         }
+
+        #region private methods
 
         private void ResetCountDown()
         {
@@ -172,14 +133,14 @@ namespace EyeNurse.Client.Services
             }
         }
 
-        private async void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
+        private void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
         {
             var temp = sender as PurchaseTipsViewModel;
             temp.Deactivated -= _tipsVM_Deactivated;
 
             AppData.Purchased = _tipsVM.Purchased || AppData.Purchased;
             AppData.Reviewed = _tipsVM.Rated || AppData.Reviewed;
-            await SaveAppData();
+            SaveAppData();
 
             _tipsVM = null;
 
@@ -196,6 +157,45 @@ namespace EyeNurse.Client.Services
 
         #endregion
 
+        #region public methods
+
+        public void OpenVIPQQGroupLink()
+        {
+            try
+            {
+                Process.Start("https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "OpenVIPQQGroupLink Ex");
+            }
+        }
+
+        public void OpenQQGroupLink()
+        {
+            try
+            {
+                Process.Start("https://shang.qq.com/wpa/qunwpa?idkey=e8d8e46fa4067c16110376db53d51065bdce6abb943e08f09736317527bfbf45");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "OpenQQGroupLink Ex");
+            }
+        }
+
+        public void CopyVipContent()
+        {
+            try
+            {
+                Clipboard.SetText(VIPGroup);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("拷贝失败，请手动拷贝");
+                logger.Error(ex, "CopyVipContent Ex");
+            }
+        }
+
         public void ActionUI(object ui)
         {
             if (ui is Window window)
@@ -205,6 +205,9 @@ namespace EyeNurse.Client.Services
         System.Threading.SemaphoreSlim semaphoreSlim = new System.Threading.SemaphoreSlim(0, 1);
         public async Task ShowPurchaseTip()
         {
+            if (!Initialized)
+                return;
+
             if (_tipsVM != null)
             {
                 ActionUI(_tipsVM.GetView());
@@ -215,9 +218,8 @@ namespace EyeNurse.Client.Services
             {
                 BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute)
             };
-            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
 
-            StoreHelper store = new StoreHelper(mainHandler);
+            StoreHelper store = new StoreHelper(_mainHandler);
             _tipsVM.Initlize(store, GetPurchaseViewModel(), _windowManager);
             _tipsVM.DisplayName = "Duang Duang Duang ! ! !";
             _tipsVM.Deactivated += _tipsVM_Deactivated;
@@ -229,31 +231,78 @@ namespace EyeNurse.Client.Services
             setting.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             _windowManager.ShowWindow(_tipsVM, null, setting);
             await semaphoreSlim.WaitAsync();
+        }
 
+        public async Task Init(IntPtr mainHandler)
+        {
+            if (Initialized || IsInitializing)
+                return;
+
+            _mainHandler = mainHandler;
+
+            Initialized = false;
+            IsInitializing = true;
+
+            //_eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
+
+            ResetCountDown();
+
+            var vm = GetPurchaseViewModel();
+            await vm.LoadProducts();//从服务端获取vip状态
+
+            CheckVIP(vm);
+
+            if (AppData.LastTipsDate == new DateTime())
+                AppData.LastTipsDate = DateTime.Now;
+            var ts = DateTime.Now - AppData.LastTipsDate;
+
+            bool showTips = false;
+
+            if (!AppData.Purchased)
+            {
+                if (!AppData.Reviewed && ts.TotalDays >= 5)
+                    showTips = true;
+                else if (AppData.Reviewed && ts.TotalDays >= 10)
+                    showTips = true;
+            }
+
+            if (showTips)
+            {
+                AppData.LastTipsDate = DateTime.Now;
+                SaveAppData();
+                await ShowPurchaseTip();
+            }
+
+            Initialized = true;
+            IsInitializing = false;
+            //_eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
         }
 
         public async void Purchase()
         {
             var vm = GetPurchaseViewModel();
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             //不用等待加载完成
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             vm.LoadProducts();
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             _windowManager.ShowDialog(vm);
 
-            await vm.LoadProducts();
-            await CheckVIP(vm);
+            //直接关窗口，在检查一次
+            if (!vm.PurchaseResult)
+                await vm.LoadProducts();
+            CheckVIP(vm);
         }
 
-        public async Task CheckVIP(PurchaseViewModel vm)
+        public void CheckVIP(PurchaseViewModel vm)
         {
             try
             {
                 if (AppData.Purchased != vm.IsVIP)
                 {
                     AppData.Purchased = vm.IsVIP;
-                    await SaveAppData();
+                    SaveAppData();
                 }
+                _eventAggregator.PublishOnBackgroundThread(new VipEvent() { IsVIP = vm.IsVIP });
             }
             catch (Exception ex)
             {
@@ -261,24 +310,24 @@ namespace EyeNurse.Client.Services
             }
         }
 
-        public async Task ReloadAppData()
+        public void ReloadAppData()
         {
-            AppData = await JsonHelper.JsonDeserializeFromFileAsync<AppData>(AppDataFilePath);
+            AppData = JsonHelper.JsonDeserializeFromFile<AppData>(AppDataFilePath);
             if (AppData == null)
             {
                 AppData = new AppData();
             }
-            await SaveAppData();
+            SaveAppData();
         }
 
-        public async Task SaveAppData()
+        public void SaveAppData()
         {
-            await JsonHelper.JsonSerializeAsync(AppData, AppDataFilePath);
+            JsonHelper.JsonSerialize(AppData, AppDataFilePath);
         }
 
-        public async Task ReloadSetting()
+        public void ReloadSetting()
         {
-            Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
+            Setting = JsonHelper.JsonDeserializeFromFile<Setting>(ConfigFilePath);
             if (Setting == null || Setting.App == null)
             {
                 //默认值
@@ -290,21 +339,20 @@ namespace EyeNurse.Client.Services
                         RestTime = new TimeSpan(0, 3, 0)
                     }
                 };
-                await JsonHelper.JsonSerializeAsync(Setting, ConfigFilePath);
+                JsonHelper.JsonSerialize(Setting, ConfigFilePath);
             }
         }
 
+        readonly string VIPGroup = "864039359";
         public PurchaseViewModel GetPurchaseViewModel()
         {
-            IntPtr mainHandler = IoC.Get<IntPtr>("MainHandler");
-
-            StoreHelper store = new StoreHelper(mainHandler);
+            StoreHelper store = new StoreHelper(_mainHandler);
             var vm = new PurchaseViewModel
             {
                 DisplayName = "感谢您的支持~~"
             };
             vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
-            vm.VIPContent = new TextBox() { IsReadOnly = true, Text = "巨应工作室VIP QQ群：864039359" };
+            vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}");
             return vm;
         }
 
@@ -312,6 +360,8 @@ namespace EyeNurse.Client.Services
         {
             Setting = await JsonHelper.JsonDeserializeFromFileAsync<Setting>(ConfigFilePath);
         }
+
+        #endregion
 
         #region properties
 

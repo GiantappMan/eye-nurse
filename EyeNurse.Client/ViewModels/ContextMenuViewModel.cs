@@ -1,26 +1,15 @@
 ﻿using Caliburn.Micro;
-using DZY.DotNetUtil.Helpers;
-using DZY.DotNetUtil.ViewModels;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.Helpers;
 using EyeNurse.Client.Services;
 using NLog;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Dynamic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using Windows.Services.Store;
 
 namespace EyeNurse.Client.ViewModels
 {
-    public class ContextMenuViewModel : Screen
+    public class ContextMenuViewModel : Screen, IHandle<VipEvent>
     {
         private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         private IWindowManager _windowManager = null;
@@ -28,9 +17,11 @@ namespace EyeNurse.Client.ViewModels
         readonly IEventAggregator _eventAggregator;
         public ContextMenuViewModel(EyeNurseService servcies, IWindowManager windowManager, IEventAggregator eventAggregator)
         {
+            eventAggregator.Subscribe(this);
             _eventAggregator = eventAggregator;
             _windowManager = windowManager;
             Services = servcies;
+            IsVIP = Services.AppData.Purchased;
             Init();
         }
 
@@ -42,6 +33,33 @@ namespace EyeNurse.Client.ViewModels
         #region properties
 
         public EyeNurseService Services { get; }
+
+        #region IsVIP
+
+        /// <summary>
+        /// The <see cref="IsVIP" /> property's name.
+        /// </summary>
+        public const string IsVIPPropertyName = "IsVIP";
+
+        private bool _IsVIP;
+
+        /// <summary>
+        /// IsVIP
+        /// </summary>
+        public bool IsVIP
+        {
+            get { return _IsVIP; }
+
+            set
+            {
+                if (_IsVIP == value) return;
+
+                _IsVIP = value;
+                NotifyOfPropertyChange(IsVIPPropertyName);
+            }
+        }
+
+        #endregion
 
         #region IsPaused
 
@@ -101,6 +119,7 @@ namespace EyeNurse.Client.ViewModels
         #endregion
 
         #region methods
+
         public async void StartWithOS()
         {
             IsAutoLaunch = !IsAutoLaunch;
@@ -127,6 +146,9 @@ namespace EyeNurse.Client.ViewModels
 
         public void RestImmediately()
         {
+            if (IsPaused)
+                Resum();
+
             Services.RestImmediately();
         }
 
@@ -168,14 +190,17 @@ namespace EyeNurse.Client.ViewModels
 
         public void QQ()
         {
-            try
-            {
-                Process.Start("https://shang.qq.com/wpa/qunwpa?idkey=e8d8e46fa4067c16110376db53d51065bdce6abb943e08f09736317527bfbf45");
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "About Ex");
-            }
+            Services.OpenQQGroupLink();            
+        }
+
+        public void QQVIP()
+        {
+            Services.OpenVIPQQGroupLink();            
+        }
+
+        public void Handle(VipEvent message)
+        {
+            IsVIP = message.IsVIP;
         }
 
         #endregion

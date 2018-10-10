@@ -39,7 +39,7 @@ namespace EyeNurse.Client.ViewModels
             {
                 TryClose(true);
             });
-            await _appServices.ReloadSetting();
+            _appServices.ReloadSetting();
         }
         public void Cancel()
         {

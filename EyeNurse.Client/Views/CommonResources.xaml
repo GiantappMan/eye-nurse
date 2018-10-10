@@ -15,7 +15,25 @@
         x:Shared="false">
         <MenuItem cal:Message.Attach="About()" Header="关于" />
         <MenuItem cal:Message.Attach="QQ()" Header="产品交流群（641405255）" />
-        <MenuItem cal:Message.Attach="Purchase()" Header="VIP" />
+        <MenuItem cal:Message.Attach="Purchase()" >
+            <MenuItem.Style>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Header" Value="VIP" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsVIP, Mode=OneWay}" Value="True">
+                            <Setter Property="Header">
+                                <Setter.Value>
+                                    <TextBlock>
+                                        <Run Text="VIP" />
+                                        <Run Foreground="Green" Text=" 已解锁" />
+                                    </TextBlock>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </MenuItem.Style>
+        </MenuItem>
         <Separator />
         <MenuItem cal:Message.Attach="OpenConfig()" Header="配置" />
         <MenuItem
