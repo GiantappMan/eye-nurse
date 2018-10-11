@@ -291,12 +291,14 @@ namespace EyeNurse.Client.Services
 
             await store.DownloadAndInstallAllUpdatesAsync(() =>
              {
-                 icon.ShowBalloonTip("提示", $"如果更新失败，请关闭软件打开商店手动更新。", BalloonIcon.Info);
                  var result = MessageBox.Show("是否更新。", "检测到新版本", MessageBoxButton.OKCancel);
                  return result == MessageBoxResult.OK;
              }, (progress) =>
              {
-                 icon.ShowBalloonTip("正在更新", $"{progress.PackageDownloadProgress}", BalloonIcon.Info);
+                 if ((int)progress.PackageUpdateState >= 3)
+                     icon.ShowBalloonTip("温馨提示", $"《眼睛护士》如果更新失败，请关闭软件打开应用商店手动更新。", BalloonIcon.Info);
+
+                 //icon.ShowBalloonTip("正在更新", $"{progress.PackageDownloadProgress}", BalloonIcon.Info);
              });
         }
 
