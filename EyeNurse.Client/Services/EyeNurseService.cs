@@ -1,6 +1,5 @@
 ﻿using Caliburn.Micro;
 using DZY.DotNetUtil.Helpers;
-using DZY.DotNetUtil.ViewModels;
 using DZY.DotNetUtil.WPF.ViewModels;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
@@ -16,8 +15,6 @@ using System.Dynamic;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
-using System.Windows.Controls;
-using static DZY.DotNetUtil.WPF.ViewModels.PurchaseTipsViewModel;
 
 namespace EyeNurse.Client.Services
 {
@@ -216,7 +213,8 @@ namespace EyeNurse.Client.Services
 
             _tipsVM = new PurchaseTipsViewModel
             {
-                BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute)
+                BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute),
+                Content = new DefaultPurchaseTipsContent()
             };
 
             StoreHelper store = new StoreHelper(_mainHandler);
