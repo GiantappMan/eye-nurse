@@ -136,6 +136,8 @@ namespace EyeNurse.Client.Services
             temp.Deactivated -= _tipsVM_Deactivated;
 
             AppData.Purchased = _tipsVM.Purchased || AppData.Purchased;
+            _eventAggregator.PublishOnBackgroundThread(new VipEvent() { IsVIP = AppData.Purchased });
+
             AppData.Reviewed = _tipsVM.Rated || AppData.Reviewed;
             SaveAppData();
 
@@ -214,7 +216,10 @@ namespace EyeNurse.Client.Services
             _tipsVM = new PurchaseTipsViewModel
             {
                 BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute),
-                Content = new DefaultPurchaseTipsContent()
+                Content = new DefaultPurchaseTipsContent(),
+                PurchaseContent = "真可怜，给他买个包子吧",
+                RatingContent =   "造孽啊，给个精神抚慰吧",
+                //CancelContent = "不管，饿死算球"
             };
 
             StoreHelper store = new StoreHelper(_mainHandler);
