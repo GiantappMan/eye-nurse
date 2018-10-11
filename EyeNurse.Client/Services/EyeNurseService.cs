@@ -218,7 +218,7 @@ namespace EyeNurse.Client.Services
                 BGM = new Uri("Resources//Sounds//PurchaseTipsBg.mp3", UriKind.RelativeOrAbsolute),
                 Content = new DefaultPurchaseTipsContent(),
                 PurchaseContent = "真可怜，给他买个包子吧",
-                RatingContent =   "造孽啊，给个精神抚慰吧",
+                RatingContent = "造孽啊，给个精神抚慰吧",
                 //CancelContent = "不管，饿死算球"
             };
 
@@ -241,10 +241,13 @@ namespace EyeNurse.Client.Services
             if (Initialized || IsInitializing)
                 return;
 
+
             _mainHandler = mainHandler;
 
             Initialized = false;
             IsInitializing = true;
+
+            CheckUpates();
 
             //_eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
 
@@ -279,6 +282,22 @@ namespace EyeNurse.Client.Services
             Initialized = true;
             IsInitializing = false;
             //_eventAggregator.PublishOnBackgroundThread(new ServiceInitEvent() { Initialized = Initialized, IsInitializing = IsInitializing });
+        }
+
+        private async void CheckUpates()
+        {
+            StoreHelper store = new StoreHelper(_mainHandler);
+            var icon = IoC.Get<TaskbarIcon>();
+
+            await store.DownloadAndInstallAllUpdatesAsync(() =>
+             {
+                 icon.ShowBalloonTip("提示", $"如果更新失败，请关闭软件打开商店手动更新。", BalloonIcon.Info);
+                 var result = MessageBox.Show("是否更新。", "检测到新版本", MessageBoxButton.OKCancel);
+                 return result == MessageBoxResult.OK;
+             }, (progress) =>
+             {
+                 icon.ShowBalloonTip("正在更新", $"{progress.PackageDownloadProgress}", BalloonIcon.Info);
+             });
         }
 
         public async void Purchase()
