@@ -17,4 +17,4 @@
 
 [Win10商店](https://www.microsoft.com/zh-cn/p/%E7%9C%BC%E7%9D%9B%E6%8A%A4%E5%A3%AB/9np76pb0d07c?rtc=1)  
 [官网](https://mscoder.cn/products/EyeNurse.html)  
-[安装包](https://github.com/MscoderStudio/EyeNurse/releases)
+[发布包](https://github.com/MscoderStudio/EyeNurse/releases)
