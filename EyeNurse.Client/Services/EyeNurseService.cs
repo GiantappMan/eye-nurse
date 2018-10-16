@@ -297,8 +297,6 @@ namespace EyeNurse.Client.Services
              {
                  if ((int)progress.PackageUpdateState >= 3)
                      icon.ShowBalloonTip("温馨提示", $"《眼睛护士》如果更新失败，请关闭软件打开应用商店手动更新。", BalloonIcon.Info);
-
-                 //icon.ShowBalloonTip("正在更新", $"{progress.PackageDownloadProgress}", BalloonIcon.Info);
              });
         }
 

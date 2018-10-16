@@ -90,18 +90,11 @@ namespace EyeNurse.Client
 
         protected override void OnStartup(object sender, StartupEventArgs e)
         {
-            try
-            {
-                //托盘icon
-                notifyIcon = (TaskbarIcon)Application.Current.FindResource("NotifyIcon");
-                notifyIcon.TrayMouseDoubleClick += NotifyIcon_TrayMouseDoubleClick;
-                notifyIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
-                container.Instance(notifyIcon);
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
+            //托盘icon
+            notifyIcon = (TaskbarIcon)Application.Current.FindResource("NotifyIcon");
+            notifyIcon.TrayMouseDoubleClick += NotifyIcon_TrayMouseDoubleClick;
+            notifyIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+            container.Instance(notifyIcon);
             DisplayRootViewFor<CountDownViewModel>();
         }
 
