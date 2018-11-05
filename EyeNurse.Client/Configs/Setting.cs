@@ -10,5 +10,6 @@ namespace EyeNurse.Client.Configs
     {
         public AppSetting App { get; set; }
         public WindowPosition WindowPosition { get; set; }
+        public SpeechSetting Speech { get; set; }
     }
 }

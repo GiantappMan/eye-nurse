@@ -20,5 +20,16 @@
       "type": "Float",
       "lan": "窗体Y坐标"
     }
+  },
+  "Speech": {
+    "lan": "语音",
+    "Enable": {
+      "type": "boolean",
+      "lan": "全屏时语音播放"
+    },
+    "Message": {
+      "type": "string",
+      "lan": "播报内容"
+    }
   }
 }

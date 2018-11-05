@@ -107,6 +107,9 @@
     <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\DZY.DotNetUtil.UI.1.0.0.33\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
     </Reference>
+    <Reference Include="DZY.WinAPI, Version=1.0.29.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.WinAPI.1.0.29\lib\netstandard2.0\DZY.WinAPI.dll</HintPath>
+    </Reference>
     <Reference Include="Hardcodet.Wpf.TaskbarNotification, Version=1.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
     </Reference>
@@ -144,6 +147,7 @@
       <HintPath>..\packages\System.Security.Principal.Windows.4.5.1\lib\net461\System.Security.Principal.Windows.dll</HintPath>
     </Reference>
     <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Speech" />
     <Reference Include="System.Transactions" />
     <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
@@ -177,6 +181,7 @@
     <Compile Include="Configs\AppData.cs" />
     <Compile Include="Configs\AppSetting.cs" />
     <Compile Include="Configs\Setting.cs" />
+    <Compile Include="Configs\SpeechSetting.cs" />
     <Compile Include="Configs\WindowPosition.cs" />
     <Compile Include="Events\AppSettingChangedEvent.cs" />
     <Compile Include="Events\PlayAudioEvent.cs" />

@@ -350,6 +350,7 @@ namespace EyeNurse.Client.Services
         public void ReloadSetting()
         {
             Setting = JsonHelper.JsonDeserializeFromFile<Setting>(ConfigFilePath);
+            bool save = false;
             if (Setting == null || Setting.App == null)
             {
                 //默认值
@@ -361,8 +362,17 @@ namespace EyeNurse.Client.Services
                         RestTime = new TimeSpan(0, 3, 0)
                     }
                 };
-                JsonHelper.JsonSerialize(Setting, ConfigFilePath);
+                save = true;
             }
+
+            if (Setting.Speech == null)
+            {
+                Setting.Speech = new SpeechSetting();
+                save = true;
+            }
+
+            if (save)
+                JsonHelper.JsonSerialize(Setting, ConfigFilePath);
         }
 
         readonly string VIPGroup = "864039359";

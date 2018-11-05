@@ -87,9 +87,18 @@ namespace EyeNurse.Client
                 Assembly.Load(new AssemblyName("DZY.DotNetUtil.WPF")),
             };
         }
-
+        System.Threading.Mutex mutex;
         protected override void OnStartup(object sender, StartupEventArgs e)
         {
+            bool ret;
+            mutex = new System.Threading.Mutex(true, "EyeNurse", out ret);
+
+            if (!ret)
+            {
+                Environment.Exit(0);
+                return;
+            }
+
             //托盘icon
             notifyIcon = (TaskbarIcon)Application.Current.FindResource("NotifyIcon");
             notifyIcon.TrayMouseDoubleClick += NotifyIcon_TrayMouseDoubleClick;
