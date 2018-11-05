@@ -69,6 +69,10 @@
                     <Setter TargetName="progressBar" Property="Foreground" Value="{Binding AppService.PausedTime, Converter={StaticResource progreeBGConverter}}" />
                     <Setter TargetName="txt" Property="Foreground" Value="{Binding AppService.PausedTime, Converter={StaticResource timeBGConverter}}" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding AppService.IsDelaying}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="休息推后中..." />
+                </DataTrigger>
+
             </ControlTemplate.Triggers>
         </ControlTemplate>
     </Window.Template>

@@ -129,8 +129,7 @@ namespace EyeNurse.Client.ViewModels
 
         public void Pause()
         {
-            IsPaused = true;
-            Services.Pause();
+            IsPaused = Services.Pause();
         }
 
         public void Resum()
@@ -190,12 +189,12 @@ namespace EyeNurse.Client.ViewModels
 
         public void QQ()
         {
-            Services.OpenQQGroupLink();            
+            Services.OpenQQGroupLink();
         }
 
         public void QQVIP()
         {
-            Services.OpenVIPQQGroupLink();            
+            Services.OpenVIPQQGroupLink();
         }
 
         public void Handle(VipEvent message)

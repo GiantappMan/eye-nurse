@@ -8,7 +8,7 @@ namespace EyeNurse.Client.Configs
 {
     public class AppSetting
     {
-        public TimeSpan AlarmInterval { get; set; }
-        public TimeSpan RestTime { get; set; }
+        public TimeSpan AlarmInterval { get; set; } = new TimeSpan(0, 45, 0);
+        public TimeSpan RestTime { get; set; } = new TimeSpan(0, 2, 30);
     }
 }

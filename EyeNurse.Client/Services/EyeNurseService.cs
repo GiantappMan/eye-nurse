@@ -1,6 +1,7 @@
 ﻿using Caliburn.Micro;
 using DZY.DotNetUtil.Helpers;
 using DZY.DotNetUtil.WPF.ViewModels;
+using DZY.WinAPI.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.ViewModels;
@@ -12,6 +13,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Dynamic;
+using System.Speech.Synthesis;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
@@ -32,9 +34,12 @@ namespace EyeNurse.Client.Services
         bool warned;
         private PurchaseTipsViewModel _tipsVM;
         private IntPtr _mainHandler;
+        private TimeSpan _totalPlayTime = new TimeSpan();
+        private int _currentPID;
 
         public EyeNurseService(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
+            _currentPID = Process.GetCurrentProcess().Id;
             _eventAggregator = eventAggregator;
             _eventAggregator.Subscribe(this);
 
@@ -91,32 +96,63 @@ namespace EyeNurse.Client.Services
             else
             {
                 PausedTime = new TimeSpan();
-                if (!IsResting)
+                //游戏中，延迟
+                if (IsDelaying)
                 {
+                    IsDelaying = false;
+                    ResetCountDown();
+                }
+                //正常运行中
+                else if (!IsResting)
+                {
+                    //倒计时减1秒
                     Countdown = Countdown.Subtract(new TimeSpan(0, 0, 1));
                     CountdownPercent = Countdown.TotalSeconds / Setting.App.AlarmInterval.TotalSeconds * 100;
-                    if (!warned && Countdown.TotalSeconds <= 30)
+                    //提前30秒警告一次
+                    if (!warned && Countdown.TotalSeconds <= 30 && Countdown.TotalSeconds >= 20)
                     {
                         warned = true;
+                        ////游戏中不播放警告声音
+                        //bool isMaximized = new OtherProgramChecker(_currentPID, true).CheckMaximized();
+                        //if (!isMaximized)
+                        //还是加上提示，害怕突然说话过于惊悚
                         _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
                         {
                             Source = @"Resources\Sounds\breakpre.mp3"
                         });
                     }
+                    //判断休息
                     if (Countdown.TotalSeconds <= 0)
                     {
                         _timer.Stop();
-                        _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
-                        RestTimeCountdown = Setting.App.RestTime;
-                        Execute.OnUIThread(() =>
+
+                        bool isMaximized = new OtherProgramChecker(_currentPID, true).CheckMaximized();
+                        //bool isMaximized = true;
+
+                        if (isMaximized && Setting.Speech.Enable)
                         {
-                            _windowManager.ShowWindow(_lastLockScreenViewModel);
-                            _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
-                        });
-                        IsResting = true;
+                            //正在全屏，语音提示
+                            IsDelaying = true;
+                            PlaySpeech();
+                        }
+                        else
+                        {//没有全屏玩游戏，立即休息
+                            IsResting = true;
+                            _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
+                            Execute.OnUIThread(() =>
+                            {
+                                _windowManager.ShowWindow(_lastLockScreenViewModel);
+                                _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
+                            });
+                            PlayRestingAudio(IsResting);
+                        }
+
+                        RestTimeCountdown = Setting.App.RestTime;
+
                         _timer.Start();
                     }
                 }
+                //休息中
                 else
                 {
                     warned = false;
@@ -124,9 +160,39 @@ namespace EyeNurse.Client.Services
                     RestTimeCountdownPercent = RestTimeCountdown.TotalSeconds / Setting.App.RestTime.TotalSeconds * 100;
                     if (RestTimeCountdown.TotalSeconds <= 0)
                     {
+                        //休息完毕
                         ResetCountDown();
+                        PlayRestingAudio(IsResting);
+                        _totalPlayTime = new TimeSpan();
                     }
                 }
+            }
+        }
+
+        private void PlaySpeech()
+        {
+            try
+            {
+                _totalPlayTime = _totalPlayTime.Add(Setting.App.AlarmInterval);
+                using (SpeechSynthesizer syn = new SpeechSynthesizer())
+                {
+                    string setting = Setting.Speech.Message;
+                    if (string.IsNullOrEmpty(setting))
+                        setting = SpeechSetting.DefaultMessage;
+
+                    string hourMsg = "";
+                    if (_totalPlayTime.Hours > 0)
+                        hourMsg = $"{_totalPlayTime.Hours}小时 {_totalPlayTime.Minutes}分";
+                    else
+                        hourMsg = $"{_totalPlayTime.Minutes}分钟";
+
+                    string msg = string.Format(setting, hourMsg);
+                    syn.Speak(msg);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error($"PlaySpeech Ex:{ex.Message}");
             }
         }
 
@@ -152,6 +218,20 @@ namespace EyeNurse.Client.Services
             var temp = sender as LockScreenViewModel;
             temp.Deactivated -= _lastLockScreenViewModel_Deactivated;
             RestTimeCountdown = new TimeSpan();
+        }
+
+        private void PlayRestingAudio(bool resting)
+        {
+            if (resting)
+                _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+                {
+                    Source = @"Resources\Sounds\break.mp3"
+                });
+            else
+                _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
+                {
+                    Source = @"Resources\Sounds\unlock.mp3"
+                });
         }
 
         #endregion
@@ -240,7 +320,6 @@ namespace EyeNurse.Client.Services
         {
             if (Initialized || IsInitializing)
                 return;
-
 
             _mainHandler = mainHandler;
 
@@ -354,14 +433,7 @@ namespace EyeNurse.Client.Services
             if (Setting == null || Setting.App == null)
             {
                 //默认值
-                Setting = new Setting()
-                {
-                    App = new AppSetting()
-                    {
-                        AlarmInterval = new TimeSpan(0, 45, 0),
-                        RestTime = new TimeSpan(0, 3, 0)
-                    }
-                };
+                Setting = new Setting();
                 save = true;
             }
 
@@ -473,17 +545,35 @@ namespace EyeNurse.Client.Services
 
                 _IsResting = value;
 
-                if (value)
-                    _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
-                    {
-                        Source = @"Resources\Sounds\break.mp3"
-                    });
-                else
-                    _eventAggregator.PublishOnUIThread(new PlayAudioEvent()
-                    {
-                        Source = @"Resources\Sounds\unlock.mp3"
-                    });
+
                 NotifyOfPropertyChange(IsRestingPropertyName);
+            }
+        }
+
+        #endregion
+
+        #region IsDelaying
+
+        /// <summary>
+        /// The <see cref="IsDelaying" /> property's name.
+        /// </summary>
+        public const string IsDelayingPropertyName = "IsDelaying";
+
+        private bool _IsDelaying;
+
+        /// <summary>
+        /// 全屏，延迟中
+        /// </summary>
+        public bool IsDelaying
+        {
+            get { return _IsDelaying; }
+
+            set
+            {
+                if (_IsDelaying == value) return;
+
+                _IsDelaying = value;
+                NotifyOfPropertyChange(IsDelayingPropertyName);
             }
         }
 
@@ -665,9 +755,12 @@ namespace EyeNurse.Client.Services
             _timer.Stop();
         }
 
-        public void Pause()
+        public bool Pause()
         {
+            if (IsResting)
+                return false;
             IsPaused = true;
+            return true;
         }
 
         public void Resum()
@@ -677,6 +770,8 @@ namespace EyeNurse.Client.Services
 
         public void RestImmediately()
         {
+            if (IsResting)
+                return;
             Countdown = new TimeSpan(0, 0, 1);
         }
 

@@ -8,7 +8,8 @@ namespace EyeNurse.Client.Configs
 {
     public class SpeechSetting
     {
+        public const string DefaultMessage = "老铁你已经连续使用电脑{0}了，注意休息";
         public bool Enable { get; set; } = true;
-        public string Message { get; set; } = "老铁你已经玩了{0}了，注意保护眼睛";
+        public string Message { get; set; } = DefaultMessage;
     }
 }

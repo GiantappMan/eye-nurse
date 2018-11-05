@@ -8,8 +8,8 @@ namespace EyeNurse.Client.Configs
 {
     public class Setting
     {
-        public AppSetting App { get; set; }
-        public WindowPosition WindowPosition { get; set; }
-        public SpeechSetting Speech { get; set; }
+        public AppSetting App { get; set; } = new AppSetting();
+        public WindowPosition WindowPosition { get; set; } = new WindowPosition();
+        public SpeechSetting Speech { get; set; } = new SpeechSetting();
     }
 }
