@@ -1,6 +1,7 @@
 ﻿using Caliburn.Micro;
 using DZY.DotNetUtil.Helpers;
 using DZY.DotNetUtil.WPF.ViewModels;
+using DZY.DotNetUtil.WPF.Views;
 using DZY.WinAPI.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
@@ -196,7 +197,7 @@ namespace EyeNurse.Client.Services
             }
         }
 
-        private void _tipsVM_Deactivated(object sender, DeactivationEventArgs e)
+        private void _tipsVM_Deactivated(object sender, EventArgs e)
         {
             var temp = sender as PurchaseTipsViewModel;
             temp.Deactivated -= _tipsVM_Deactivated;
@@ -302,9 +303,9 @@ namespace EyeNurse.Client.Services
                 //CancelContent = "不管，饿死算球"
             };
 
-            StoreHelper store = new StoreHelper(_mainHandler);
-            _tipsVM.Initlize(store, GetPurchaseViewModel(), _windowManager);
-            _tipsVM.DisplayName = "Duang Duang Duang ! ! !";
+            //StoreHelper store = new StoreHelper(_mainHandler);
+            _tipsVM.Initlize(GetPurchaseViewModel(), _windowManager);
+            //_tipsVM.DisplayName = "Duang Duang Duang ! ! !";
             _tipsVM.Deactivated += _tipsVM_Deactivated;
 
             dynamic setting = new ExpandoObject();
@@ -450,13 +451,13 @@ namespace EyeNurse.Client.Services
         readonly string VIPGroup = "864039359";
         public PurchaseViewModel GetPurchaseViewModel()
         {
-            StoreHelper store = new StoreHelper(_mainHandler);
-            var vm = new PurchaseViewModel
-            {
-                DisplayName = "感谢您的支持~~"
-            };
-            vm.Initlize(store, new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
-            vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}");
+            //StoreHelper store = new StoreHelper(_mainHandler);
+            var vm = new PurchaseViewModel();
+            //{
+            //    DisplayName = "感谢您的支持~~"
+            //};
+            vm.Initlize(new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
+            vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}", VIPGroup, "https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");
             return vm;
         }
 
