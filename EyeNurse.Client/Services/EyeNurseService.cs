@@ -100,6 +100,7 @@ namespace EyeNurse.Client.Services
                 //游戏中，延迟
                 if (IsDelaying)
                 {
+                    warned = false;
                     IsDelaying = false;
                     ResetCountDown();
                 }
