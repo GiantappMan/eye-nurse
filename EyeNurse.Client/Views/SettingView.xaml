@@ -23,7 +23,10 @@
             HorizontalAlignment="Right">
             存储目录
         </Button>
-        <wpf:JsonConfierControl Grid.Row="1" DataContext="{Binding JsonConfierViewModel}" />
+        <wpf:JsonConfierControl
+            Grid.Row="1"
+            BorderBrush="Gray"
+            DataContext="{Binding JsonConfierViewModel}" />
         <StackPanel
             Grid.Row="2"
             Margin="0,5"

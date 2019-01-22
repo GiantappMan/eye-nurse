@@ -52,6 +52,7 @@
                 <TextBlock Text="{Binding Services.PausedTime, StringFormat={}恢复 {0:mm\\:ss}}" />
             </MenuItem.Header>
         </MenuItem>
+        <MenuItem cal:Message.Attach="Reset()" Header="重置" />
         <MenuItem cal:Message.Attach="RestImmediately()" Header="立即休息" />
         <Separator />
         <MenuItem cal:Message.Attach="ExitApp()" Header="退出" />

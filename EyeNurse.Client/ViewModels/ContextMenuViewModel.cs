@@ -138,6 +138,11 @@ namespace EyeNurse.Client.ViewModels
             Services.Resum();
         }
 
+        public void Reset()
+        {
+            Services.Reset();
+        }
+
         public void ExitApp()
         {
             Application.Current.Shutdown();

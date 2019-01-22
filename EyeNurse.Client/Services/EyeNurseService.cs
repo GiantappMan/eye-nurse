@@ -36,11 +36,11 @@ namespace EyeNurse.Client.Services
         private PurchaseTipsViewModel _tipsVM;
         private IntPtr _mainHandler;
         private TimeSpan _totalPlayTime = new TimeSpan();
-        private int _currentPID;
+        //private int _currentPID;
 
         public EyeNurseService(IWindowManager windowManager, IEventAggregator eventAggregator)
         {
-            _currentPID = Process.GetCurrentProcess().Id;
+            //_currentPID = Process.GetCurrentProcess().Id;
             _eventAggregator = eventAggregator;
             _eventAggregator.Subscribe(this);
 
@@ -128,7 +128,7 @@ namespace EyeNurse.Client.Services
                     {
                         _timer.Stop();
 
-                        bool isMaximized = new OtherProgramChecker(_currentPID, true).CheckMaximized();
+                        bool isMaximized = new OtherProgramChecker(Process.GetCurrentProcess(), true).CheckMaximized();
                         //bool isMaximized = true;
 
                         if (isMaximized && Setting.Speech.Enable)
@@ -305,7 +305,7 @@ namespace EyeNurse.Client.Services
             };
 
             //StoreHelper store = new StoreHelper(_mainHandler);
-            _tipsVM.Initlize(GetPurchaseViewModel(), _windowManager);
+            _tipsVM.Initlize(GetPurchaseViewModel());
             //_tipsVM.DisplayName = "Duang Duang Duang ! ! !";
             _tipsVM.Deactivated += _tipsVM_Deactivated;
 
@@ -768,6 +768,11 @@ namespace EyeNurse.Client.Services
         public void Resum()
         {
             IsPaused = false;
+        }
+
+        public void Reset()
+        {
+            ResetCountDown();
         }
 
         public void RestImmediately()
