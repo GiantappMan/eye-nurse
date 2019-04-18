@@ -14,11 +14,6 @@ namespace EyeNurse.Client.Helpers
 {
     public static class AutoStartup
     {
-#if UWP
         public static IStartupManager Instance { get; private set; } = new DesktopBridgeStartupManager();
-#else
-        //wpf
-        public static IStartupManager Instance { get; private set; } = new DesktopStartupManager();
-#endif
     }
 }

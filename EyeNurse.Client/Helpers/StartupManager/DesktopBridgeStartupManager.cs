@@ -16,7 +16,7 @@ namespace EyeNurse.Client.Helpers.StartupManager
         public async Task<bool> Set(bool enabled)
         {
 #pragma warning disable UWP003 // UWP-only
-            var startupTask = await StartupTask.GetAsync("EyeNureseTask");
+            var startupTask = await StartupTask.GetAsync("EyeNurse");
 #pragma warning restore UWP003 // UWP-only
             if (!enabled && startupTask.State == StartupTaskState.Enabled)
             {

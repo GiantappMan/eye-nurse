@@ -18,6 +18,7 @@ using System.Speech.Synthesis;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace EyeNurse.Client.Services
 {
@@ -452,11 +453,8 @@ namespace EyeNurse.Client.Services
         readonly string VIPGroup = "864039359";
         public PurchaseViewModel GetPurchaseViewModel()
         {
-            //StoreHelper store = new StoreHelper(_mainHandler);
-            var vm = new PurchaseViewModel();
-            //{
-            //    DisplayName = "感谢您的支持~~"
-            //};
+            var vm = new PurchaseViewModel();         
+            vm.InitHandle(_mainHandler, Dispatcher.CurrentDispatcher);
             vm.Initlize(new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
             vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}", VIPGroup, "https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");
             return vm;
