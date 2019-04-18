@@ -107,14 +107,14 @@
     <Reference Include="DZY.DotNetUtil.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\DZY.DotNetUtil.UI.1.0.0.56\lib\net46\DZY.DotNetUtil.WPF.dll</HintPath>
     </Reference>
-    <Reference Include="DZY.WinAPI, Version=1.0.45.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DZY.WinAPI.1.0.45\lib\netstandard2.0\DZY.WinAPI.dll</HintPath>
+    <Reference Include="DZY.WinAPI, Version=1.0.48.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DZY.WinAPI.1.0.48\lib\netstandard2.0\DZY.WinAPI.dll</HintPath>
     </Reference>
     <Reference Include="Hardcodet.Wpf.TaskbarNotification, Version=1.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Hardcodet.NotifyIcon.Wpf.1.0.8\lib\net451\Hardcodet.Wpf.TaskbarNotification.dll</HintPath>
     </Reference>
     <Reference Include="JsonConfiger.WPF, Version=1.0.0.16, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\JsonConfiger.1.0.0.52\lib\net46\JsonConfiger.WPF.dll</HintPath>
+      <HintPath>..\packages\JsonConfiger.1.0.0.54\lib\net46\JsonConfiger.WPF.dll</HintPath>
     </Reference>
     <Reference Include="LoadingIndicators.WPF, Version=0.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\LoadingIndicators.WPF.0.0.1\lib\LoadingIndicators.WPF.dll</HintPath>
@@ -135,7 +135,7 @@
       <HintPath>..\packages\Newtonsoft.Json.12.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <HintPath>..\packages\NLog.4.5.11\lib\net45\NLog.dll</HintPath>
+      <HintPath>..\packages\NLog.4.6.2\lib\net45\NLog.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
