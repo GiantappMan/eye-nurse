@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '15.0'">
     <VisualStudioVersion>15.0</VisualStudioVersion>
@@ -40,7 +40,7 @@
     <DefaultLanguage>en-US</DefaultLanguage>
     <PackageCertificateKeyFile>EyeNurse.App_StoreKey.pfx</PackageCertificateKeyFile>
     <EntryPointProjectUniqueName>..\EyeNurse.Client\EyeNurse.Client.csproj</EntryPointProjectUniqueName>
-    <PackageCertificateThumbprint>1798624C8EAD2E000359E5C118EC47ABE6CEBCB6</PackageCertificateThumbprint>
+    <PackageCertificateThumbprint>68CEEF889DB06FF7990B768D8E94121C2E303608</PackageCertificateThumbprint>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
     <AppxBundlePlatforms>neutral</AppxBundlePlatforms>
