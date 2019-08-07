@@ -22,3 +22,8 @@
 [Win10商店](https://www.microsoft.com/zh-cn/p/%E7%9C%BC%E7%9D%9B%E6%8A%A4%E5%A3%AB/9np76pb0d07c?rtc=1)  
 [官网](https://mscoder.cn/products/EyeNurse.html)  
 [发布包](https://github.com/MscoderStudio/EyeNurse/releases)
+
+## QQ群交流:
+**C#全栈开发**：191034956  
+**全球it互联交友**: 665127101
+（只允许单身码农和各行业的妹子加入，初衷是给程序员多一种认识异性的渠道）
