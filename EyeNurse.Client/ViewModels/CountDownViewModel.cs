@@ -1,9 +1,8 @@
 ﻿using Caliburn.Micro;
-using DZY.DotNetUtil.Helpers;
+using DZY.Util.Common.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
 using EyeNurse.Client.Services;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 

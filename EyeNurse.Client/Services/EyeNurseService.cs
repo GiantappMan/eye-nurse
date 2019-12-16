@@ -1,7 +1,7 @@
 ﻿using Caliburn.Micro;
-using DZY.DotNetUtil.Helpers;
-using DZY.DotNetUtil.WPF.ViewModels;
-using DZY.DotNetUtil.WPF.Views;
+using DZY.Util.Common.Helpers;
+using DZY.Util.WPF.ViewModels;
+using DZY.Util.WPF.Views;
 using DZY.WinAPI.Helpers;
 using EyeNurse.Client.Configs;
 using EyeNurse.Client.Events;
@@ -10,15 +10,17 @@ using EyeNurse.Client.Views;
 using Hardcodet.Wpf.TaskbarNotification;
 using NLog;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Dynamic;
-using System.Speech.Synthesis;
+using System.IO;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
 using System.Windows.Threading;
+using Windows.Media.SpeechSynthesis;
 
 namespace EyeNurse.Client.Services
 {
@@ -129,7 +131,8 @@ namespace EyeNurse.Client.Services
                     {
                         _timer.Stop();
 
-                        bool isMaximized = new OtherProgramChecker(Process.GetCurrentProcess(), true).CheckMaximized();
+                        new OtherProgramChecker(Process.GetCurrentProcess().Id, true).CheckMaximized(out List<System.Windows.Forms.Screen> maximizedScreens);
+                        bool isMaximized = maximizedScreens != null && maximizedScreens.Count > 0;
                         //bool isMaximized = true;
 
                         if (isMaximized && Setting.Speech.Enable)
@@ -172,26 +175,43 @@ namespace EyeNurse.Client.Services
             }
         }
 
-        private void PlaySpeech()
+        private async void PlaySpeech()
         {
             try
             {
                 _totalPlayTime = _totalPlayTime.Add(Setting.App.AlarmInterval);
-                using (SpeechSynthesizer syn = new SpeechSynthesizer())
-                {
-                    string setting = Setting.Speech.Message;
-                    if (string.IsNullOrEmpty(setting))
-                        setting = SpeechSetting.DefaultMessage;
+                //todo 
+                //using (SpeechSynthesizer syn = new SpeechSynthesizer())
+                //{
+                //    string setting = Setting.Speech.Message;
+                //    if (string.IsNullOrEmpty(setting))
+                //        setting = SpeechSetting.DefaultMessage;
 
-                    string hourMsg = "";
-                    if (_totalPlayTime.Hours > 0)
-                        hourMsg = $"{_totalPlayTime.Hours}小时 {_totalPlayTime.Minutes}分";
-                    else
-                        hourMsg = $"{_totalPlayTime.Minutes}分钟";
+                //    string hourMsg = "";
+                //    if (_totalPlayTime.Hours > 0)
+                //        hourMsg = $"{_totalPlayTime.Hours}小时 {_totalPlayTime.Minutes}分";
+                //    else
+                //        hourMsg = $"{_totalPlayTime.Minutes}分钟";
 
-                    string msg = string.Format(setting, hourMsg);
-                    syn.Speak(msg);
-                }
+                //    string msg = string.Format(setting, hourMsg);
+                //    syn.Speak(msg);
+                //}
+
+                string setting = Setting.Speech.Message;
+                string hourMsg = "";
+                if (_totalPlayTime.Hours > 0)
+                    hourMsg = $"{_totalPlayTime.Hours}小时 {_totalPlayTime.Minutes}分";
+                else
+                    hourMsg = $"{_totalPlayTime.Minutes}分钟";
+
+                string msg = string.Format(setting, hourMsg);
+
+                using var synthesizer = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
+                using Windows.Media.SpeechSynthesis.SpeechSynthesisStream synthStream = await synthesizer.SynthesizeTextToStreamAsync(msg);
+                using Stream stream = synthStream.AsStreamForRead();
+                using System.Media.SoundPlayer player = new System.Media.SoundPlayer();
+                player.Stream = stream;
+                player.Play();
             }
             catch (Exception ex)
             {
@@ -453,7 +473,7 @@ namespace EyeNurse.Client.Services
         readonly string VIPGroup = "864039359";
         public PurchaseViewModel GetPurchaseViewModel()
         {
-            var vm = new PurchaseViewModel();         
+            var vm = new PurchaseViewModel();
             vm.InitHandle(_mainHandler, Dispatcher.CurrentDispatcher);
             vm.Initlize(new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
             vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}", VIPGroup, "https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");

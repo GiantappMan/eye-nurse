@@ -84,7 +84,7 @@ namespace EyeNurse.Client
         {
             return new[] {
                 Assembly.GetExecutingAssembly(),
-                Assembly.Load(new AssemblyName("DZY.DotNetUtil.WPF")),
+                Assembly.Load(new AssemblyName("DZY.Util.WPF")),
             };
         }
         System.Threading.Mutex mutex;

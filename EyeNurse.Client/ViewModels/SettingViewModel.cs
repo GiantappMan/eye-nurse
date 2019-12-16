@@ -1,5 +1,5 @@
 ﻿using Caliburn.Micro;
-using DZY.DotNetUtil.Helpers;
+using DZY.Util.Common.Helpers;
 using EyeNurse.Client.Services;
 using JsonConfiger;
 using JsonConfiger.Models;
@@ -7,7 +7,6 @@ using NLog;
 using System;
 using System.Diagnostics;
 using System.IO;
-using Windows.Storage;
 
 namespace EyeNurse.Client.ViewModels
 {

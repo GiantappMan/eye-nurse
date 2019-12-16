@@ -1,6 +1,6 @@
 ﻿using Caliburn.Micro;
+using DZY.Util.Common.Helpers;
 using EyeNurse.Client.Events;
-using EyeNurse.Client.Helpers;
 using EyeNurse.Client.Services;
 using NLog;
 using System;
@@ -14,6 +14,7 @@ namespace EyeNurse.Client.ViewModels
         private Logger logger = NLog.LogManager.GetCurrentClassLogger();
         private IWindowManager _windowManager = null;
         private SettingViewModel _settingVM;
+        private IStartupManager _startupManager = null;
         readonly IEventAggregator _eventAggregator;
         public ContextMenuViewModel(EyeNurseService servcies, IWindowManager windowManager, IEventAggregator eventAggregator)
         {
@@ -22,12 +23,22 @@ namespace EyeNurse.Client.ViewModels
             _windowManager = windowManager;
             Services = servcies;
             IsVIP = Services.AppData.Purchased;
+            //开机启动
+            DesktopBridge.Helpers helpers = new DesktopBridge.Helpers();
+            if (helpers.IsRunningAsUwp())
+                _startupManager = new DesktopBridgeStartupManager("EyeNurse");
+            else
+            {
+                _startupManager = new DesktopStartupHelper("EyeNurse");
+            }
+
             Init();
         }
 
         private async void Init()
         {
-            IsAutoLaunch = await AutoStartup.Instance.Check();
+
+            IsAutoLaunch = await _startupManager.Check();
         }
 
         #region properties
@@ -123,8 +134,8 @@ namespace EyeNurse.Client.ViewModels
         public async void StartWithOS()
         {
             IsAutoLaunch = !IsAutoLaunch;
-            await AutoStartup.Instance.Set(IsAutoLaunch);
-            IsAutoLaunch = await AutoStartup.Instance.Check();
+            await _startupManager.Set(IsAutoLaunch);
+            IsAutoLaunch = await _startupManager.Check();
         }
 
         public void Pause()
