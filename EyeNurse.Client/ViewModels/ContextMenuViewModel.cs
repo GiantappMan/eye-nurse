@@ -37,7 +37,6 @@ namespace EyeNurse.Client.ViewModels
 
         private async void Init()
         {
-
             IsAutoLaunch = await _startupManager.Check();
         }
 
