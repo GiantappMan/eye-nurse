@@ -30,6 +30,10 @@
     "Message": {
       "type": "string",
       "lan": "播报内容"
+    },
+    "NeverLockScreen": {
+      "type": "boolean",
+      "lan": "仅语音提醒，不锁屏"
     }
   }
 }

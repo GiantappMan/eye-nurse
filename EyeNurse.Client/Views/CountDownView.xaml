@@ -7,7 +7,7 @@
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="CountDownView"
-    Width="70"
+    Width="80"
     Height="20"
     MinWidth="0"
     HorizontalAlignment="Center"
@@ -72,7 +72,9 @@
                 <DataTrigger Binding="{Binding AppService.IsDelaying}" Value="True">
                     <Setter TargetName="txt" Property="Text" Value="休息推后中..." />
                 </DataTrigger>
-
+                <DataTrigger Binding="{Binding AppService.IsResting}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="{Binding AppService.RestTimeCountdown, StringFormat={}放松 {0:mm\\:ss}}" />
+                </DataTrigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>
     </Window.Template>

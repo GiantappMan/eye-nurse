@@ -19,6 +19,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using Windows.Media.SpeechSynthesis;
 
@@ -133,23 +134,30 @@ namespace EyeNurse.Client.Services
 
                         new OtherProgramChecker(Process.GetCurrentProcess().Id, true).CheckMaximized(out List<System.Windows.Forms.Screen> maximizedScreens);
                         bool isMaximized = maximizedScreens != null && maximizedScreens.Count > 0;
-                        //bool isMaximized = true;
-
-                        if (isMaximized && Setting.Speech.Enable)
+                        // 正在全屏&&开启语音提示
+                        if ((isMaximized && Setting.Speech.Enable))
                         {
-                            //正在全屏，语音提示
                             IsDelaying = true;
                             PlaySpeech();
                         }
                         else
                         {//没有全屏玩游戏，立即休息
                             IsResting = true;
-                            _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
-                            Execute.OnUIThread(() =>
+
+                            //开启不锁屏
+                            if (Setting.Speech.NeverLockScreen)
                             {
-                                _windowManager.ShowWindow(_lastLockScreenViewModel);
-                                _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
-                            });
+                                PlaySpeech();
+                            }
+                            else
+                            {//锁屏
+                                _lastLockScreenViewModel = IoC.Get<LockScreenViewModel>();
+                                Execute.OnUIThread(() =>
+                                {
+                                    _windowManager.ShowWindow(_lastLockScreenViewModel);
+                                    _lastLockScreenViewModel.Deactivated += _lastLockScreenViewModel_Deactivated;
+                                });
+                            }
                             PlayRestingAudio(IsResting);
                         }
 
@@ -212,6 +220,8 @@ namespace EyeNurse.Client.Services
                 using System.Media.SoundPlayer player = new System.Media.SoundPlayer();
                 player.Stream = stream;
                 player.Play();
+                var icon = IoC.Get<TaskbarIcon>();
+                icon.ShowBalloonTip("休息提示", msg, BalloonIcon.Info);
             }
             catch (Exception ex)
             {
@@ -476,7 +486,9 @@ namespace EyeNurse.Client.Services
             var vm = new PurchaseViewModel();
             vm.InitHandle(_mainHandler, Dispatcher.CurrentDispatcher);
             vm.Initlize(new string[] { "Durable" }, new string[] { "9P3F93X9QJRV", "9PM5NZ2V9D6S", "9P98QTMNM1VZ" });
-            vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}", VIPGroup, "https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");
+            //vm.VIPContent = new VIPContent($"巨应工作室VIP QQ群：{VIPGroup}", VIPGroup, "https://shang.qq.com/wpa/qunwpa?idkey=24010e6212fe3c7ba6f79f5f91e6b216c6708d7a47abceb6f7e26890c3b15944");
+
+            vm.VIPContent = new Label() { Content = "购买成功，将不再有提示，感谢支持!" };
             return vm;
         }
 
