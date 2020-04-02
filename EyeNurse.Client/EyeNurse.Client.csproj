@@ -8,6 +8,7 @@
     <ApplicationIcon>logo.ico</ApplicationIcon>
     <Platforms>AnyCPU;x64;x86</Platforms>
     <AssemblyName>EyeNurse</AssemblyName>
+    <Version>1.1.30</Version>
   </PropertyGroup>
 
   <ItemGroup>
