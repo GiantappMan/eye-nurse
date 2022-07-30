@@ -7,10 +7,17 @@ function DeletePath([String]$path) {
     }
 }
 
-Import-Module -Name "$PSScriptRoot/Invoke-MsBuild/Invoke-MsBuild.psm1" -Force
+# build frontend
+Set-Location ../eyenurse-client-ui
+yarn
+yarn build
 
-$sln = "../EyeNurse2.sln"
-$buildDist = "$PSScriptRoot/publish"
+Set-Location ../setup
+
+Import-Module -Name "$PSScriptRoot\Invoke-MsBuild\Invoke-MsBuild.psm1" -Force
+
+$sln = "..\EyeNurse2.sln"
+$buildDist = "$PSScriptRoot\publish"
 # clean dist
 DeletePath -path $buildDist
 # build sln
