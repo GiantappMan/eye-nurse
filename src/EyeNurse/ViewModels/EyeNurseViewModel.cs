@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using EyeNurse.Models.UserConfigs;
 using EyeNurse.Services;
 using EyeNurse.Views;
+using Win32 = Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -27,6 +28,8 @@ namespace EyeNurse.ViewModels
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly List<PInvoke.User32.MONITORINFO> _screens;
         private readonly EyeNurseService _eyeNurseService;
+        private DateTime? _lockTime;
+        private Setting? _setting;
         #endregion
 
         #region construct
@@ -36,6 +39,8 @@ namespace EyeNurse.ViewModels
 #pragma warning restore CS8618 
         public EyeNurseViewModel(EyeNurseService service)
         {
+            //锁屏检测
+            Win32.SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
             _eyeNurseService = service;
             _eyeNurseService.SettingChanged += SettingChanged;
             _screens = User32Ex.GetMonitorInfos()!;
@@ -50,11 +55,32 @@ namespace EyeNurse.ViewModels
         #endregion
 
         #region private
+        private void SystemEvents_SessionSwitch(object sender, Win32.SessionSwitchEventArgs e)
+        {
+            switch (e.Reason)
+            {
+                case Win32.SessionSwitchReason.SessionUnlock:
+                    Resume();
+                    if (_lockTime != null && _setting != null)
+                    {
+                        if (DateTime.Now - _lockTime > _setting.ResetTimeout)
+                        {
+                            _lockTime = null;
+                            Reset();
+                        }
+                    }
+                    break;
+                case Win32.SessionSwitchReason.SessionLock:
+                    _lockTime = DateTime.Now;
+                    Pause();
+                    break;
+            }
+        }
         private void Init()
         {
-            var settingConfig = _eyeNurseService.LoadUserConfig<Setting>();
-            MainInterval = settingConfig.RestInterval;
-            MainCountdown = settingConfig.RestInterval;//UI立即显示时间
+            _setting = _eyeNurseService.LoadUserConfig<Setting>();
+            MainInterval = _setting.RestInterval;
+            MainCountdown = _setting.RestInterval;//UI立即显示时间
 
             //释放
             if (_timerService != null)
@@ -64,7 +90,7 @@ namespace EyeNurse.ViewModels
                 _timerService.Stop();
             }
 
-            _timerService = new GlobalTimerService(settingConfig.RestInterval);
+            _timerService = new GlobalTimerService(_setting.RestInterval);
             _timerService.Elapsed += TimerService_Elapsed;
             _timerService.Trigger += TimerService_Trigger;
 
@@ -152,14 +178,14 @@ namespace EyeNurse.ViewModels
                 window.Top = item.rcWork.top;
                 window.Height = item.rcWork.bottom - item.rcWork.top;
                 window.Width = item.rcWork.right - item.rcWork.left;
-                System.Diagnostics.Debug.WriteLine($"left:{window.Left},top:{window.Top},height:{window.Height},width:{window.Width}");
+                Debug.WriteLine($"left:{window.Left},top:{window.Top},height:{window.Height},width:{window.Width}");
                 _openWindows.Add(window);
                 window.Show();
             }
             await StartLockScreenCountdown(settingConfig.RestDuration);
             CloseLockScreen();
             Reset();
-            _timerService.Start();
+            _timerService?.Start();
             IsResting = false;
         }
         public async Task StartLockScreenCountdown(TimeSpan countDown)
@@ -190,6 +216,8 @@ namespace EyeNurse.ViewModels
         }
         internal void Reset()
         {
+            if (IsPaused)
+                Resume();
             _timerService?.Reset();
         }
         internal void Resume()

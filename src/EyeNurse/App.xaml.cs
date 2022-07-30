@@ -4,7 +4,6 @@ using EyeNurse.ViewModels;
 using HandyControl.Controls;
 using HandyControl.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Win32;
 using MultiLanguageForXAML;
 using System;
 using System.IO;
@@ -24,15 +23,11 @@ namespace EyeNurse
         private readonly MenuItem _resetMenuItem;
         private readonly MenuItem _restNowMenuItem;
         private readonly MenuItem _exitMenuItem;
-        private static DateTime? _lockTime;
 
         public static ContextMenu? Menu { private set; get; }
 
         public App()
         {
-            //锁屏检测
-            SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
-
             //基础服务初始化
             var services = new ServiceCollection();
             services.AddSingleton<EyeNurseService>();
@@ -124,21 +119,7 @@ namespace EyeNurse
 
         #region private
         #region callback
-        private static void SystemEvents_SessionSwitch(object sender, SessionSwitchEventArgs e)
-        {
-            var vm = IocService.GetService<EyeNurseViewModel>();
-            switch (e.Reason)
-            {
-                case SessionSwitchReason.SessionUnlock:
-                    vm?.Resume();
-                    _lockTime = null;
-                    break;
-                case SessionSwitchReason.SessionLock:
-                    _lockTime = DateTime.Now;
-                    vm?.Pause();
-                    break;
-            }
-        }
+ 
         private void ResetMenuItem_Click(object sender, RoutedEventArgs e)
         {
             var vm = IocService.GetService<EyeNurseViewModel>();
