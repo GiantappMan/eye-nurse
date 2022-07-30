@@ -1,11 +1,7 @@
 ﻿using Common.Apps.WPF.ViewModels;
-using CommunityToolkit.Mvvm.ComponentModel;
 using EyeNurse.Views;
 using Microsoft.Web.WebView2.Core;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace EyeNurse.ViewModels
@@ -28,21 +24,32 @@ namespace EyeNurse.ViewModels
 
         #region public
 
-        public void ShowWindow()
+        public async void ShowWindow()
         {
             if (_window == null)
             {
                 _window = new MainWindow();
+                _window.webview2.NavigationCompleted += Webview2_NavigationCompleted;
                 _window.DataContext = this;
                 _window.Closed += Window_Closed;
             }
             if (_window.WindowState == System.Windows.WindowState.Minimized)
                 _window.WindowState = System.Windows.WindowState.Normal;
-            
+
             if (!_window.IsActive)
                 _window.Activate();
 
+            Initlizing = true;
+            await Task.Run(CheckWebView2);
             _window.Show();
+        }
+
+        private void Webview2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (_window == null)
+                return;
+            _window.webview2.NavigationCompleted -= Webview2_NavigationCompleted;
+            Initlizing = false;
         }
 
         #endregion

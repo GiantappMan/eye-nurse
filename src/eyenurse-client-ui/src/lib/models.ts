@@ -5,4 +5,8 @@ export class Setting {
   RestDuration?: string;
   //开机启动
   RunWhenStarts?: boolean;
+  //自动重置
+  ResetWhenSessionUnlock?: boolean;
+  //重置超时时间
+  ResetTimeout?: string;
 }

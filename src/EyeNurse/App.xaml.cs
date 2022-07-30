@@ -24,6 +24,7 @@ namespace EyeNurse
         private readonly MenuItem _resetMenuItem;
         private readonly MenuItem _restNowMenuItem;
         private readonly MenuItem _exitMenuItem;
+        private static DateTime? _lockTime;
 
         public static ContextMenu? Menu { private set; get; }
 
@@ -130,8 +131,10 @@ namespace EyeNurse
             {
                 case SessionSwitchReason.SessionUnlock:
                     vm?.Resume();
+                    _lockTime = null;
                     break;
                 case SessionSwitchReason.SessionLock:
+                    _lockTime = DateTime.Now;
                     vm?.Pause();
                     break;
             }

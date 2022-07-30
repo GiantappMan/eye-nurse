@@ -4,26 +4,24 @@ using EyeNurse.Services;
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.Windows;
-using UserConfigs = EyeNurse.Models.UserConfigs;
 
 namespace EyeNurse.Views
 {
     public partial class MainWindow : Window
     {
         readonly EyeNurseService? _eyeNurseService;
+
         public MainWindow()
         {
             InitializeComponent();
 
             _eyeNurseService = IocService.GetService<EyeNurseService>()!;
-
             webview2.CoreWebView2InitializationCompleted += Webview2_CoreWebView2InitializationCompleted;
             Uri domain = new("https://client.eyenurse.giantapp.cn/index.html");
 #if DEBUG
             //本地开发
             domain = new("http://localhost:3000/index.html");
 #endif
-
             Uri source = new($"{domain}#/settings");
             webview2.Source = source;
         }
