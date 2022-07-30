@@ -4,14 +4,13 @@ using EyeNurse.ViewModels;
 using HandyControl.Controls;
 using HandyControl.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 using MultiLanguageForXAML;
 using System;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
-using UserConfigs = EyeNurse.Models.UserConfigs;
 
 namespace EyeNurse
 {
@@ -30,6 +29,9 @@ namespace EyeNurse
 
         public App()
         {
+            //锁屏检测
+            SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
+
             //基础服务初始化
             var services = new ServiceCollection();
             services.AddSingleton<EyeNurseService>();
@@ -121,6 +123,19 @@ namespace EyeNurse
 
         #region private
         #region callback
+        private static void SystemEvents_SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            var vm = IocService.GetService<EyeNurseViewModel>();
+            switch (e.Reason)
+            {
+                case SessionSwitchReason.SessionUnlock:
+                    vm?.Resume();
+                    break;
+                case SessionSwitchReason.SessionLock:
+                    vm?.Pause();
+                    break;
+            }
+        }
         private void ResetMenuItem_Click(object sender, RoutedEventArgs e)
         {
             var vm = IocService.GetService<EyeNurseViewModel>();

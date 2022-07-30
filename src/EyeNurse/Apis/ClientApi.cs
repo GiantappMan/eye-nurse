@@ -74,9 +74,5 @@ namespace EyeNurse.Apis
             _eyeNurseService?.ApplySetting(defaultConfig);
             return json;
         }
-
-
-
-
     }
 }
