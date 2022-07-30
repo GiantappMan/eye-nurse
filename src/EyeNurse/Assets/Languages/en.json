@@ -1,0 +1,13 @@
+﻿{
+  "app_name": "EyeNurse 2",
+  "about": "About",
+  "setting": "Setting",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "resting": "Resting...",
+  "rest_now": "Rest now",
+  "installWebview2Tips": "This function requires Microsoft's latest webview2 runtime support. Please reopen this window after manual installation",
+  "installNow": "Install now",
+  "exit": "Exit"
+}

@@ -1,0 +1,94 @@
+﻿<Window
+    x:Class="EyeNurse.Views.CountdownWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:EyeNurse.Views.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    xmlns:lan="clr-namespace:MultiLanguageForXAML;assembly=MultiLanguageForXAML"
+    xmlns:local="clr-namespace:EyeNurse"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:EyeNurse.ViewModels"
+    Title="CountdownWindow"
+    Width="80"
+    Height="20"
+    d:DataContext="{d:DesignInstance vm:EyeNurseViewModel,
+                                     IsDesignTimeCreatable=True}"
+    AllowsTransparency="True"
+    ResizeMode="NoResize"
+    ShowInTaskbar="False"
+    Topmost="{Binding IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
+    WindowStyle="None"
+    mc:Ignorable="d">
+    <Window.Resources>
+        <converters:TimeSpanToPercent x:Key="TimeSpanToPercent" />
+        <!--  8分钟  -->
+        <converters:TimeSpanToColorBrushConveter
+            x:Key="progreeBGConverter"
+            DurationSecond="480"
+            From="#ECC071"
+            To="#3E0D0D" />
+        <converters:TimeSpanToColorBrushConveter
+            x:Key="timeBGConverter"
+            DurationSecond="480"
+            From="#080808"
+            To="#F40000" />
+    </Window.Resources>
+    <Window.Template>
+        <ControlTemplate>
+            <Grid d:DataContext="{d:DesignInstance vm:EyeNurseViewModel, IsDesignTimeCreatable=True}">
+                <ProgressBar
+                    x:Name="progressBar"
+                    Background="Beige"
+                    IsIndeterminate="False"
+                    Maximum="100"
+                    Style="{x:Null}">
+                    <ProgressBar.Value>
+                        <MultiBinding Converter="{StaticResource TimeSpanToPercent}">
+                            <Binding Mode="OneWay" Path="MainCountdown" />
+                            <Binding Mode="OneWay" Path="MainInterval" />
+                        </MultiBinding>
+                    </ProgressBar.Value>
+                </ProgressBar>
+                <TextBlock
+                    x:Name="txt"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Text="{Binding MainCountdown, StringFormat=mm\\:ss}" />
+                <TextBlock
+                    x:Name="txtResting"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    lan:Xaml.Key="resting"
+                    Visibility="Collapsed" />
+                <iconPacks:PackIconMaterialLight
+                    x:Name="icon"
+                    Width="15"
+                    Height="15"
+                    Margin="2,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    Background="Transparent"
+                    Foreground="{Binding ElementName=txt, Path=Foreground}"
+                    Kind="Clock"
+                    Visibility="Collapsed" />
+                <MediaElement x:Name="media" Loaded="Media_Loaded" />
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsPaused}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="{Binding PausedTime, StringFormat=mm\\:ss}" />
+                    <Setter TargetName="icon" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="progressBar" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource progreeBGConverter}}" />
+                    <Setter TargetName="txt" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource timeBGConverter}}" />
+                </DataTrigger>
+                <!--<DataTrigger Binding="{Binding IsDelaying}" Value="True">
+                    <Setter TargetName="txt" Property="Text" Value="休息推后中..." />
+                </DataTrigger>-->
+                <DataTrigger Binding="{Binding IsResting}" Value="True">
+                    <Setter TargetName="txt" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="txtResting" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </Window.Template>
+</Window>

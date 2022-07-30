@@ -1,0 +1,61 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Version>2.0.1</Version>
+    <Company>Giantapp Studio</Company>
+    <Authors>Giantapp Studio</Authors>
+    <Description>https://eyenurse.giantapp.cn</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Eye Nurse 2</AssemblyName>
+    <ApplicationIcon>Assets\Img\logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\Img\logo.ico" />
+    <None Remove="Assets\Img\logo.png" />
+    <None Remove="Assets\Languages\en.json" />
+    <None Remove="Assets\Languages\zh.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Img\logo.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Img\logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Languages\en.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Languages\zh.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HandyControl" Version="3.3.0" />
+    <PackageReference Include="MahApps.Metro.IconPacks.MaterialLight" Version="4.11.0">
+      <TreatAsUsed>true</TreatAsUsed>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\gitee private\dotnet\DotNetUtil\src\Common.Apps.WPF\Common.Apps.WPF.csproj" />
+    <ProjectReference Include="..\..\..\..\gitee private\dotnet\DotNetUtil\src\Common.WinAPI\Common.WinAPI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Assets\UI\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Assets\UI\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

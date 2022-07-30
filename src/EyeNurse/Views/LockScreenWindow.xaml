@@ -1,0 +1,77 @@
+﻿<Window
+    x:Class="EyeNurse.Views.LockScreenWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:EyeNurse.ViewModels"
+    Title="LockScreenView"
+    d:DataContext="{d:DesignInstance vm:EyeNurseViewModel,
+                                     IsDesignTimeCreatable=True}"
+    d:DesignHeight="121.82"
+    d:DesignWidth="222.48"
+    AllowsTransparency="True"
+    Background="#141418"
+    BorderThickness="0"
+    Foreground="#EEEEF2"
+    ShowInTaskbar="False"
+    Topmost="True"
+    WindowState="Normal"
+    WindowStyle="None"
+    mc:Ignorable="d">
+    <!--<WindowChrome.WindowChrome>
+    -->
+    <!--  白边问题  -->
+    <!--
+        <WindowChrome CaptionHeight="0" />
+    </WindowChrome.WindowChrome>-->
+    <Window.Resources>
+        <ResourceDictionary>
+            <Style TargetType="{x:Type Button}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Button}">
+                            <ContentPresenter
+                                x:Name="contentPresenter"
+                                Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                Focusable="False"
+                                RecognizesAccessKey="True"
+                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid>
+        <Viewbox Width="70" Height="70">
+            <hc:LoadingCircle />
+        </Viewbox>
+
+        <TextBlock
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Text="{Binding LockScreenCountdown, StringFormat=mm\\:ss}" />
+        <Button
+            x:Name="Exit"
+            Margin="0,0,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            BorderThickness="0"
+            Command="{Binding CloseCommand}">
+            <iconPacks:PackIconMaterialLight
+                Width="25"
+                Height="25"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="Transparent"
+                Foreground="White"
+                Kind="LockUnLocked" />
+        </Button>
+    </Grid>
+</Window>
