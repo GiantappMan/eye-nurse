@@ -1,9 +1,0 @@
-/.vs
-bin
-obj
-packages
-*.user
-*App_StoreKey.pfx
-BundleArtifacts
-AppPackages
-/EyeNurse.App/_pkginfo.txt
