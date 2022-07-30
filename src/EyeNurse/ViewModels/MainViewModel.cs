@@ -40,8 +40,10 @@ namespace EyeNurse.ViewModels
                 _window.Activate();
 
             Initlizing = true;
-            await Task.Run(CheckWebView2);
+            bool ok = await Task.Run(CheckWebView2);
             _window.Show();
+            if (!ok)
+                Initlizing = false;
         }
 
         private void Webview2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)

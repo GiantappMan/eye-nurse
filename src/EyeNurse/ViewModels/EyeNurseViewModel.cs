@@ -44,6 +44,7 @@ namespace EyeNurse.ViewModels
             _eyeNurseService = service;
             _eyeNurseService.SettingChanged += SettingChanged;
             _screens = User32Ex.GetMonitorInfos()!;
+
             _countdown = new CountdownWindow()
             {
                 DataContext = this

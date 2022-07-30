@@ -4,15 +4,18 @@ namespace EyeNurse.Models.UserConfigs
 {
     public class Setting
     {
+        public static TimeSpan defaultRestInterval = new TimeSpan(0, 45, 0);
+        public static TimeSpan defaultRestDuration = new TimeSpan(0, 2, 30);
+        public static TimeSpan defaultResetTimeout = new TimeSpan(0, 5, 0);
         public Setting()
         {
 
         }
         public Setting(SettingFrontEnd settingFrontEnd)
         {
-            RestInterval = GetTimeSpan(settingFrontEnd.RestInterval, new TimeSpan(0, 45, 0));
-            RestDuration = GetTimeSpan(settingFrontEnd.RestDuration, new TimeSpan(0, 2, 30));
-            ResetTimeout = GetTimeSpan(settingFrontEnd.ResetTimeout, new TimeSpan(0, 5, 0));
+            RestInterval = GetTimeSpan(settingFrontEnd.RestInterval, defaultRestInterval);
+            RestDuration = GetTimeSpan(settingFrontEnd.RestDuration, defaultRestDuration);
+            ResetTimeout = GetTimeSpan(settingFrontEnd.ResetTimeout, defaultResetTimeout);
             ResetWhenSessionUnlock = settingFrontEnd.ResetWhenSessionUnlock;
             RunWhenStarts = settingFrontEnd.RunWhenStarts;
         }
@@ -29,8 +32,8 @@ namespace EyeNurse.Models.UserConfigs
             return defaultTs;
         }
 
-        public TimeSpan RestInterval { get; set; }
-        public TimeSpan RestDuration { get; set; }
+        public TimeSpan RestInterval { get; set; } = defaultRestInterval;
+        public TimeSpan RestDuration { get; set; } = defaultRestDuration;
         /// <summary>
         /// 开机启动
         /// </summary>
@@ -42,7 +45,7 @@ namespace EyeNurse.Models.UserConfigs
         /// <summary>
         /// 锁定超过时间就重置
         /// </summary>
-        public TimeSpan ResetTimeout { get; set; }
+        public TimeSpan ResetTimeout { get; set; } = defaultResetTimeout;
     }
 
     public class SettingFrontEnd
