@@ -22,7 +22,7 @@ https://gitee.com/DaZiYuan/eye-nurse
 	/dzy-dotnet-tools/src/xxx
 - vs2022 开发
 
-# 欢迎贡献
+# 欢迎任何语言的贡献，中文/英文/或者任何语言~
 - PR
 - 想法
 - Bug
