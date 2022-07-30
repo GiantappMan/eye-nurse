@@ -15,13 +15,6 @@ https://gitee.com/DaZiYuan/eye-nurse
 - 暂时取消提示音，1.0很多人不喜欢那个闹铃声
 - 同时支持中文和英文，帮助不同地区的电脑使用者
 
-# 开发
-- [编译前端项目](https://github.com/DaZiYuan/eye-nurse/tree/v2.x/src/eyenurse-client-ui)
-- 拷贝[DZY.Dotnet.Tools](https://github.com/DaZiYuan/dzy-dotnet-tools)到仓库同级目录
-	/eye-nurse/src/xxx
-	/dzy-dotnet-tools/src/xxx
-- vs2022 开发
-
 # 欢迎任何语言的贡献，中文/英文/或者任何语言~
 - PR
 - 想法
