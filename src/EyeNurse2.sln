@@ -10,7 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Doc", "Doc", "{DD7E3C32-4C2
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DaZiYuan.Common", "DaZiYuan.Common", "{7F5D1F08-C559-4064-8D30-49B28CF4DACC}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DZY.Dotnet.Tools", "DZY.Dotnet.Tools", "{7F5D1F08-C559-4064-8D30-49B28CF4DACC}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestProject", "TestProject\TestProject.csproj", "{DD2C1585-EEF4-4E49-B596-98D88620AB8B}"
 EndProject

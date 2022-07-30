@@ -2,14 +2,9 @@
   <footer class="bg-white">
     <div class="max-w-7xl mx-auto py-12 px-4 overflow-hidden sm:px-6 lg:px-8">
       <div class="mt-8 flex justify-center space-x-6">
-        <a
-          v-for="item in navigation"
-          rel="noopener noreferrer"
-          :target="item.openExternal === true ? '_blank' : '_self'"
-          :key="item.name"
-          :href="item.href"
-          class="text-gray-400 hover:text-gray-500"
-        >
+        <a v-for="item in navigation" rel="noopener noreferrer"
+          :target="item.openExternal === true ? '_blank' : '_self'" :key="item.name" :href="item.href"
+          class="text-gray-400 hover:text-gray-500">
           <span class="sr-only">{{ item.name }}</span>
           <component :is="item.icon" class="h-6 w-6" aria-hidden="true" />
         </a>
@@ -17,51 +12,28 @@
         <Listbox v-model="locale">
           <div class="-mt-2 relative w-28">
             <ListboxButton
-              class="relative w-full cursor-default rounded-lg bg-white py-2 pl-3 pr-10 text-left shadow-md focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-orange-300 sm:text-sm"
-            >
+              class="relative w-full cursor-default rounded-lg bg-white py-2 pl-3 pr-10 text-left shadow-md focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-orange-300 sm:text-sm">
               <span class="block truncate text-gray-600">{{ t(locale) }}</span>
-              <span
-                class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
-              >
-                <SelectorIcon
-                  class="h-5 w-5 text-gray-400"
-                  aria-hidden="true"
-                />
+              <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                <SelectorIcon class="h-5 w-5 text-gray-400" aria-hidden="true" />
               </span>
             </ListboxButton>
 
-            <transition
-              leave-active-class="transition duration-100 ease-in"
-              leave-from-class="opacity-100"
-              leave-to-class="opacity-0"
-            >
+            <transition leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100"
+              leave-to-class="opacity-0">
               <ListboxOptions
-                class="absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm"
-              >
-                <ListboxOption
-                  v-slot="{ active, selected }"
-                  v-for="item in $i18n.availableLocales"
-                  :key="`locale-${item}`"
-                  :value="item"
-                  as="template"
-                >
-                  <li
-                    :class="[
-                      active ? 'bg-teal-100 text-teal-900' : 'text-gray-900',
-                      'relative cursor-default select-none py-2 pl-10 pr-4',
-                    ]"
-                  >
-                    <span
-                      :class="[
-                        selected ? 'font-medium' : 'font-normal',
-                        'block truncate',
-                      ]"
-                      >{{ t(item) }}</span
-                    >
-                    <span
-                      v-if="selected"
-                      class="absolute inset-y-0 left-0 flex items-center pl-3 text-teal-600"
-                    >
+                class="absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                <ListboxOption v-slot="{ active, selected }" v-for="item in $i18n.availableLocales"
+                  :key="`locale-${item}`" :value="item" as="template">
+                  <li :class="[
+                    active ? 'bg-teal-100 text-teal-900' : 'text-gray-900',
+                    'relative cursor-default select-none py-2 pl-10 pr-4',
+                  ]">
+                    <span :class="[
+                      selected ? 'font-medium' : 'font-normal',
+                      'block truncate',
+                    ]">{{ t(item) }}</span>
+                    <span v-if="selected" class="absolute inset-y-0 left-0 flex items-center pl-3 text-teal-600">
                       <CheckIcon class="h-5 w-5" aria-hidden="true" />
                     </span>
                   </li>
@@ -71,10 +43,9 @@
           </div>
         </Listbox>
       </div>
-      <p
-        class="mt-8 text-center text-base text-gray-400"
-        v-html="t('copyright')"
-      />
+      <p class="mt-8 text-center">
+        <a href="https://giantapp.cn" target="_blank" class="text-base text-gray-400" v-html="t('copyright')" />
+      </p>
     </div>
   </footer>
 </template>
@@ -98,14 +69,14 @@ watch(locale, async (newLocale) => {
 
 const navigation = [
   {
-    name: "巨应工作室",
+    name: "GitHub",
     openExternal: true,
-    href: "https://giantapp.cn",
+    href: "https://github.com/DaZiYuan/eye-nurse",
     icon: defineComponent({
       render: () =>
         h("svg", { fill: "currentColor", viewBox: "0 0 1024 1024" }, [
           h("path", {
-            d: "M537.984 139.52l277.333333 123.178667A64 64 0 0 1 853.333333 321.194667v381.610666a64 64 0 0 1-38.016 58.496l-277.333333 123.157334a64 64 0 0 1-51.968 0l-277.333333-123.157334A64 64 0 0 1 170.666667 702.805333V321.194667a64 64 0 0 1 38.016-58.496l277.333333-123.157334a64 64 0 0 1 51.968 0zM234.666667 381.44v321.365333l250.666666 111.317334V488.853333L234.666667 381.44z m554.666666 2.304l-240 102.826667V809.386667L789.333333 702.805333V383.744zM512 198.037333l-266.581333 118.378667 269.290666 115.413333 266.517334-114.24L512 198.037333z",
+            d: "M279.04 714.24a42.666667 42.666667 0 1 1 53.461333-66.474667l90.453334 72.789334a42.666667 42.666667 0 0 1 13.994666 45.952c-11.648 37.205333-20.266667 65.066667-25.856 83.541333l-5.973333 20.181333c-3.669333 21.162667-18.773333 38.144-42.709333 38.144a994.133333 994.133333 0 0 1-15.786667-5.461333C189.226667 838.698667 85.333333 684.885333 85.333333 511.957333 85.333333 276.352 276.352 85.333333 512 85.333333s426.666667 191.018667 426.666667 426.666667a426.666667 426.666667 0 0 1-260.437334 392.96c-5.802667 2.304-11.349333 3.413333-16.64 3.413333-23.978667 0-39.04-16.981333-42.112-35.882666a3806.933333 3806.933333 0 0 0-16.213333-53.930667 30942.72 30942.72 0 0 0-56.149333-179.029333 42.666667 42.666667 0 0 1 21.376-50.901334c50.346667-25.514667 71.509333-51.072 71.509333-76.672 0-13.909333-5.333333-27.648-15.872-40.362666a42.666667 42.666667 0 0 1-8.618667-37.632l0.768-3.072-5.546666 3.328a42.666667 42.666667 0 0 1-37.034667 3.328A174.805333 174.805333 0 0 0 512 426.624c-21.930667 0-42.922667 3.84-61.696 10.922667a42.666667 42.666667 0 0 1-37.034667-3.328l-5.546666-3.328 0.768 3.072a42.666667 42.666667 0 0 1-8.618667 37.632c-10.538667 12.714667-15.872 26.453333-15.872 40.362666 0 25.6 21.12 51.157333 71.509333 76.672a42.666667 42.666667 0 1 1-38.570666 76.117334C340.778667 626.176 298.666667 575.274667 298.666667 512c0-27.178667 7.808-53.205333 22.229333-76.458667L299.946667 351.658667c-9.216-36.864 30.72-66.474667 63.317333-46.933334l77.226667 46.293334A264.277333 264.277333 0 0 1 512 341.333333c24.661333 0 48.768 3.285333 71.552 9.685334l77.184-46.293334c32.554667-19.541333 72.533333 10.069333 63.317333 46.933334l-20.949333 83.882666A144.213333 144.213333 0 0 1 725.333333 511.957333c0 53.845333-30.506667 98.730667-86.485333 134.698667a26941.482667 26941.482667 0 0 1 49.322667 157.738667A341.333333 341.333333 0 0 0 512 170.666667a341.333333 341.333333 0 0 0-176.128 633.728l11.008-35.584-67.84-54.613334z",
           }),
         ]),
     }),
@@ -135,19 +106,6 @@ const navigation = [
           }),
           h("path", {
             d: "M821.76 938.688H203.776c-89.152 0-161.088-73.28-161.088-164.032v-482.56C42.688 201.152 114.56 128 203.776 128h617.984c87.616 0 159.552 73.28 159.552 164.032v484.16c0 89.216-71.936 162.496-159.552 162.496zM203.776 223.552c-37.504 0-67.2 30.272-67.2 68.48v484.16c0 38.272 29.696 68.48 67.2 68.48h617.984c37.568 0 67.264-30.208 67.264-68.48V292.032c-1.536-38.208-31.296-68.48-67.264-68.48H203.776z",
-          }),
-        ]),
-    }),
-  },
-  {
-    name: "GitHub",
-    openExternal: true,
-    href: "https://github.com/daziyuan",
-    icon: defineComponent({
-      render: () =>
-        h("svg", { fill: "currentColor", viewBox: "0 0 1024 1024" }, [
-          h("path", {
-            d: "M279.04 714.24a42.666667 42.666667 0 1 1 53.461333-66.474667l90.453334 72.789334a42.666667 42.666667 0 0 1 13.994666 45.952c-11.648 37.205333-20.266667 65.066667-25.856 83.541333l-5.973333 20.181333c-3.669333 21.162667-18.773333 38.144-42.709333 38.144a994.133333 994.133333 0 0 1-15.786667-5.461333C189.226667 838.698667 85.333333 684.885333 85.333333 511.957333 85.333333 276.352 276.352 85.333333 512 85.333333s426.666667 191.018667 426.666667 426.666667a426.666667 426.666667 0 0 1-260.437334 392.96c-5.802667 2.304-11.349333 3.413333-16.64 3.413333-23.978667 0-39.04-16.981333-42.112-35.882666a3806.933333 3806.933333 0 0 0-16.213333-53.930667 30942.72 30942.72 0 0 0-56.149333-179.029333 42.666667 42.666667 0 0 1 21.376-50.901334c50.346667-25.514667 71.509333-51.072 71.509333-76.672 0-13.909333-5.333333-27.648-15.872-40.362666a42.666667 42.666667 0 0 1-8.618667-37.632l0.768-3.072-5.546666 3.328a42.666667 42.666667 0 0 1-37.034667 3.328A174.805333 174.805333 0 0 0 512 426.624c-21.930667 0-42.922667 3.84-61.696 10.922667a42.666667 42.666667 0 0 1-37.034667-3.328l-5.546666-3.328 0.768 3.072a42.666667 42.666667 0 0 1-8.618667 37.632c-10.538667 12.714667-15.872 26.453333-15.872 40.362666 0 25.6 21.12 51.157333 71.509333 76.672a42.666667 42.666667 0 1 1-38.570666 76.117334C340.778667 626.176 298.666667 575.274667 298.666667 512c0-27.178667 7.808-53.205333 22.229333-76.458667L299.946667 351.658667c-9.216-36.864 30.72-66.474667 63.317333-46.933334l77.226667 46.293334A264.277333 264.277333 0 0 1 512 341.333333c24.661333 0 48.768 3.285333 71.552 9.685334l77.184-46.293334c32.554667-19.541333 72.533333 10.069333 63.317333 46.933334l-20.949333 83.882666A144.213333 144.213333 0 0 1 725.333333 511.957333c0 53.845333-30.506667 98.730667-86.485333 134.698667a26941.482667 26941.482667 0 0 1 49.322667 157.738667A341.333333 341.333333 0 0 0 512 170.666667a341.333333 341.333333 0 0 0-176.128 633.728l11.008-35.584-67.84-54.613334z",
           }),
         ]),
     }),
