@@ -1,8 +1,7 @@
 ﻿using Common.Apps.Helpers;
 using Common.Apps.Services;
-using EyeNurse.Models.UserConfigs;
 using MultiLanguageForXAML;
-using System;
+using MultiLanguageForXAML.DB;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -61,7 +60,7 @@ namespace EyeNurse.Services
             var lanSetting = LoadUserConfig<UserConfigs.Languages>();
             //多语言初始化
             string i18nDir = Path.Combine(ApptEntryDir, "Assets\\Languages");
-            LanService.Init(new JsonDB(i18nDir), true, lanSetting?.CurrentLan, "en");
+            LanService.Init(new JsonFileDB(i18nDir), true, lanSetting?.CurrentLan, "en");
 
             var appSetting = LoadUserConfig<UserConfigs.Setting>();
             ApplySetting(appSetting);

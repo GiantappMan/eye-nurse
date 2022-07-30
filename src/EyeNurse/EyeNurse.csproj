@@ -44,12 +44,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\gitee private\dotnet\DotNetUtil\src\Common.Apps.WPF\Common.Apps.WPF.csproj" />
-    <ProjectReference Include="..\..\..\..\gitee private\dotnet\DotNetUtil\src\Common.WinAPI\Common.WinAPI.csproj" />
+    <Folder Include="Assets\UI\" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Assets\UI\" />
+    <ProjectReference Include="..\..\..\dzy-dotnet-tools\src\Common.Apps.WPF\Common.Apps.WPF.csproj" />
+    <ProjectReference Include="..\..\..\dzy-dotnet-tools\src\Common.Apps\Common.Apps.csproj" />
+    <ProjectReference Include="..\..\..\dzy-dotnet-tools\src\Common.WinAPI\Common.WinAPI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
