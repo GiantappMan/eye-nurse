@@ -24,7 +24,6 @@ namespace EyeNurse.Services
         #endregion
 
         #region constructs
-        //public GlobalTimerService() : this(TimeSpan.FromSeconds(1)) { }
         public GlobalTimerService(TimeSpan triggerInterval)
         {
             _triggerInterval = triggerInterval;

@@ -2,6 +2,7 @@
 using Common.WinAPI;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EyeNurse.Models.UserConfigs;
 using EyeNurse.Services;
 using EyeNurse.Views;
 using System;
@@ -22,7 +23,7 @@ namespace EyeNurse.ViewModels
         private readonly List<Window> _openWindows = new();
         //其他
         private bool _isLocking = false;
-        readonly GlobalTimerService _timerService;
+        private GlobalTimerService? _timerService;
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly List<PInvoke.User32.MONITORINFO> _screens;
         private readonly EyeNurseService _eyeNurseService;
@@ -36,25 +37,43 @@ namespace EyeNurse.ViewModels
         public EyeNurseViewModel(EyeNurseService service)
         {
             _eyeNurseService = service;
-            var settingConfig = _eyeNurseService.LoadUserConfig<UserConfigs.Setting>();
-            MainInterval = settingConfig.RestInterval;
-
-            _timerService = new GlobalTimerService(settingConfig.RestInterval);
-            MainCountdown = settingConfig.RestInterval;//UI立即显示时间
-            _timerService.Elapsed += TimerService_Elapsed;
-            _timerService.Trigger += TimerService_Trigger;
-            _timerService.Start();
+            _eyeNurseService.SettingChanged += SettingChanged;
             _screens = User32Ex.GetMonitorInfos()!;
             _countdown = new CountdownWindow()
             {
                 DataContext = this
             };
             CloseCommand = new RelayCommand(CloseLockScreen);
+            Init();
         }
 
         #endregion
 
         #region private
+        private void Init()
+        {
+            var settingConfig = _eyeNurseService.LoadUserConfig<Setting>();
+            MainInterval = settingConfig.RestInterval;
+            MainCountdown = settingConfig.RestInterval;//UI立即显示时间
+
+            //释放
+            if (_timerService != null)
+            {
+                _timerService.Elapsed -= TimerService_Elapsed;
+                _timerService.Trigger -= TimerService_Trigger;
+                _timerService.Stop();
+            }
+
+            _timerService = new GlobalTimerService(settingConfig.RestInterval);
+            _timerService.Elapsed += TimerService_Elapsed;
+            _timerService.Trigger += TimerService_Trigger;
+
+            _timerService.Start();
+        }
+        private void SettingChanged(object? sender, Setting e)
+        {
+            Init();
+        }
         private void CloseLockScreen()
         {
             _isLocking = false;
@@ -122,7 +141,7 @@ namespace EyeNurse.ViewModels
             if (IsResting)
                 return;
             IsResting = true;
-            _timerService.Stop();
+            _timerService?.Stop();
             var settingConfig = _eyeNurseService.LoadUserConfig<UserConfigs.Setting>();
             foreach (var item in _screens)
             {
@@ -171,11 +190,11 @@ namespace EyeNurse.ViewModels
         }
         internal void Reset()
         {
-            _timerService.Reset();
+            _timerService?.Reset();
         }
         internal void Resume()
         {
-            if (_timerService.Resume())
+            if (_timerService != null && _timerService.Resume())
                 IsPaused = false;
             PausedTime = null;
         }
@@ -184,7 +203,7 @@ namespace EyeNurse.ViewModels
             if (IsPaused)
                 return;
 
-            if (_timerService.Pause())
+            if (_timerService != null && _timerService.Pause())
                 IsPaused = true;
 
             while (IsPaused)

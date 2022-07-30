@@ -1,8 +1,8 @@
 ﻿using Common.Apps.Helpers;
 using Common.Apps.Services;
-using Microsoft.Win32;
 using MultiLanguageForXAML;
 using MultiLanguageForXAML.DB;
+using System;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -12,7 +12,7 @@ using UserConfigs = EyeNurse.Models.UserConfigs;
 namespace EyeNurse.Services
 {
     /// <summary>
-    /// 全局服务
+    /// 全局服务，和UI无关的逻辑
     /// </summary>
     public class EyeNurseService
     {
@@ -38,10 +38,11 @@ namespace EyeNurse.Services
 
         #region properties
         public string ApptEntryDir { get; private set; }
+        public EventHandler<UserConfigs.Setting>? SettingChanged;
         #endregion
 
         #region private
-  
+
         #endregion
 
         #region public
@@ -53,6 +54,7 @@ namespace EyeNurse.Services
         internal void ApplySetting(UserConfigs.Setting setting)
         {
             _desktopStartupHelper.Set(setting.RunWhenStarts);
+            SettingChanged?.Invoke(this, setting);
         }
         internal void Init()
         {
