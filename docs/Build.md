@@ -1,14 +1,14 @@
-# ¿ª·¢
-- [±àÒëÇ°¶ËÏîÄ¿](https://github.com/DaZiYuan/eye-nurse/tree/v2.x/src/eyenurse-client-ui)
-- ¿½±´[DZY.Dotnet.Tools](https://github.com/DaZiYuan/dzy-dotnet-tools)µ½²Ö¿âÍ¬¼¶Ä¿Â¼
-	/eye-nurse/src/xxx
-	/dzy-dotnet-tools/src/xxx
-- vs2022 ¿ª·¢
+# å¼€å‘
+- [ç¼–è¯‘å‰ç«¯é¡¹ç›®](https://github.com/DaZiYuan/eye-nurse/tree/v2.x/src/eyenurse-client-ui)
+- æ‹·è´[DZY.Dotnet.Tools](https://github.com/DaZiYuan/dzy-dotnet-tools)åˆ°ä»“åº“åŒçº§ç›®å½•  
+	/eye-nurse/src/xxx  
+	/dzy-dotnet-tools/src/xxx  
+- vs2022 å¼€å‘
 
-# ´ò°ü
+# æ‰“åŒ…
 
-- Ö´ĞĞ[compile.ps1](eye-nurse\src\setup\compile.ps1)
-- Ö´ĞĞ[build.iss](eye-nurse\src\setup\build.iss)
+- æ‰§è¡Œ[compile.ps1](eye-nurse\src\setup\compile.ps1)
+- æ‰§è¡Œ[build.iss](eye-nurse\src\setup\build.iss)
 
 
 
