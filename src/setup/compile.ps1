@@ -20,9 +20,10 @@ Set-Location ../setup
 
 Import-Module -Name "$PSScriptRoot\Invoke-MsBuild\Invoke-MsBuild.psm1" -Force
 
-$sln = "..\EyeNurse2.sln"
+$sln = "..\EyeNurse\EyeNurse.csproj"
 $buildDist = "$PSScriptRoot\publish"
 # clean dist
 DeletePath -path $buildDist
 # build sln
-Invoke-MsBuild -Path $sln -MsBuildParameters "-t:restore /target:Clean;Build /property:Configuration=Release;OutputPath=$buildDist" -ShowBuildOutputInNewWindow -PromptForInputBeforeClosing -AutoLaunchBuildLogOnFailure
+# Invoke-MsBuild -Path $sln -MsBuildParameters "-t:restore /target:Clean;Build /property:Configuration=Release;OutputPath=$buildDist" -ShowBuildOutputInNewWindow -PromptForInputBeforeClosing -AutoLaunchBuildLogOnFailure
+Invoke-MsBuild -Path $sln -MsBuildParameters "-t:restore /target:Clean;Publish /p:PublishProfile=./FolderProfile.pubxml" -ShowBuildOutputInNewWindow -PromptForInputBeforeClosing -AutoLaunchBuildLogOnFailure
