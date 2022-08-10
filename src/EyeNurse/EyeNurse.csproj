@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net6.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <Version>2.0.4</Version>
+    <Version>2.0.5</Version>
     <Company>Giantapp Studio</Company>
     <Authors>Giantapp Studio</Authors>
     <Description>https://eyenurse.giantapp.cn</Description>
@@ -17,6 +17,8 @@
   <ItemGroup>
     <None Remove="Assets\Img\logo.ico" />
     <None Remove="Assets\Img\logo.png" />
+    <None Remove="Assets\Img\TopMostChecked.png" />
+    <None Remove="Assets\Img\TopMostUnChecked.png" />
     <None Remove="Assets\Languages\en.json" />
     <None Remove="Assets\Languages\zh.json" />
   </ItemGroup>
@@ -26,6 +28,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\Img\logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Img\TopMostChecked.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Img\TopMostUnChecked.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\Languages\en.json">

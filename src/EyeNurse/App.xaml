@@ -9,6 +9,7 @@
         <ResourceDictionary>
             <app_converters:InverseBooleanConveter x:Key="InverseBooleanConveter" />
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Eye Nurse 2;component/Styles/All.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>

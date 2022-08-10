@@ -20,7 +20,7 @@ namespace EyeNurse.Views
             Uri domain = new("https://client.eyenurse.giantapp.cn/index.html");
 #if DEBUG
             //本地开发
-            domain = new("http://localhost:3000/index.html");
+            //domain = new("http://localhost:3000/index.html");
 #endif
             Uri source = new($"{domain}#/settings");
             webview2.Source = source;

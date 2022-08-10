@@ -33,94 +33,101 @@
             From="#080808"
             To="#F40000" />
     </Window.Resources>
-    <Window.Template>
-        <ControlTemplate>
-            <Grid d:DataContext="{d:DesignInstance vm:EyeNurseViewModel, IsDesignTimeCreatable=True}">
-                <ProgressBar
-                    x:Name="progressBar"
-                    Background="Beige"
-                    IsIndeterminate="False"
-                    Maximum="100"
-                    Style="{x:Null}">
-                    <ProgressBar.Value>
-                        <MultiBinding Converter="{StaticResource TimeSpanToPercent}">
-                            <Binding Mode="OneWay" Path="MainCountdown" />
-                            <Binding Mode="OneWay" Path="MainInterval" />
-                        </MultiBinding>
-                    </ProgressBar.Value>
-                </ProgressBar>
-                <TextBlock
-                    x:Name="txt"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Text="{Binding MainCountdown, StringFormat=mm\\:ss}" />
-                <TextBlock
-                    x:Name="txtResting"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    lan:Xaml.Key="resting"
-                    Visibility="Collapsed" />
-                <iconPacks:PackIconMaterialLight
-                    x:Name="icon"
-                    Width="15"
-                    Height="15"
-                    Margin="4,0,0,0"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Stretch"
-                    Background="Transparent"
-                    Foreground="{Binding ElementName=txt, Path=Foreground}"
-                    Kind="Clock"
-                    Visibility="Collapsed" />
-                <CheckBox
-                    x:Name="ChkTopMost"
-                    Margin="0,0,4,0"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
-                    Checked="TopMost_Checked"
-                    IsChecked="{Binding TopMost, Mode=TwoWay}"
-                    Opacity="0"
-                    Unchecked="TopMost_Unchecked" />
-                <MediaElement x:Name="media" Loaded="Media_Loaded" />
-            </Grid>
-            <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Trigger.EnterActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation
-                                    Storyboard.TargetName="ChkTopMost"
-                                    Storyboard.TargetProperty="Opacity"
-                                    To="1"
-                                    Duration="0:0:.3" />
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </Trigger.EnterActions>
-                    <Trigger.ExitActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation
-                                    Storyboard.TargetName="ChkTopMost"
-                                    Storyboard.TargetProperty="Opacity"
-                                    To="0.0"
-                                    Duration="0:0:.3" />
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </Trigger.ExitActions>
-                </Trigger>
-                <DataTrigger Binding="{Binding IsPaused}" Value="True">
-                    <Setter TargetName="txt" Property="Text" Value="{Binding PausedTime, StringFormat=mm\\:ss}" />
-                    <Setter TargetName="icon" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="progressBar" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource progreeBGConverter}}" />
-                    <Setter TargetName="txt" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource timeBGConverter}}" />
-                </DataTrigger>
-                <!--<DataTrigger Binding="{Binding IsDelaying}" Value="True">
-                    <Setter TargetName="txt" Property="Text" Value="休息推后中..." />
-                </DataTrigger>-->
-                <DataTrigger Binding="{Binding IsResting}" Value="True">
-                    <Setter TargetName="txt" Property="Visibility" Value="Collapsed" />
-                    <Setter TargetName="txtResting" Property="Visibility" Value="Visible" />
-                </DataTrigger>
-            </ControlTemplate.Triggers>
-        </ControlTemplate>
-    </Window.Template>
+    <Grid>
+        <Control>
+            <Control.Template>
+                <ControlTemplate>
+                    <Grid d:DataContext="{d:DesignInstance vm:EyeNurseViewModel, IsDesignTimeCreatable=True}">
+                        <ProgressBar
+                            x:Name="progressBar"
+                            Background="Beige"
+                            IsIndeterminate="False"
+                            Maximum="100"
+                            Style="{x:Null}">
+                            <ProgressBar.Value>
+                                <MultiBinding Converter="{StaticResource TimeSpanToPercent}">
+                                    <Binding Mode="OneWay" Path="MainCountdown" />
+                                    <Binding Mode="OneWay" Path="MainInterval" />
+                                </MultiBinding>
+                            </ProgressBar.Value>
+                        </ProgressBar>
+                        <TextBlock
+                            x:Name="txt"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Text="{Binding MainCountdown, StringFormat=mm\\:ss}" />
+                        <TextBlock
+                            x:Name="txtResting"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            lan:Xaml.Key="resting"
+                            Visibility="Collapsed" />
+                        <iconPacks:PackIconMaterialLight
+                            x:Name="icon"
+                            Width="15"
+                            Height="15"
+                            Margin="4,0,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Stretch"
+                            Background="Transparent"
+                            Foreground="{Binding ElementName=txt, Path=Foreground}"
+                            Kind="Clock"
+                            Visibility="Collapsed" />
+                        <CheckBox
+                            x:Name="ChkTopMost"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Checked="TopMost_Checked"
+                            IsChecked="{Binding TopMost, Mode=TwoWay}"
+                            Opacity="0"
+                            Style="{StaticResource TopMostCheckBox}"
+                            Unchecked="TopMost_Unchecked">
+                            <CheckBox.ToolTip>
+                                <TextBlock lan:Xaml.Key="always_on_top" TextWrapping="Wrap" />
+                            </CheckBox.ToolTip>
+                        </CheckBox>
+                        <MediaElement x:Name="media" Loaded="Media_Loaded" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="ChkTopMost"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="1"
+                                            Duration="0:0:.3" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimationUsingKeyFrames
+                                            Storyboard.TargetName="ChkTopMost"
+                                            Storyboard.TargetProperty="Opacity"
+                                            Duration="0:0:3">
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.7" Value="1" />
+                                            <LinearDoubleKeyFrame KeyTime="0:0:1" Value="0" />
+                                        </DoubleAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding IsPaused}" Value="True">
+                            <Setter TargetName="txt" Property="Text" Value="{Binding PausedTime, StringFormat=mm\\:ss}" />
+                            <Setter TargetName="icon" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="progressBar" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource progreeBGConverter}}" />
+                            <Setter TargetName="txt" Property="Foreground" Value="{Binding PausedTime, Converter={StaticResource timeBGConverter}}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsResting}" Value="True">
+                            <Setter TargetName="txt" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="txtResting" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Control.Template>
+        </Control>
+    </Grid>
 </Window>
