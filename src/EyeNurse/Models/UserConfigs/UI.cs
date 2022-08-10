@@ -10,5 +10,6 @@ namespace EyeNurse.Models.UserConfigs
     {
         public double CoutdownWindowLeft { get; set; } = 100;
         public double CoutdownWindowTop { get; set; } = 100;
+        public bool TopMost { get; set; } = true;
     }
 }

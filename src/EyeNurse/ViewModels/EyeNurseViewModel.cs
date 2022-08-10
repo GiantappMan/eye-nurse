@@ -143,7 +143,8 @@ namespace EyeNurse.ViewModels
         #region public
         public async void ShowCountdownWindow()
         {
-            var uiConfig = await _eyeNurseService.LoadUserConfigAsync<UserConfigs.UI>();
+            var uiConfig = await _eyeNurseService.LoadUserConfigAsync<UI>();
+            TopMost = uiConfig.TopMost;
             _ = _countdown.Dispatcher.BeginInvoke(() =>
              {
                  _countdown.Left = uiConfig.CoutdownWindowLeft;
@@ -155,9 +156,15 @@ namespace EyeNurse.ViewModels
         }
         public async void SaveCountdownWindowPosition(double left, double top)
         {
-            var uiConfig = await _eyeNurseService.LoadUserConfigAsync<UserConfigs.UI>();
+            var uiConfig = await _eyeNurseService.LoadUserConfigAsync<UI>();
             uiConfig.CoutdownWindowLeft = left;
             uiConfig.CoutdownWindowTop = top;
+            await _eyeNurseService.SaveUserConfigAsync(uiConfig);
+        }
+        public async void SaveTopMost(bool topMost)
+        {
+            var uiConfig = await _eyeNurseService.LoadUserConfigAsync<UI>();
+            uiConfig.TopMost = topMost;
             await _eyeNurseService.SaveUserConfigAsync(uiConfig);
         }
         /// <summary>
@@ -286,6 +293,14 @@ namespace EyeNurse.ViewModels
 
         bool _isResting;
         public bool IsResting { get => _isResting; set => SetProperty(ref _isResting, value); }
+
+        //是否置顶
+        bool _topMost;
+        public bool TopMost
+        {
+            get => _topMost;
+            set => SetProperty(ref _topMost, value);
+        }
 
         #endregion
     }

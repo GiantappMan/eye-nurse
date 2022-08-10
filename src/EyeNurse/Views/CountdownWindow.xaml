@@ -6,7 +6,6 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:lan="clr-namespace:MultiLanguageForXAML;assembly=MultiLanguageForXAML"
-    xmlns:local="clr-namespace:EyeNurse"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="clr-namespace:EyeNurse.ViewModels"
     Title="CountdownWindow"
@@ -17,7 +16,7 @@
     AllowsTransparency="True"
     ResizeMode="NoResize"
     ShowInTaskbar="False"
-    Topmost="{Binding IsResting, Mode=OneWay, Converter={StaticResource InverseBooleanConveter}}"
+    Topmost="{Binding TopMost, Mode=OneWay}"
     WindowStyle="None"
     mc:Ignorable="d">
     <Window.Resources>
@@ -72,6 +71,11 @@
                     Foreground="{Binding ElementName=txt, Path=Foreground}"
                     Kind="Clock"
                     Visibility="Collapsed" />
+                <CheckBox
+                    HorizontalAlignment="Right"
+                    Checked="TopMost_Checked"
+                    IsChecked="{Binding TopMost, Mode=TwoWay}"
+                    Unchecked="TopMost_Unchecked" />
                 <MediaElement x:Name="media" Loaded="Media_Loaded" />
             </Grid>
             <ControlTemplate.Triggers>

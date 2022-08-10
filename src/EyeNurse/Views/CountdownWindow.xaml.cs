@@ -25,7 +25,7 @@ namespace EyeNurse.Views
         public CountdownWindow()
         {
             InitializeComponent();
-            this.ContextMenu = App.Menu;
+            ContextMenu = App.Menu;
             Loaded += CountdownWindow_Loaded;
             MouseDown += CountdownWindow_MouseDown;
         }
@@ -125,6 +125,18 @@ namespace EyeNurse.Views
         private void Media_Loaded(object sender, RoutedEventArgs e)
         {
 
+        }
+
+        private void TopMost_Checked(object sender, RoutedEventArgs e)
+        {
+            var vm = (EyeNurseViewModel)DataContext;
+            vm.SaveTopMost(vm.TopMost);
+        }
+
+        private void TopMost_Unchecked(object sender, RoutedEventArgs e)
+        {
+            var vm = (EyeNurseViewModel)DataContext;
+            vm.SaveTopMost(vm.TopMost);
         }
     }
 }
