@@ -6,4 +6,7 @@ if [%1]==[] exit /b 0
 
 rmdir /s /q %1
 mklink /j %1 %2
+
+pause
 EXIT /B 0
+

@@ -72,13 +72,41 @@
                     Kind="Clock"
                     Visibility="Collapsed" />
                 <CheckBox
+                    x:Name="ChkTopMost"
+                    Margin="0,0,4,0"
                     HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
                     Checked="TopMost_Checked"
                     IsChecked="{Binding TopMost, Mode=TwoWay}"
+                    Opacity="0"
                     Unchecked="TopMost_Unchecked" />
                 <MediaElement x:Name="media" Loaded="Media_Loaded" />
             </Grid>
             <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation
+                                    Storyboard.TargetName="ChkTopMost"
+                                    Storyboard.TargetProperty="Opacity"
+                                    To="1"
+                                    Duration="0:0:.3" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation
+                                    Storyboard.TargetName="ChkTopMost"
+                                    Storyboard.TargetProperty="Opacity"
+                                    To="0.0"
+                                    Duration="0:0:.3" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
                 <DataTrigger Binding="{Binding IsPaused}" Value="True">
                     <Setter TargetName="txt" Property="Text" Value="{Binding PausedTime, StringFormat=mm\\:ss}" />
                     <Setter TargetName="icon" Property="Visibility" Value="Visible" />
