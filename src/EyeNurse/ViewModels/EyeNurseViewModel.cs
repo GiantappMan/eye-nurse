@@ -66,6 +66,10 @@ namespace EyeNurse.ViewModels
                     {
                         if (DateTime.Now - _lockTime > _setting.ResetTimeout)
                         {
+                            if (_isResting)
+                            {
+                                CloseLockScreen();
+                            }
                             _lockTime = null;
                             Reset();
                         }

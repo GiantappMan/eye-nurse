@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net6.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <Version>2.0.5</Version>
+    <Version>2.0.6</Version>
     <Company>Giantapp Studio</Company>
     <Authors>Giantapp Studio</Authors>
     <Description>https://eyenurse.giantapp.cn</Description>
