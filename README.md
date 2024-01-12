@@ -3,6 +3,7 @@
  ---
 # 下载
 [微软商店](https://apps.microsoft.com/store/detail/eye-nurse-2/XP9K4SFKVKX9SS)  
+[阿里云盘](https://www.aliyundrive.com/s/J3qUQHd984u/folder/64782391184c2ddb985441ef8b7d47ec950ce88f)  
 [百度网盘](https://pan.baidu.com/s/1aKHiv50gYdT6y1QSI40a3A?pwd=gapp&_at_=1660812362041#list/path=%2F%E5%B7%A8%E5%BA%94%E5%8F%91%E5%B8%83%2F%E7%9C%BC%E7%9D%9B%E6%8A%A4%E5%A3%AB&parentPath=%2F%E5%B7%A8%E5%BA%94%E5%8F%91%E5%B8%83)
 
 # 功能
