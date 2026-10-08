@@ -107,10 +107,18 @@ fn check_mask(app: &tauri::AppHandle<Wry>) -> Result<(), String> {
             GetWindowLongPtrW, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
         };
         let hwnd = w.hwnd().map_err(|e| format!("hwnd 获取失败: {e}"))?;
-        // SAFETY：只读本进程窗口的扩展样式位
-        let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
-        if ex & WS_EX_TOOLWINDOW.0 as isize == 0 {
-            return Err("EXSTYLE 缺 WS_EX_TOOLWINDOW（§5.4 补丁未打）".into());
+        // 补丁与 wry 的异步标志回写存在竞态（§5.4 自愈线程会持续重打），轮询等它稳态
+        let deadline = Instant::now() + WINDOW_TIMEOUT;
+        loop {
+            // SAFETY：只读本进程窗口的扩展样式位
+            let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+            if ex & WS_EX_TOOLWINDOW.0 as isize != 0 {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err("EXSTYLE 缺 WS_EX_TOOLWINDOW（§5.4 补丁未打）".into());
+            }
+            std::thread::sleep(POLL_INTERVAL);
         }
     }
     // 生产关闭路径同为 destroy（§5.3：close 会被 mask* 的 prevent_close 拦截）

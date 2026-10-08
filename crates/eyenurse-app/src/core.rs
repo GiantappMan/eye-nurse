@@ -77,11 +77,33 @@ pub(crate) fn build_mask_window(
         (mon.rc_work[3] - mon.rc_work[1]).max(1) as u32,
     ));
     #[cfg(target_os = "windows")]
-    if let Ok(hwnd) = win.hwnd() {
-        // Alt-Tab 隐藏补丁（§5.4）：创建时打一次即可（无需 egui 版的每帧自愈）
-        crate::win::ensure_toolwindow(hwnd.0 as isize);
-    }
+    let hwnd_for_style = win.hwnd().ok().map(|h| h.0 as isize);
     let _ = win.show();
+    // Alt-Tab 隐藏补丁（§5.4）：同步先打一次；
+    // 但 wry 把窗口标志应用代理到主线程异步执行，建窗后的一小段时间内会用 winit
+    // 缓存态反复回写 GWL_EXSTYLE、抹掉手工补丁（winit set_window_flags 语义，
+    // 即 egui 版 heal_toolwindows 面对的同源问题）。因此这里再派生短周期自愈线程
+    // 覆盖创建初段，休息期由 CoreLoop 1Hz tick 兜底。
+    #[cfg(target_os = "windows")]
+    if let Some(h) = hwnd_for_style {
+        crate::win::ensure_toolwindow(h);
+        let app = app.clone();
+        let label = label.to_string();
+        std::thread::spawn(move || {
+            use tauri::Manager;
+            for _ in 0..12 {
+                match app.get_webview_window(&label) {
+                    Some(w) => {
+                        if let Ok(hwnd) = w.hwnd() {
+                            crate::win::ensure_toolwindow(hwnd.0 as isize);
+                        }
+                    }
+                    None => return, // 窗口已销毁（冒烟/正常关闭路径）
+                }
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        });
+    }
     Ok(win)
 }
 
@@ -525,6 +547,16 @@ impl CoreLoop {
                     return;
                 }
                 self.lock_countdown = self.lock_countdown.saturating_sub(Duration::from_secs(1));
+                // §5.4 兜底自愈：DPI 变化等后续窗口标志回写会抹掉 WS_EX_TOOLWINDOW，
+                // 休息期每拍重打（ensure_ 幂等，稳态只是一次 GetWindowLongPtrW 读）
+                #[cfg(target_os = "windows")]
+                for label in &self.mask_labels {
+                    if let Some(w) = self.app.get_webview_window(label) {
+                        if let Ok(hwnd) = w.hwnd() {
+                            crate::win::ensure_toolwindow(hwnd.0 as isize);
+                        }
+                    }
+                }
             }
             // §4.2：CoreLoop 每拍 emit_to 每个 mask 标签（仅休息期间发）
             let payload = RestTickPayload {
