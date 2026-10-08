@@ -1,31 +1,54 @@
-# 眼睛护士
- 一个小软件提醒你保护视力
- ---
+# 眼睛护士 3（EyeNurse v3）
+
+一个小软件提醒你保护视力：定时全屏休息遮罩 + 悬浮倒计时条 + 托盘常驻。**v3 用 Rust 从零重写**（纯原生桌面应用，不再内嵌 WebView2/Vue 前端），配置文件与 v2 **完全双向兼容**（同路径、同字段、同序列化字节），v2 升级 v3 无感迁移。
+
+> 架构设计：[docs/v3-architecture.md](docs/v3-architecture.md) · 行为对齐清单：[docs/v3-parity-checklist.md](docs/v3-parity-checklist.md) · 构建说明：[docs/Build.md](docs/Build.md)
+
+## 功能
+
+- 托盘常驻：关于 / 设置 / 暂停 / 恢复 / 重置 / 立刻休息 / 退出（与 v2 菜单一致）
+- 悬浮倒计时条（80×20，无边框，Alt-Tab 隐藏，可拖动、可置顶）
+- 全屏休息遮罩（每显示器一个，居中 mm:ss 倒计时 + 解锁按钮）
+- 设置窗（egui 视口）：休息间隔/时长、开机启动、锁屏后重置、中英文切换
+- 会话锁联动：锁屏暂停计时，解锁超时自动重置
+- 单实例运行、WTS 会话通知、HKCU 自启（含 v2 `Eye Nurse 2` 值名静默迁移）
+
+## 从源码构建
+
+环境：Windows 10/11 + Rust 1.95+（MSVC 工具链）。
+
+```sh
+cargo check --workspace      # 编译检查
+cargo build --workspace      # debug 构建
+cargo run -p eyenurse-app    # 运行（debug 带控制台日志）
+cargo test -p eyenurse-core  # core 单元测试
+cargo build --release        # 发布构建 → target/release/eyenurse.exe
+```
+
+## 配置与文案
+
+- 配置：`%LOCALAPPDATA%\EyeNurse\UserData\{Setting,UI,Languages}.json`——与 v2 完全一致，可直接沿用旧文件。
+- 文案：exe 旁 `Assets/Languages/*.json`（替换即换文案）；缺失时回退程序内嵌副本（真源：`crates/eyenurse-core/assets/languages/`）。
+
+## 仓库结构
+
+```
+crates/
+├─ eyenurse-core/   # 纯逻辑：TimeSpan 兼容、计时状态机、字节级兼容配置、自启、i18n
+└─ eyenurse-app/    # 桌面壳：eframe/egui、托盘、WTS 会话线程、显示器枚举、悬浮条/遮罩/设置窗
+assets/             # logo.png / logo.ico / 设置页 logo.zh.svg / logo.en.svg（取自 v2）
+docs/               # v3 架构文档、parity 清单、构建说明
+```
+
 # 下载
-[微软商店](https://apps.microsoft.com/store/detail/eye-nurse-2/XP9K4SFKVKX9SS)  
-[阿里云盘](https://www.aliyundrive.com/s/J3qUQHd984u/folder/64782391184c2ddb985441ef8b7d47ec950ce88f)  
-[百度网盘](https://pan.baidu.com/s/1aKHiv50gYdT6y1QSI40a3A?pwd=gapp&_at_=1660812362041#list/path=%2F%E5%B7%A8%E5%BA%94%E5%8F%91%E5%B8%83%2F%E7%9C%BC%E7%9D%9B%E6%8A%A4%E5%A3%AB&parentPath=%2F%E5%B7%A8%E5%BA%94%E5%8F%91%E5%B8%83)
 
-# 功能
-定时锁屏，休息眼睛防止你座在椅子上一整天  
-当然可以手动解除，但我建议你最好不要    
-
-# 截图
-![image](https://user-images.githubusercontent.com/80653/182538644-1e90698e-cec6-4885-80c2-ec86c6048813.png)
-![image](https://user-images.githubusercontent.com/80653/182538353-292c0666-3dbd-4de7-8e78-cacde126f398.png)
-![image](https://user-images.githubusercontent.com/80653/182538495-6ab4129a-5ef3-45ac-b6f0-6769a531db59.png)
-
+[微软商店（v2）](https://apps.microsoft.com/store/detail/eye-nurse-2/XP9K4SFKVKX9SS)
 
 # 源码
-https://github.com/DaZiYuan/eye-nurse  
+
+https://github.com/DaZiYuan/eye-nurse
 https://gitee.com/DaZiYuan/eye-nurse
 
-# 2.0和1.0的区别
-- 重新开发，wpf+webview2实现
-- 暂时取消提示音，1.0很多人不喜欢那个闹铃声
-- 同时支持中文和英文，帮助不同地区的电脑使用者
-
 # 欢迎任何语言的贡献，中文/英文/或者任何语言~
-- PR
-- 想法
-- Bug
+
+- PR / 想法 / Bug

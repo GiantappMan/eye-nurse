@@ -1,0 +1,23 @@
+[package]
+name = "eyenurse-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "eyenurse"
+path = "src/main.rs"
+
+[dependencies]
+eyenurse-core = { path = "../eyenurse-core" }
+eframe = { workspace = true }
+egui = { workspace = true }
+tray-icon = { workspace = true }
+image = { workspace = true }
+crossbeam-channel = { workspace = true }
+sys-locale = { workspace = true }
+windows = { workspace = true }
+
+[build-dependencies]
+# exe 图标（assets/logo.ico）与 app.manifest（PerMonitorV2）的资源嵌入（§7.5）
+embed-resource = "3"
