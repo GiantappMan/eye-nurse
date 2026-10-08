@@ -5,13 +5,11 @@ members = ["crates/eyenurse-core", "crates/eyenurse-app"]
 [workspace.package]
 version = "3.0.0"
 edition = "2021"
-rust-version = "1.95"        # eframe 0.36.2 要求
+rust-version = "1.95"        # 当前工具链基线；tauri 2 MSRV 低于此值
 
 [workspace.dependencies]
-eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts"] }
-egui = "0.36.2"                  # 直接依赖（eframe::egui 同版本 re-export；UI 模块直接 use egui::）
-tray-icon = "0.26.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
+tauri-build = { version = "2" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 crossbeam-channel = "0.5"
@@ -20,6 +18,8 @@ windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse", # TrackMouseEvent/TRACKMOUSEEVENT（bar 复选悬停浮现，§6.2）
+    "Win32_UI_HiDpi",               # GetDpiForWindow / GetDpiForMonitor（bar 逻辑/物理换算，§6.1）
     "Win32_System_RemoteDesktop",
     "Win32_System_Registry",
     "Win32_System_LibraryLoader",
@@ -32,3 +32,8 @@ windows = { version = "0.62.2", features = [
 [profile.release]
 lto = "thin"
 strip = true
+
+# dev 下依赖（tauri/wry/WebView2 相关）用 O2，业务代码保持 O0 快速增量编译：
+# 界面不卡，改代码后的重编译仍然只发生在本 crate
+[profile.dev.package."*"]
+opt-level = 2

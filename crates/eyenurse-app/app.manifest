@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- ASCII-only by design: tauri-winres inlines this manifest line-by-line into an
+       .rc script compiled by rc.exe; non-ASCII comments get mangled there and the
+       embedded RT_MANIFEST becomes unreadable (os error 14001 at process start).
+       Chinese annotations live in build.rs instead. -->
   <assemblyIdentity version="3.0.0.0" processorArchitecture="*" name="Giantapp.EyeNurse3" type="win32"/>
   <description>EyeNurse 3</description>
   <dependency>
@@ -11,7 +15,7 @@
   </dependency>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
-      <!-- PerMonitorV2：与 v2 manifest 一致（架构文档 §7.4） -->
+      <!-- PerMonitorV2, same as the v2 manifest (architecture doc section 7.4) -->
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
     </windowsSettings>

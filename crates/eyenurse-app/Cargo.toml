@@ -8,16 +8,20 @@ rust-version.workspace = true
 name = "eyenurse"
 path = "src/main.rs"
 
+[features]
+# tauri build 时由 CLI 传入；普通 cargo check/test 不启用（无需 ui/dist 即可编译，
+# 架构文档 §1.3：dev 流程由 CLI 以 `cargo run --no-default-features` 驱动）
+custom-protocol = ["tauri/custom-protocol"]
+
 [dependencies]
 eyenurse-core = { path = "../eyenurse-core" }
-eframe = { workspace = true }
-egui = { workspace = true }
-tray-icon = { workspace = true }
-image = { workspace = true }
+tauri = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 crossbeam-channel = { workspace = true }
 sys-locale = { workspace = true }
 windows = { workspace = true }
 
 [build-dependencies]
-# exe 图标（assets/logo.ico）与 app.manifest（PerMonitorV2）的资源嵌入（§7.5）
-embed-resource = "3"
+tauri-build = { workspace = true }
+serde_json = { workspace = true } # build.rs 消费 theme.json（配色真源校验 + 代码生成）

@@ -4,6 +4,13 @@
 > 标记：`[单测]`=自动化断言；`[手测]`=人工步骤；`[字节]`=文件字节级比对。
 > 怪癖决议项（Q 系列）实现前必须先给出"保留/修复"结论，并在本文件勾选。
 
+> **⚠ v3.1 框架变更注记（Tauri 2，详见 `docs/v3-tauri-architecture.md`）**
+> 应用壳从 egui/eframe 改为 Tauri 2：设置窗与休息遮罩移到 WebView 页面（`ui/`，Vite + Vue 3 + TS），
+> 悬浮条改为原生 Win32 线程窗口（GDI 自绘），托盘改用 tauri 内置 tray。
+> 本清单**行为口径全部不变**；框架相关的「v3 预期」实现手段已在对应行内以「**Tauri 注记**」标注，
+> 未标注的行（A 系列状态机、F/G 配置与自启、D 系列会话锁逻辑等 UI 无关条目）原样适用。
+> 归属含义随框架微调：C = 悬浮条（原生 Win32）+ 遮罩（mask.html 页面），D = 设置窗（index.html 页面 + IPC 命令）+ 打包。
+
 ---
 
 ## A. 计时器状态机（归属 A，复刻 `src/EyeNurse/Services/GlobalTimerService.cs`）
@@ -21,7 +28,7 @@
 | A9 | Reset 语义 | cs:89-94；Test:138-183 | 恒 true；remaining 立即回满；Elapssed 的 remaining 随时间单调递减（Test:150-153） | `reset()` 恒 true；`Elapsed{remaining}` 单调递减 | [单测] | A |
 | A10 | 触发阈值 | cs:122-127 | 剩余 <1s → 发 `Trigger` 并立即 Reset | `poll()` 在 `remaining<1s` 产出 `Trigger` 且内部回满 | [单测] 1s 间隔 6s 内触发次数 4..8（v2 容差 ±2） | A |
 | A11 | Elapsed 在 Trigger 之前 | cs:109-128 | 每次检查先 Elapsed 再（可能）Trigger | `Vec` 内顺序 `Elapsed` 先于 `Trigger` | [单测] | A |
-| A12 | 1Hz 更新粒度 | cs:47-52（Timer Interval=1000） | 悬浮条每秒跳一格 | v3 心跳 1Hz（`request_repaint_after(1s)`），显示秒粒度 | [手测] 观察 60s | B |
+| A12 | 1Hz 更新粒度 | cs:47-52（Timer Interval=1000） | 悬浮条每秒跳一格 | **Tauri 注记**：CoreLoop 线程以 `recv_timeout` 1Hz 节拍喂 `poll()`（egui 版的 `request_repaint_after(1s)` 心跳废止）；悬浮条显示由自身 `WM_TIMER(1s)` 驱动。显示秒粒度不变 | [手测] 观察 60s | B |
 | A13 | Reset 即时刷新 | cs:92（Reset 内立即 CheckTrigger，注释"立即更新"） | 托盘"重置"后悬浮条**立即**回满，不等下一秒 | `AppModel::reset_timer` 在 `reset()` 后立即 `poll()` 并应用 Elapsed（架构 §4.2 怪癖 3） | [手测] 点重置瞬间倒计时回满 | B |
 | A14 | 暂停后 Start | cs:43（守卫 `_timer != null && _timer.Enabled`） | 暂停后调用 `Start()` 会**成功**（Enabled=false 通过守卫并新建定时器）；该序列 v2 UI 不可达、NUnit 未锁定 | **Q11 决议：有意偏差**——v3 `start()` 暂停期间返回 false（视为已运行）；架构 §4.2 的"逐条等价"限定为 v2 UI 可达序列 | [单测] 断言 v3 选择的行为，注释标明 Q11 | A |
 
@@ -29,35 +36,42 @@
 
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
-| B1 | 尺寸/边框 | CountdownWindow.xaml:11-21 | 80×20 DIP，`WindowStyle=None`，`ResizeMode=NoResize`，允许透明 | root 视口 `with_inner_size([80,20])`、`decorations(false)`、`resizable(false)` | [手测] 与 v2 并排目测 | C |
+| B1 | 尺寸/边框 | CountdownWindow.xaml:11-21 | 80×20 DIP，`WindowStyle=None`，`ResizeMode=NoResize`，允许透明 | **Tauri 注记**：悬浮条为**原生 Win32 窗口**（独立线程，不进 WebView）：80×20 逻辑 × 窗口 DPI，`WS_POPUP` 无边框、不可调大小；内部几何全程物理像素，仅读/写 UI.json 时换算逻辑 DIP | [手测] 与 v2 并排目测 | C |
 | B2 | 显示格式 | CountdownWindow.xaml:58（`StringFormat=mm\:ss`） | `mm` 是 TimeSpan **分钟分量（00-59）**，非总分钟：剩余 >59min 时回绕显示（90min 间隔首帧即显示 "30:00"，Q13） | 同公式：`mm = 分钟分量（总分钟 % 60）`，**不做**总分钟换算；Q13 决议：保留 | [单测] interval=90min 首帧显示 "30:00" | C |
-| B3 | 进度条语义 | CountdownWindow.xaml:47-52 + Converters/TimeSpanToPercent.cs:21 | `remaining/interval*100`：**满→空**（ProgressBar 值是"剩余"） | bar 内自绘进度条从 100% 缩到 0% | [手测] 45min 档观察 | C |
-| B4 | 悬停显示置顶开关 | CountdownWindow.xaml:91-117 | 鼠标进入 0.3s 淡入置顶复选；移出 ~1s 淡出 | hover 时显示置顶 checkbox，移出淡出（0.3s/1s） | [手测] | C |
-| B5 | 置顶持久化 | CountdownWindow.xaml.cs:130-140；EyeNurseViewModel.cs:168-173 | 勾选即写 UI.json `TopMost`；`Topmost` 绑定生效 | toggle 即存 UI.json；**启动时按 UiJson.TopMost 条件应用**（`native_options(top_most)`，架构 §5.1——关掉置顶的用户重启后仍不置顶）；运行中经 `ViewportCommand::WindowLevel` 切换 | [手测] 关闭置顶→重启：悬浮条不置顶；开启→重启：置顶 | C/D |
-| B6 | 拖动与保存 | CountdownWindow.xaml.cs:33-46 | **评审修订：保存分支疑似死代码**——`DragMove()` 阻塞至释放（MSDN：左键未按下时抛 InvalidOperationException，拖动进入系统 move-size 循环），MouseUp 被该循环吞掉，返回后 `e.LeftButton`（引用源核实：委托活设备状态，但设备大概率未收到被吞的释放）极可能仍为按下态 ⇒ `Released` 分支不执行，**v2 实际从不保存悬浮条位置**（UI.json Left/Top 恒默认 100,100） | **Q9 决议：修复**——v3 拖动结束帧保存逻辑坐标（有意偏差，记录于 Q9） | [手测] v3 拖动→重启位置保持；对 v2 不做此项验收 | C/B |
-| B7 | Alt-Tab/任务栏隐藏 | CountdownWindow.xaml.cs:52-57（WS_EX_TOOLWINDOW）+ xaml:18（ShowInTaskbar=False） | 任务栏与 Alt-Tab 均不可见 | `with_taskbar(false)` **加** `GWL_EXSTYLE\|=WS_EX_TOOLWINDOW`（缺一不可，架构 §7.2）；补丁必须**自愈**（每帧检测重打），否则 B5 切换置顶触发 winit 回写 EXSTYLE 后重新出现在 Alt-Tab | [手测] Alt+Tab 查无此项；**切换置顶开关后再查仍查无**；托盘重置/休息各来一轮后复查 | C/B |
+| B3 | 进度条语义 | CountdownWindow.xaml:47-52 + Converters/TimeSpanToPercent.cs:21 | `remaining/interval*100`：**满→空**（ProgressBar 值是"剩余"） | bar 内 GDI 自绘进度条从 100% 缩到 0% | [手测] 45min 档观察 | C |
+| B4 | 悬停显示置顶开关 | CountdownWindow.xaml:91-117 | 鼠标进入 0.3s 淡入置顶复选；移出 ~1s 淡出 | hover 时显示置顶 checkbox，移出淡出（0.7s 宽限 + 0.3s）；**Tauri 注记**：`WM_MOUSEMOVE`+`TrackMouseEvent` 检测，淡入淡出经 `AlphaBlend`（可先交付显隐+宽限定时器，淡化为观感增强项） | [手测] | C |
+| B5 | 置顶持久化 | CountdownWindow.xaml.cs:130-140；EyeNurseViewModel.cs:168-173 | 勾选即写 UI.json `TopMost`；`Topmost` 绑定生效 | toggle 即存 UI.json；**启动时按 UiJson.TopMost 条件应用**（bar 建窗时决定 WS_EX_TOPMOST——关掉置顶的用户重启后仍不置顶）；**Tauri 注记**：运行中由 CoreLoop 经 `WM_APP_TOPMOST` → `SetWindowPos(HWND_TOPMOST/NOTOPMOST)` 切换（只作用于原生 bar；Tauri 窗口无运行时样式切换） | [手测] 关闭置顶→重启：悬浮条不置顶；开启→重启：置顶 | C/D |
+| B6 | 拖动与保存 | CountdownWindow.xaml.cs:33-46 | **评审修订：保存分支疑似死代码**——`DragMove()` 阻塞至释放（MSDN：左键未按下时抛 InvalidOperationException，拖动进入系统 move-size 循环），MouseUp 被该循环吞掉，返回后 `e.LeftButton`（引用源核实：委托活设备状态，但设备大概率未收到被吞的释放）极可能仍为按下态 ⇒ `Released` 分支不执行，**v2 实际从不保存悬浮条位置**（UI.json Left/Top 恒默认 100,100） | **Q9 决议：修复**——v3 拖动结束保存逻辑坐标（有意偏差，记录于 Q9）。**Tauri 注记**：实现为 `WM_NCHITTEST → HTCAPTION` 系统拖动（egui 版逐帧发 OuterPosition 的"位置反馈滞后一帧致拖动不畅"已定位并根除）+ `WM_EXITSIZEMOVE` 时 `GetWindowRect ÷ GetDpiForWindow` 落盘 | [手测] v3 拖动→重启位置保持；对 v2 不做此项验收 | C/B |
+| B7 | Alt-Tab/任务栏隐藏 | CountdownWindow.xaml.cs:52-57（WS_EX_TOOLWINDOW）+ xaml:18（ShowInTaskbar=False） | 任务栏与 Alt-Tab 均不可见 | `GWL_EXSTYLE \|= WS_EX_TOOLWINDOW`（缺一不可）。**Tauri 注记**：bar 自持 hwnd 创建时直写（幂等）；遮罩等 Tauri 窗口的 `skip_taskbar(true)` 经查证仍是 `ITaskbarList::DeleteTab`（tao window.rs:1543-1552），只藏任务栏不藏 Alt-Tab → 创建后补打一次 `WS_EX_TOOLWINDOW`；egui 版「每帧自愈」降级为「创建时补丁」——Tauri 窗口无运行时样式切换，无 winit 回写抹除问题 | [手测] Alt+Tab 查无此项；**切换置顶开关后再查仍查无**；托盘重置/休息各来一轮后复查 | C/B |
 | B8 | 默认位置 | Models/UserConfigs/UI.cs:11-12 | Left=Top=100 | UI.json 缺省 (100,100) | [字节] | A |
 | B9 | 暂停态展示 | CountdownWindow.xaml:118-123 + EyeNurseViewModel.cs:241-256 | 文字变 `PausedTime`（mm:ss，分钟分量同 Q13 回绕），文字色 `#080808→#F40000`、进度条前景 `#ECC071→#3E0D0D`（分母固定 480s，`percent==0` 时取 0.1），左侧出现时钟图标 | 同色值同渐变公式（含 0.1 下限），图标用 egui 自绘时钟 | [手测] 暂停 5min 比对色 | C |
 | B10 | 休息中文案 | CountdownWindow.xaml:59-64 + 键 `resting` | 休息期间文字替换为本地化"休息中..." | 同 | [手测] | C |
-| B11 | 双击托盘 | App.xaml.cs:87,162-165 | 双击托盘图标 → 显示悬浮条 | DoubleClick → bar 置顶显示 | [手测] | B |
+| B11 | 双击托盘 | App.xaml.cs:87,162-165 + EyeNurseViewModel.cs:148-160 | 双击托盘图标 → ShowCountdownWindow：**每次重读 UI 配置**，按持久化 TopMost/位置恢复显示（`TopMost = uiConfig.TopMost` + Left/Top 赋值后 Show + Activate） | DoubleClick → bar 按 UI.json 持久化 TopMost/位置恢复显示：关掉置顶的用户双击后**不**置顶、位置回到保存点（评审修订：原「bar 置顶显示」为清单误写，v2 实际从不无条件置顶）。**Tauri 注记**：`TrayIconEvent::DoubleClick`（`on_tray_icon_event`）→ `CoreMsg::ShowBar` → CoreLoop 把内存 ui 值写入共享快照 → bar 线程 `WM_APP_SHOW` 应用置顶态+位置回放（单写者：进程内不直读盘，UI.json 写盘非原子可能撕裂，§3） | [手测] 关置顶→重启→双击托盘：条不置顶、位置=保存点；再开置顶→双击：置顶 | B |
 
 ## C. 休息遮罩 LockScreenWindow（归属 C + B）
 
+> **v3.1 Tauri 注记**：遮罩从 egui deferred 视口改为**每显示器一个 WebviewWindow**（`mask.html`
+> 页面：深底 + `mm:ss` + CSS 加载圈 + 解锁按钮）；窗口创建/关闭由 CoreLoop 在 `rest_now`/
+> 结束时统一驱动（架构文档 §5）。页面文案走 i18n（`get_texts` + `i18n-changed` 重取）。
+
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
-| C1 | 每显示器一个 | EyeNurseViewModel.cs:184-196 | 遍历显示器快照，各建一窗，位置/大小 = `rcWork` | 每显示器一个 deferred 视口，rcWork 摆放（物理÷scale，见架构 §7.4） | [手测] 双屏不同 DPI | C/B |
-| C2 | 样式 | LockScreenWindow.xaml:16-22 | 背景 `#141418`、前景 `#EEEEF2`、Topmost、无任务栏、无边框 | 同色值；`always_on_top`+`taskbar(false)`+`active(false)` | [手测] 取色器比对 | C |
-| C3 | 居中倒计时 | LockScreenWindow.xaml:55-58 | `mm:ss`（LockScreenCountdown） | 同 | [手测] | C |
-| C4 | 加载圈 | LockScreenWindow.xaml:51-53 | 70×70 LoadingCircle | egui Spinner，70×70 | [手测] | C |
-| C5 | 解锁按钮 | LockScreenWindow.xaml:59-75；CloseCommand → CloseLockScreen（EyeNurseViewModel.cs:52,108-117） | 右下角 25×25 锁开图标，点击提前结束休息 | 右下角图标按钮 → `UiAction::RestDone` 提前结束 | [手测] | C |
+| C1 | 每显示器一个 | EyeNurseViewModel.cs:184-196 | 遍历显示器快照，各建一窗，位置/大小 = `rcWork` | **Tauri 注记**：每显示器一个 WebviewWindow（label `mask0..N`），`set_position/set_size(PhysicalPosition/PhysicalSize)` 按 `rcWork` **物理像素**直接摆放（builder 的 position/inner_size 是逻辑像素，弃用；egui 版 §7.4 的换算收敛流程废止） | [手测] 双屏不同 DPI | C/B |
+| C2 | 样式 | LockScreenWindow.xaml:16-22 | 背景 `#141418`、前景 `#EEEEF2`、Topmost、无任务栏、无边框 | 同色值（页面 CSS）；窗口 `always_on_top(true)` + `skip_taskbar(true)` + `focused(false)` + `decorations(false)` + 补 `WS_EX_TOOLWINDOW`（见 B7） | [手测] 取色器比对 | C |
+| C3 | 居中倒计时 | LockScreenWindow.xaml:55-58 | `mm:ss`（LockScreenCountdown） | 同（mask.html 渲染，`eyenurse://rest-tick` 事件 1Hz 驱动；mm 为分钟分量，B2/Q13 公式） | [手测] | C |
+| C4 | 加载圈 | LockScreenWindow.xaml:51-53 | 70×70 LoadingCircle | mask.html CSS 加载圈，70×70 | [手测] | C |
+| C5 | 解锁按钮 | LockScreenWindow.xaml:59-75；CloseCommand → CloseLockScreen（EyeNurseViewModel.cs:52,108-117） | 右下角 25×25 锁开图标，点击提前结束休息 | 右下角图标按钮 → `invoke("rest_done")` → CoreLoop 提前结束（等价 v2 CloseCommand） | [手测] | C |
 | C6 | 休息时长 | EyeNurseViewModel.cs:212-217 | `RestDuration` 起 1Hz 递减，`TotalSeconds<0` 才退出 ⇒ 实际休息 ≈ RestDuration+1s（00:00 保留一秒） | 同：显示到 00:00 后下一 tick 才结束 | [单测] tick 序列 + [手测] 30s 档 | B |
 | C7 | 立即休息入口 | App.xaml.cs:63-64,156-159 | 托盘"立刻休息" | 托盘同项触发 `rest_now()` | [手测] | B |
 | C8 | 休息期间计时器停止/重启 | EyeNurseViewModel.cs:182,199-201 | RestNow：Stop；结束：Reset→Start | 同 | [单测] 状态序列 | B |
 | C9 | 遮罩期间再触发休息 | EyeNurseViewModel.cs:178-180 | `IsResting` 互斥 | `rest_now()` 重入直接返回 | [手测] 托盘连点 | B |
 | C10 | 显示器快照时机 | EyeNurseViewModel.cs:46（构造时枚举一次） | 用启动时快照 → 运行中插拔显示器会错位 | **Q4 决议**：默认 v3 改为休息开始时现枚举（记录为有意偏差） | [手测] 拔显示器后立刻休息 | B |
-| C11 | 遮罩按钮即时性 | EyeNurseViewModel.cs:108-117（CloseLockScreen 立即关窗） | 点击解锁 → 立即关闭全部遮罩 | UiAction + `request_repaint_after_for(ZERO, ROOT)` 唤醒（架构 §6.1/§10），关闭感知延迟 ≤100ms；**deferred 视口输入不会执行 root logic，不得依赖 1Hz 心跳** | [手测] 点击解锁无明显滞留 | C/B |
+| C11 | 遮罩按钮即时性 | EyeNurseViewModel.cs:108-117（CloseLockScreen 立即关窗） | 点击解锁 → 立即关闭全部遮罩 | **Tauri 注记**：`invoke("rest_done")` → CoreLoop 立即 `destroy()` 全部 mask 窗口并停发 rest-tick，感知延迟 ≤100ms（egui 版「发送后唤醒 ROOT」机制废止：无逐帧心跳模型，命令经 async runtime 直接入队）。**必须 `destroy()` 而非 `close()`**：`close()` 会先发 `CloseRequested`、被本应用对 `mask*` 的 `prevent_close` 拦截器吞掉 → 遮罩关不掉（架构 §5.3） | [手测] 点击解锁无明显滞留 | C/B |
 
 ## D. 会话锁/暂停（归属 B，复刻 EyeNurseViewModel.cs:59-83, 229-256）
+
+> **v3.1 Tauri 注记**：逻辑原样移植到 CoreLoop 线程（原 AppModel 逐方法等价），WinEvent 通道
+> 与 `pause()/resume()` 门控不变；本节条目无框架耦合。
 
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
@@ -74,13 +88,13 @@
 
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
-| E1 | 菜单项与顺序 | App.xaml.cs:67-75 | 关于/设置/—/暂停/恢复/重置/立刻休息/—/退出 | 同序同项 | [手测] | B |
-| E2 | 恢复项初始隐藏 | App.xaml.cs:59 | resume 初始 Collapsed | 初始只显示"暂停"（构建时即不含 resume 项；muda 无 set_visible，用 remove/insert，架构 §5.3） | [手测] | B |
-| E3 | 退出 | App.xaml.cs:65（ControlCommands.ShutdownApp） | 菜单退出 → 进程结束 | 同（root Close → run_and_return） | [手测] 任务管理器查进程 | B |
-| E4 | 关于 | EyeNurseViewModel.cs:265-269 | 打开浏览器 `https://www.giantapp.cn/post/products/eyenurse2` | ShellExecute open 同 URL | [手测] | B |
-| E5 | 设置入口 | EyeNurseViewModel.cs:258-263 | 打开设置窗（已开则激活/还原，MainViewModel.cs:36-44） | 打开/聚焦设置视口 | [手测] | D/B |
-| E6 | 图标 | App.xaml.cs:46-47 | `Assets/Img/logo.png`，300px 解码 | 同一 png（复制进 v3 assets）渲染托盘+视口图标 | [手测] | D |
-| E7 | 菜单文案本地化 | App.xaml.cs:101-116 | 切语言即刷新全部菜单标题 | `set_language` 后 `tray.update_texts` | [手测] 中英切换 | B/D |
+| E1 | 菜单项与顺序 | App.xaml.cs:67-75 | 关于/设置/—/暂停/恢复/重置/立刻休息/—/退出 | 同序同项（**Tauri 注记**：tauri::tray + tauri::menu，`TrayIconBuilder::show_menu_on_left_click(false)`，菜单 id 沿用语言键） | [手测] | B |
+| E2 | 恢复项初始隐藏 | App.xaml.cs:59 | resume 初始 Collapsed | 初始只显示"暂停"（resume 建好不插入）。**Tauri 注记**：tauri::menu::MenuItem 同样无 `set_visible`（已核实仅 `set_text`/`set_enabled`），`Menu::remove`+`Menu::insert(item, 3)` 互换沿用，幂等守卫保留 | [手测] | B |
+| E3 | 退出 | App.xaml.cs:65（ControlCommands.ShutdownApp） | 菜单退出 → 进程结束 | 同（**Tauri 注记**：CoreLoop → `app_handle.exit(0)`；run 返回后 `session.request_stop()+join()` 收尾不变） | [手测] 任务管理器查进程 | B |
+| E4 | 关于 | EyeNurseViewModel.cs:265-269 | 打开浏览器 `https://www.giantapp.cn/post/products/eyenurse2` | ShellExecute open 同 URL（app.rs `open_about` 原样保留） | [手测] | B |
+| E5 | 设置入口 | EyeNurseViewModel.cs:258-263 | 打开设置窗（已开则激活/还原，MainViewModel.cs:36-44） | **Tauri 注记**：`show()` + `unminimize()` + `set_focus()`（窗口启动即建、`visible:false` 常驻，hide/show 切换；页面不重载、草稿不丢，对齐 v2 MainViewModel.ShowWindow） | [手测] | D/B |
+| E6 | 图标 | App.xaml.cs:46-47 | `Assets/Img/logo.png`，300px 解码 | **Tauri 注记**：同一 png 经 `tauri::image::Image::from_bytes`（feature `image-png`）渲染托盘图标；窗口图标（.ico）由 tauri-build `window_icon_path` 嵌入 | [手测] | D |
+| E7 | 菜单文案本地化 | App.xaml.cs:101-116 | 切语言即刷新全部菜单标题 | `set_language` 后 `tray.update_texts`。**Tauri 注记**：`MenuItem::set_text` ×7 + tooltip 重设 + 设置窗 `set_title(app_name)`；页面经 `eyenurse://i18n-changed` 广播重取 `get_texts` | [手测] 中英切换 | B/D |
 
 ## F. 配置持久化（归属 A/D；字节兼容最高优先级）
 
@@ -94,8 +108,8 @@
 | F6 | TimeSpan 解析与 clamp 时机 | Setting.cs:14-21（构造路径 GetTimeSpan 有 clamp） | clamp **只**发生在“前端字符串 → Setting”路径；读盘路径从不 clamp（v2 手改 ≥1 天的 RestInterval 原样生效、原样回存） | `HmsSpan::parse` 失败→默认（同 v2）；`clamp_like_v2` 只在设置窗“文本→数值”保存路径调用，**`ConfigStore::load` 不 clamp**（否则手改配置行为改变、保存字节无法与 v2 往返，破坏 F12） | [单测] 读入 "1.02:03:04" 不变形、保存往返一致；设置窗输入 "1.02:03:04"→"02:03:04"、"-00:10:00"→"00:10:00"、"abc"→默认 | A/D |
 | F7 | 坏文件容错 | 外部 JsonHelper.cs（吞异常返回 default）+ ConfigService.cs（`?? new T()`） | 损坏 JSON → 全默认值，不崩溃 | 同（load 内部 `unwrap_or_default`） | [单测] 写入 `{{{` 后 load | A |
 | F8 | 保存失败静默 | 外部 JsonHelper.cs catch 返回 null | 保存异常不崩溃 | `save` 返回 Err，上层记日志不崩溃 | [单测] 只读目录 | A |
-| F9 | 改设置即时生效 | ClientApi.cs:57-67 + EyeNurseService.cs:54-58 | SetSettings → 存盘 + 注册表 + `SettingChanged`→重建计时器（间隔生效，当前倒计时重置） | 设置窗保存 → 存盘 + timer 换 interval + reset | [手测] 改 2min 档立即重跳 | D/B |
-| F10 | RunWhenStarts 展示值 | ClientApi.cs:51-55 | **评审修订：v2 实际显示磁盘值**——`GetSettings` 先 `Serialize` 再覆盖 `settings.RunWhenStarts`（cs:51-54，覆盖发生在序列化之后，是死代码；注释"显示给UI才调用"的意图未生效），Settings.vue 显示的是 Setting.json 里的值 | **Q10 决议：修复**——v3 设置窗勾选态 = 注册表实测值（落实 v2 注释声明的意图，有意偏差，记录于 Q10） | [手测] 手动删注册表值后打开设置窗：v3 应显示未勾选（v2 显示磁盘值 true） | D |
+| F9 | 改设置即时生效 | ClientApi.cs:57-67 + EyeNurseService.cs:54-58 | SetSettings → 存盘 + 注册表 + `SettingChanged`→重建计时器（间隔生效，当前倒计时重置） | 设置窗保存 → 存盘 + timer 换 interval + reset。**Tauri 注记**：`invoke("set_settings")` → CoreMsg::SaveSettings（CoreLoop 单写者）→ 广播 `eyenurse://settings-changed`（v2 SettingChanged），返回应用后 DTO 供页面回写刷新 | [手测] 改 2min 档立即重跳 | D/B |
+| F10 | RunWhenStarts 展示值 | ClientApi.cs:51-55 | **评审修订：v2 实际显示磁盘值**——`GetSettings` 先 `Serialize` 再覆盖 `settings.RunWhenStarts`（cs:51-54，覆盖发生在序列化之后，是死代码；注释"显示给UI才调用"的意图未生效），Settings.vue 显示的是 Setting.json 里的值 | **Q10 决议：修复**——v3 设置窗勾选态 = 注册表实测值（落实 v2 注释声明的意图，有意偏差，记录于 Q10）。**Tauri 注记**：`get_settings` 命令返回前用 `DesktopStartup::check()` 覆盖（另有独立 `get_autostart` 命令） | [手测] 手动删注册表值后打开设置窗：v3 应显示未勾选（v2 显示磁盘值 true） | D |
 | F11 | 恢复默认 | ClientApi.cs:69-76 | ResetSettings：写默认 + 应用（注册表/计时器） | 设置窗"恢复默认"按钮同语义 | [手测]+[字节] | D |
 | F12 | v2→v3 迁移 | —（兼容性目标） | — | 把 v2 的三个 json 原样放入 v3 读取，字段全部生效 | [手测] 用 v2 遗留文件冷启动 v3 | A |
 
@@ -118,27 +132,32 @@
 | H2 | 缺失键回退 en | EyeNurseService.cs:66（第 4 参 "en"） | 当前语言无键 → 英文 | `get()`：current→en→key | [单测] | A |
 | H3 | 未设置语言 | Languages.cs CurrentLan=null | 由 LanService 决定（未深究）→ **Q7 决议**：v3 取系统 locale，zh 开头→zh 否则 en | 同 | [单测] | A |
 | H4 | 切语言持久化 | ClientApi.cs:36-45 | 写 Languages.json + 刷新托盘文案 | 同（Vue 侧还存 localStorage 的行为不迁移） | [手测] | D/B |
-| H5 | 中文渲染 | —（WPF 自带） | — | egui 需加载系统字体 msyh.ttc（架构 §7.5），缺字体表现为方块=失败 | [手测] 中文界面无"豆腐块" | C |
+| H5 | 中文渲染 | —（WPF 自带） | — | **Tauri 注记**：WebView2 直接用系统字体渲染中文（egui 加载 msyh.ttc 的 `ui/fonts.rs` 废止）；悬浮条 GDI 以 `CreateFontW("Microsoft YaHei UI")` 按 DPI 缩放自绘，中文显示为方块=失败 | [手测] 中文界面无"豆腐块" | C |
 
-## I. 设置窗（归属 D；替代 v2 WebView2，行为对齐 `src/eyenurse-client-ui`）
+## I. 设置窗（归属 D；v3.1 改回 WebView2 承载（Tauri WebviewWindow），行为对齐 `src/eyenurse-client-ui`）
+
+> **v3.1 Tauri 注记**：设置窗从 egui 视口改回 WebView 页面（`ui/index.html` + Vue 3，见
+> 架构文档 §8）——窗口在 tauri.conf.json 静态声明（`visible:false` + `center:true`，启动即建），
+> 打开 = show+unminimize+set_focus，关闭(X) = prevent_close + hide（草稿/未保存编辑保留）。
+> 本节验收口径不变。
 
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
-| I1 | 窗口尺寸 | MainWindow.xaml:11-12 | 900×500，居中启动 | 同（逻辑点） | [手测] | D |
-| I2 | 控件集 | Settings.vue:19-78 | 开机启动开关；锁屏重置开关+超时输入；休息间隔输入；休息时长输入，占位 `HH:mm:ss` | 同四项同布局 | [手测] | D |
-| I3 | 保存时机 | Settings.vue:94-100 | 输入 blur 后 300ms 防抖保存，回写 UI | 失焦/回车提交，防抖 300ms；保存后用服务端回包刷新显示（等价 SetSettings 返回值语义） | [手测] | D |
-| I4 | 非法时长输入 | Setting.cs:23-33 | 解析失败静默回默认并回显 | 同（保存后回读刷新） | [手测] 输入 "abc" | D/A |
-| I5 | 语言下拉 | Footer.vue:12-68 | 列出可用语言，选中即 SetCurrentLanguage | 下拉列出 `Assets/Languages/*.json` 文件名 | [手测] | D |
+| I1 | 窗口尺寸 | MainWindow.xaml:11-12 | 900×500，居中启动 | 同（**Tauri 注记**：tauri.conf.json `width/height` 900×500 逻辑尺寸） | [手测] | D |
+| I2 | 控件集 | Settings.vue:19-78 | 开机启动开关；锁屏重置开关+超时输入；休息间隔输入；休息时长输入，占位 `HH:mm:ss` | 同四项同布局（Vue 页面）；**Tauri 注记**：侧栏 logo 恢复 v2 的 `logo.{zh,en}.svg`（WebView 可渲染 SVG，egui 版的 png 平替偏差消除） | [手测] | D |
+| I3 | 保存时机 | Settings.vue:94-100 | 输入 blur 后 300ms 防抖保存，回写 UI | 失焦/回车提交，**页面 JS 300ms 防抖** → `invoke("set_settings")`；保存后用**应用后 DTO 回包**刷新显示（等价 SetSettings 返回值语义） | [手测] | D |
+| I4 | 非法时长输入 | Setting.cs:23-33 | 解析失败静默回默认并回显 | 同（**Tauri 注记**：parse+clamp 在命令侧——core `HmsSpan::parse + clamp_like_v2`，非法回默认/负值取幅/≥1 天丢天取分量；保存后回包刷新） | [手测] 输入 "abc" | D/A |
+| I5 | 语言下拉 | Footer.vue:12-68 | 列出可用语言，选中即 SetCurrentLanguage | 下拉列出 `Assets/Languages/*.json` 文件名。**Tauri 注记**：清单经 `invoke("get_languages")`（core `I18n::available()`），选中值经 `get_current_language`；选中即 `invoke("set_current_language")` → 写盘 + 托盘/标题刷新 + `eyenurse://i18n-changed` 广播 | [手测] | D |
 
 ## J. 进程级行为（归属 B/D）
 
 | # | 条目 | v2 证据 | v2 行为 | v3 预期 | 验证 | 归属 |
 |---|---|---|---|---|---|---|
-| J1 | 启动即显示悬浮条 | App.xaml.cs:94-98 | OnStartup → ShowCountdownWindow | v3 root 视口常驻即悬浮条 | [手测] | B |
-| J2 | 全局异常不闪退 | EyeNurseService.cs:62 | CatchApplicationError | v3：主循环错误记日志（E2E 手测无崩溃） | [手测] | B |
-| J3 | 单实例 | —（v2 未实现） | 无 | v3 新增：CreateMutexW("Local\\EyeNurse3") 防双开 | [手测] 双击两次仅一个实例 | B |
-| J4 | 打包产物 | docs/Build.md + src/setup | Inno Setup 安装包 | D 提供 cargo build 脚本 + 沿用现有 iss（或出 v3 模板） | [手测] 干净机安装 | D |
-| J5 | 无控制台黑窗 | EyeNurse.csproj `<OutputType>WinExe</OutputType>` | v2 是 GUI 子系统，无控制台窗口 | v3 main.rs 顶部 `#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]`（架构 §5.1；debug 构建保留控制台） | [手测] 双击 release exe 与 `cargo run --release` 均无控制台 | B |
+| J1 | 启动即显示悬浮条 | App.xaml.cs:94-98 | OnStartup → ShowCountdownWindow | **Tauri 注记**：原生 bar 线程窗口常驻即悬浮条（tauri `setup` 钩子里 spawn，消息循环自持，不依赖 tauri 主循环） | [手测] | B |
+| J2 | 全局异常不闪退 | EyeNurseService.cs:62 | CatchApplicationError | v3：CoreLoop/bar 线程错误记日志不 panic（E2E 手测无崩溃） | [手测] | B |
+| J3 | 单实例 | —（v2 未实现） | 无 | v3 新增：CreateMutexW("Local\\EyeNurse3") 防双开（`win/single_instance.rs` 原样复用，main 第一行，不变） | [手测] 双击两次仅一个实例 | B |
+| J4 | 打包产物 | docs/Build.md + src/setup | Inno Setup 安装包 | **Tauri 注记**：`bun run build`（tauri build：beforeBuildCommand 建 ui/dist → cargo release 带 `custom-protocol` 嵌页面；bundle.active=false 不出 tauri 安装器）→ `setup/compile.ps1`（其 `cargo build --release` 行替换为 `bun run build`，原因见架构 §1.3 陷阱）+ 现有 iss 沿用；产物仍 `target/release/eyenurse.exe`。另注意：WebView2 Runtime 成为部署前提——installer.iss 已带引导（`InitializeSetup` 检测 EdgeUpdate 注册表指纹，缺失则询问并下载 Evergreen Bootstrapper 安装、复检，仍缺失终止安装） | [手测] 干净机安装 | D |
+| J5 | 无控制台黑窗 | EyeNurse.csproj `<OutputType>WinExe</OutputType>` | v2 是 GUI 子系统，无控制台窗口 | main.rs 顶部 `#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]` 保留（**Tauri 注记**：tauri dev=debug 带控制台；`tauri build`/release 无控制台） | [手测] 双击 release exe 无控制台 | B |
 
 ---
 
@@ -170,3 +189,6 @@
 4. `[手测]` Win+L 锁屏 10s 解锁：暂停/恢复；锁 >ResetTimeout：重置；休息中锁屏无暂停态（D1-D4、D8）。
 5. `[单测]` `cargo test -p eyenurse-core` 全绿（A 系列全项）。
 6. `[字节]` v3 保存默认配置后三个文件与 §F3/F4/F5 期望串逐字节一致。
+7. `[单测/冒烟]`（v3.1 新增，教训 3）`bun run smoke` 输出 `SMOKE settings=ok mask=ok bar=ok`
+   且退出码 0——三类窗口（设置窗 show、遮罩创建/关闭、悬浮条 Win32 窗口）的创建路径全部
+   程序化验证（架构文档 §11）。

@@ -94,6 +94,23 @@ impl I18n {
         }
     }
 
+    /// 当前语言整包文案（current → fallback 合并；fallback 缺失的 key 原样保留）。
+    /// v3 对 core 的唯一增量（tauri 架构文档 §3/§9）：`get_texts` 命令的数据源，
+    /// settings/mask 页面一次取全，语言切换时重取。
+    pub fn texts(&self) -> BTreeMap<String, String> {
+        let mut merged = self
+            .langs
+            .get(&self.fallback)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(m) = self.langs.get(&self.current) {
+            for (k, v) in m {
+                merged.insert(k.clone(), v.clone());
+            }
+        }
+        merged
+    }
+
     /// 当前语言 → 回退语言 → 原样返回 key（v2 LanService.Get 语义）
     pub fn get(&self, key: &str) -> String {
         self.langs

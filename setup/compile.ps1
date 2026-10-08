@@ -7,8 +7,10 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path "$PSScriptRoot/.."
 Set-Location $root
 
-# 1) release 构建（release 无控制台窗口；图标/manifest 由 build.rs 嵌入）
-cargo build --release -p eyenurse-app
+# 1) tauri build（先建 ui/dist 前端，再 cargo release 并推入 custom-protocol
+#    资产嵌入；bundle.active=false 不出安装器——裸 `cargo build --release` 不带
+#    custom-protocol 时不嵌页面，必须经 tauri CLI，tauri 架构文档 §1.3/§10）
+bun run app:build
 
 # 2) 暂存绿色包
 $publish = "$PSScriptRoot/publish"

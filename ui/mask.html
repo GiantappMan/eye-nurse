@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LockScreenWindow</title>
+  </head>
+  <body>
+    <!-- 休息遮罩页面（无框架，纯 TS：深底倒计时 + 解锁按钮；§5.1）。
+         解锁按钮的提示文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。 -->
+    <div id="mask">
+      <div class="spinner-stack">
+        <div class="spinner"></div>
+        <div id="countdown">00:00</div>
+      </div>
+      <button id="unlock">
+        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#EEEEF2"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 7.9-.8" />
+        </svg>
+      </button>
+    </div>
+    <script type="module" src="/src/mask/main.ts"></script>
+  </body>
+</html>

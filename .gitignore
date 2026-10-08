@@ -2,6 +2,12 @@
 /target/
 **/target/
 
+# 前端（ui/，bun 管理）构建产物
+ui/dist/
+
+# tauri 生成物（capabilities 校验 schema 等）
+crates/eyenurse-app/gen/
+
 # 备份文件
 *.rs.bk
 *.orig
@@ -19,3 +25,9 @@ desktop.ini
 # 工具自带目录（不入库）
 .zcode/
 .mimosa/
+
+# bun / npm（根 package.json 只作 tauri CLI 任务脚本入口；
+# ui/ 的 bun.lock 前端依赖锁入库，bun.lockb/package-lock 不入库）
+node_modules/
+bun.lockb
+package-lock.json

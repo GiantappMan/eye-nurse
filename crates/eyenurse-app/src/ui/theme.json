@@ -1,0 +1,14 @@
+{
+  "$comment": "配色单一真源（C 所有，tauri 架构文档 §3 评审修订）。build.rs 严格校验（#RRGGBB + 必备键，失败即 panic=编译期红）并生成 RGB 常量到 OUT_DIR 供 ui/theme.rs include!；页面侧 ui/src 直接 import 本文件注入 :root CSS 变量。唯一允许的改色入口 = 改本文件，两态自动一致。值取自 v2 XAML。",
+  "mask_bg": "#141418",
+  "mask_fg": "#EEEEF2",
+  "bar_progress_bg": "#F5F5DC",
+  "bar_text_idle": "#000000",
+  "bar_progress_fill": "#3AC32E",
+  "bar_check_glyph": "#444444",
+  "bar_check_hover_bg": "#FFFFFF",
+  "bar_progress_from": "#ECC071",
+  "bar_progress_to": "#3E0D0D",
+  "bar_time_from": "#080808",
+  "bar_time_to": "#F40000"
+}

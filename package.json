@@ -1,0 +1,17 @@
+{
+  "name": "eyenurse",
+  "private": true,
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  },
+  "scripts": {
+    "dev": "tauri dev",
+    "ui:dev": "cd ui && bun run dev",
+    "ui:build": "cd ui && bun run build",
+    "app:build": "tauri build --no-bundle",
+    "smoke": "bun run ui:build && cargo run -p eyenurse-app --features custom-protocol -- --smoke",
+    "check": "cargo check --workspace",
+    "test": "cargo test --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings"
+  }
+}

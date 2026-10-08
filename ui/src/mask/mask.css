@@ -1,0 +1,70 @@
+/* 休息遮罩样式（tauri 架构文档 §5.1；值 = v2 LockScreenWindow.xaml，真源
+   theme.json 的 mask_bg/mask_fg——mask/main.ts 经 shared/theme.ts 注入 :root 变量，
+   此处字面量仅为注入前的兜底） */
+:root {
+  --eyenurse-mask-bg: #141418;
+  --eyenurse-mask-fg: #eeeef2;
+}
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--eyenurse-mask-bg);
+  color: var(--eyenurse-mask-fg);
+  user-select: none;
+}
+#mask {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 70×70 CSS 旋转加载圈 + 叠放其上的 mm:ss（C3/C4） */
+.spinner-stack {
+  position: relative;
+  width: 70px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner {
+  position: absolute;
+  inset: 0;
+  border: 4px solid transparent;
+  border-top-color: var(--eyenurse-mask-fg);
+  border-right-color: var(--eyenurse-mask-fg);
+  border-radius: 50%;
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+#countdown {
+  /* v2 TextBlock 默认 12pt ≈ 16px（egui 版 mask.rs 同取 16px），等宽保证 mm:ss 不跳动 */
+  font-family: Consolas, monospace;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+/* 右下角 25×25 解锁图标按钮（C5；v2 Margin="0,0,12,12"） */
+#unlock {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.8;
+}
+#unlock:hover {
+  opacity: 1;
+}
