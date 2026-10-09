@@ -11,6 +11,7 @@
 //! restDuration, restInterval, runWhenStarts, resetWhenSessionUnlock, settings, zh, en；
 //! v3 新增：restoreDefaults（设置窗“恢复默认”入口，清单 F11；v2 的
 //! ClientApi.ResetSettings 有后端无入口）。
+//! 占位符：`{year}` 在 get/texts 输出时展开为本地当前年份（版权行随年份滚动）。
 //! `installWebview2Tips`/`installNow` 不再使用但保留（v2 文件兼容）。
 
 use std::collections::BTreeMap;
@@ -109,16 +110,21 @@ impl I18n {
             }
         }
         merged
+            .into_iter()
+            .map(|(k, v)| (k, expand_placeholders(&v)))
+            .collect()
     }
 
     /// 当前语言 → 回退语言 → 原样返回 key（v2 LanService.Get 语义）
     pub fn get(&self, key: &str) -> String {
-        self.langs
+        let text = self
+            .langs
             .get(&self.current)
             .and_then(|m| m.get(key))
             .or_else(|| self.langs.get(&self.fallback).and_then(|m| m.get(key)))
             .cloned()
-            .unwrap_or_else(|| key.to_string())
+            .unwrap_or_else(|| key.to_string());
+        expand_placeholders(&text)
     }
 
     /// 目录下 *.json 文件名（去扩展名）排序
@@ -145,6 +151,13 @@ impl I18n {
 fn parse_flat_json(text: &str) -> Option<BTreeMap<String, String>> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     serde_json::from_str(text).ok()
+}
+
+/// 文案占位符展开：`{year}` → 本地当前年份（版权行 "2022-{year}" 随年份滚动，
+/// 免去每年手改 json）；不含占位符的文案原样返回。
+fn expand_placeholders(value: &str) -> String {
+    let today = crate::stats::local_today();
+    value.replace("{year}", &today[..4])
 }
 
 #[cfg(test)]
@@ -199,6 +212,16 @@ mod tests {
         assert_eq!(i.current(), "zh");
         let i = I18n::load_embedded(Some(" "), "en", "ja-JP");
         assert_eq!(i.current(), "en");
+    }
+
+    #[test]
+    fn year_placeholder_expands_to_local_year() {
+        let i = I18n::load_embedded(None, "en", "zh-CN");
+        let year = &crate::stats::local_today()[..4];
+        assert_eq!(i.get("copyright"), format!("&copy; 2022-{year} 巨应君"));
+        assert!(i.texts()["copyright"].contains(year));
+        // 无占位符的键不受影响
+        assert_eq!(i.get("app_name"), "眼睛护士3");
     }
 
     #[test]
