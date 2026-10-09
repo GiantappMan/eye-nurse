@@ -78,12 +78,14 @@ pub(crate) fn build_mask_window(
             .shadow(false)
             .visible(false) // 先藏后摆，避免 (0,0) 闪现
             .build()?;
-    // 物理像素直接摆到 rcWork（builder 的 position/inner_size 是逻辑像素，
-    // tauri 的物理 setter 收物理值，混合 DPI 不再有换算收敛问题，§5.2）
-    let _ = win.set_position(tauri::PhysicalPosition::new(mon.rc_work[0], mon.rc_work[1]));
+    // 物理像素直接摆到**整块显示器矩形**（rc_monitor，含任务栏区域）：
+    // 休息 = 全屏遮挡，任务栏不得露出（用户反馈 2026-10）；builder 的
+    // position/inner_size 是逻辑像素，tauri 的物理 setter 收物理值，
+    // 混合 DPI 不再有换算收敛问题，§5.2
+    let _ = win.set_position(tauri::PhysicalPosition::new(mon.rc_monitor[0], mon.rc_monitor[1]));
     let _ = win.set_size(tauri::PhysicalSize::new(
-        (mon.rc_work[2] - mon.rc_work[0]).max(1) as u32,
-        (mon.rc_work[3] - mon.rc_work[1]).max(1) as u32,
+        (mon.rc_monitor[2] - mon.rc_monitor[0]).max(1) as u32,
+        (mon.rc_monitor[3] - mon.rc_monitor[1]).max(1) as u32,
     ));
     #[cfg(target_os = "windows")]
     let hwnd_for_style = win.hwnd().ok().map(|h| h.0 as isize);

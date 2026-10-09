@@ -171,7 +171,7 @@ mod tests {
     fn embedded_contains_merged_keyset() {
         let i = I18n::load_embedded(None, "en", "zh-CN");
         assert_eq!(i.current(), "zh");
-        assert_eq!(i.get("app_name"), "眼睛护士2");
+        assert_eq!(i.get("app_name"), "眼睛护士3");
         assert_eq!(i.get("clientSettings"), "客户端设置");
         assert_eq!(i.available(), vec!["en".to_string(), "zh".to_string()]);
         // 未知 key 原样返回
@@ -182,7 +182,7 @@ mod tests {
     fn fallback_and_unknown_language() {
         let i = I18n::load_embedded(None, "en", "en-US");
         assert_eq!(i.current(), "en");
-        assert_eq!(i.get("app_name"), "EyeNurse 2");
+        assert_eq!(i.get("app_name"), "EyeNurse 3");
 
         let mut i = I18n::load_embedded(None, "en", "zh-CN");
         i.set_language("fr"); // 未知语言 → 回退 fallback
