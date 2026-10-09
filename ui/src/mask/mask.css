@@ -106,7 +106,8 @@ body {
 #pwd-row {
   margin-top: 12px;
 }
-#pwd {
+#pwd,
+#skin-pwd {
   width: 220px;
   padding: 10px 14px;
   font-family: inherit;
@@ -120,11 +121,13 @@ body {
   outline: none;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
-#pwd:focus {
+#pwd:focus,
+#skin-pwd:focus {
   border-color: rgb(255 255 255 / 0.7);
   background: rgb(255 255 255 / 0.12);
 }
-#pwd::placeholder {
+#pwd::placeholder,
+#skin-pwd::placeholder {
   letter-spacing: 0;
   font-size: 13px;
   color: rgb(238 238 242 / 0.45);
@@ -133,4 +136,45 @@ body {
   margin: 2px 0 0;
   font-size: 13px;
   color: #ff8b8b;
+}
+
+/* —— ESP-1 皮肤宿主（shared/skinHost.ts）：iframe 只有握手通过才显示
+   （不能用 hidden 属性——下方 #mask [hidden] 的 !important 会压住显示规则），
+   看门狗失败/未启用 → 内置界面接管（永不白窗）。z 序：iframe 盖住内置内容，
+   宿主 chrome 与解锁按钮在最上 —— */
+#skin-frame {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  z-index: 10;
+}
+body.skin-alive #skin-frame {
+  display: block;
+}
+body.skin-alive .center-stack {
+  display: none;
+}
+/* 皮肤模式下宿主独占 chrome：百分比摆放由 JS 按 manifest 声明写内联样式 */
+#skin-pwd-row {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  margin: 0;
+}
+#skin-lock-err {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #ff8b8b;
+  white-space: nowrap;
+}
+/* 解锁按钮在皮肤模式下改按百分比摆放（默认 right/bottom 由内联样式覆盖） */
+body.skin-alive #unlock {
+  z-index: 20;
 }

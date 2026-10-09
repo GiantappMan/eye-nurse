@@ -17,6 +17,7 @@
 //! 会死锁」，本线程非主线程、非同步回调，是受支持路径，§2）。
 
 use crate::events::{CoreMsg, Reply, WinEvent};
+use crate::skin_proto::{self, SkinSurfaceDto};
 use crate::tray::{I18nTexts, Tray, TrayAction};
 use crate::ui::bar::{self, BarSkinColors, BarSnapshot};
 use crate::win::monitors::MonitorRects;
@@ -24,7 +25,9 @@ use crossbeam_channel::{Receiver, RecvTimeoutError};
 use eyenurse_core::autostart::DesktopStartup;
 use eyenurse_core::config::{ConfigStore, LanguagesJson, LockScreenJson, SettingJson, UiJson};
 use eyenurse_core::i18n::I18n;
-use eyenurse_core::skin::{self, SkinColors, SkinConfig, SkinMeta, SkinsDto};
+use eyenurse_core::skin::{
+    self, DiskSkinEntry, SkinColors, SkinConfig, SkinMeta, SkinsDto,
+};
 use eyenurse_core::stats::{local_today, StatsStore};
 use eyenurse_core::timer::{GlobalTimer, TimerEvent};
 use std::path::PathBuf;
@@ -53,6 +56,19 @@ pub struct SettingsTickPayload {
     pub remaining_ms: u64,
     pub paused: bool,
     pub resting: bool,
+}
+
+/// ESP-1 bar 皮肤壳窗（barweb）的 1Hz 状态事件：GDI 条读共享快照的 WebView
+/// 等价物（§6.4 数据同源——CoreLoop 仍是唯一写者，barweb 页面只读）。
+/// 文案不在此载荷：页面启动取 get_texts + 监听 i18n-changed（低频路径分离）。
+#[derive(serde::Serialize, Clone, Copy, Debug)]
+pub struct BarStatePayload {
+    pub countdown_ms: u64,
+    pub interval_ms: u64,
+    /// 暂停累计（v2 PausedTime；None = 非暂停态）
+    pub paused_ms: Option<u64>,
+    pub resting: bool,
+    pub topmost: bool,
 }
 
 /// core 聚合（egui 版 CoreBundle 原样搬移；v3.2 增锁屏配置与统计；字段对 C/D 不透明）
@@ -151,6 +167,14 @@ pub(crate) fn apply_lock_policy(lock: &LockScreenJson) {
     crate::win::hotkey::set_hotkey(lock.Enabled);
 }
 
+/// bar 装配（main setup 产出；ESP-1 双模式——GDI 线程或 barweb 壳窗共用快照，
+/// web 模式 hwnd 为空占位、is_web=true）
+pub struct BarWiring {
+    pub snapshot: Arc<Mutex<BarSnapshot>>,
+    pub hwnd: Arc<std::sync::OnceLock<isize>>,
+    pub is_web: bool,
+}
+
 /// CoreLoop 线程（`run` 消费 Self；由 main 的 setup 钩子 spawn）
 pub struct CoreLoop {
     app: AppHandle<Wry>,
@@ -162,6 +186,12 @@ pub struct CoreLoop {
     bar: Arc<Mutex<BarSnapshot>>,
     /// bar 窗口句柄（bar 线程建窗后回填；本线程 PostMessage 用）
     bar_hwnd: Arc<std::sync::OnceLock<isize>>,
+    /// ESP-1：bar 运行模式（true = barweb WebView 壳，启动期定死）。
+    /// true 时 bar_hwnd 恒空（bar_post 自然空转），WM_APP 路径由事件广播替代
+    bar_is_web: bool,
+    /// ESP-1：web bar 位置落盘脏标记（窗口 Moved 逐帧触发 → 攒到 1Hz tick
+    /// 落盘；GDI 路径是 WM_EXITSIZEMOVE 一次性写，不经此标记）
+    bar_pos_dirty: bool,
     // —— B 内部状态（AppModel 同名字段逐项搬移）——
     is_resting: bool,
     lock_countdown: Duration,
@@ -175,6 +205,11 @@ pub struct CoreLoop {
     // —— v3.2 仿锁屏 / 统计 ——
     /// 仿锁屏激活中（与休息态正交：AutoRest 路径两者同真）
     is_locked: bool,
+    /// ESP-1：解锁尝试限速（宿主职责，与入口无关）：上次尝试时刻 / 连错计数 /
+    /// 冷却截止（连错 5 次 → 60s）
+    unlock_last: Option<Instant>,
+    unlock_fails: u32,
+    unlock_cooldown_until: Option<Instant>,
     /// 统计有未落盘变更（60s 周期 + 关键事件即时落盘）
     stats_dirty: bool,
     /// 上次统计落盘时刻
@@ -189,8 +224,7 @@ impl CoreLoop {
         core: CoreBundle,
         startup: DesktopStartup,
         tray: Tray,
-        bar: Arc<Mutex<BarSnapshot>>,
-        bar_hwnd: Arc<std::sync::OnceLock<isize>>,
+        bar: BarWiring,
     ) -> Self {
         Self {
             app,
@@ -198,8 +232,10 @@ impl CoreLoop {
             core,
             startup,
             tray,
-            bar,
-            bar_hwnd,
+            bar: bar.snapshot,
+            bar_hwnd: bar.hwnd,
+            bar_is_web: bar.is_web,
+            bar_pos_dirty: false,
             is_resting: false,
             lock_countdown: Duration::ZERO,
             last_rest_tick: None,
@@ -208,6 +244,9 @@ impl CoreLoop {
             locked_at: None,
             mask_labels: Vec::new(),
             is_locked: false,
+            unlock_last: None,
+            unlock_fails: 0,
+            unlock_cooldown_until: None,
             stats_dirty: false,
             last_stats_save: Instant::now(),
         }
@@ -269,12 +308,17 @@ impl CoreLoop {
             CoreMsg::GetCurrentLanguage(reply) => {
                 self.reply(reply, self.core.i18n.current().to_string())
             }
-            // —— v3.1 换肤 ——
+            // —— v3.1 换肤 / v3.2 ESP-1 开放皮肤协议 ——
             CoreMsg::SetSkin(id) => {
                 self.core.skin.Current = id;
                 let _ = self.core.cfg.save(&self.core.skin);
                 let effective = self.effective_skin();
                 self.apply_skin(&effective);
+                // ESP-1：表面运行时随配色一并广播（mask/barweb 壳页换 iframe /
+                // 调 chrome 摆放；bar 形态变化由设置页对照 bar_is_web 提示重启）
+                let _ = self
+                    .app
+                    .emit("eyenurse://skin-surface-changed", self.surface_dto());
             }
             CoreMsg::SetCustomSkin(def, reply) => {
                 self.core.skin.Custom = Some(*def);
@@ -282,10 +326,14 @@ impl CoreLoop {
                 let _ = self.core.cfg.save(&self.core.skin);
                 let effective = self.effective_skin();
                 self.apply_skin(&effective);
+                let _ = self
+                    .app
+                    .emit("eyenurse://skin-surface-changed", self.surface_dto());
                 self.reply(reply, effective);
             }
             CoreMsg::GetSkins(reply) => self.reply(reply, self.skins_dto()),
             CoreMsg::GetSkin(reply) => self.reply(reply, self.effective_skin()),
+            CoreMsg::GetSkinSurface(reply) => self.reply(reply, self.surface_dto()),
             // —— v3.2 仿锁屏 / 护眼统计 ——
             CoreMsg::LockActivate => self.lock_now(),
             CoreMsg::LockTryUnlock(password, reply) => {
@@ -327,18 +375,41 @@ impl CoreLoop {
         skin::resolve_effective(&self.core.skin, &disk)
     }
 
-    /// 可用皮肤清单：内置 + 磁盘 + 自定义槽（custom 槽仅在已有自定义时出现，
-    /// 展示名由前端按语言本地化；colors 供页面直接渲染迷你预览）
+    /// ESP-1 表面运行时（配色 + 皮肤页 URL + chrome 摆放 + bar 模式；
+    /// GetSkinSurface 命令与 skin-surface-changed 广播共用）
+    fn surface_dto(&self) -> SkinSurfaceDto {
+        skin_proto::surface_dto(&self.core.skin, self.bar_is_web)
+    }
+
+    /// 可用皮肤清单：内置 + 磁盘（Tier 0 + Tier 1）+ 自定义槽（custom 槽仅在
+    /// 已有自定义时出现，展示名由前端按语言本地化；colors 供页面直接渲染迷你
+    /// 预览；has_bar/has_lock/has_preview = ESP-1 徽标位）
     fn skins_dto(&self) -> SkinsDto {
         let classic = skin::classic();
         let mut skins = skin::builtin_metas();
         for entry in skin::scan_disk(&Self::skins_dir()) {
-            let colors = skin::resolve(&entry.def, &classic);
+            let mut colors = skin::resolve(entry.colors_def(), &classic);
+            let (zh, en) = entry.display_name();
+            if let Some(zh) = zh {
+                // Tier 1：manifest.name 为展示真源（覆盖 colors 回退名）
+                colors.name = zh;
+            }
+            if let Some(en) = en {
+                colors.name_en = en;
+            }
+            let (has_bar, has_lock) = entry.has_surface();
+            let has_preview = matches!(
+                &entry,
+                DiskSkinEntry::Package { dir, .. } if dir.join("preview.png").is_file()
+            );
             skins.push(SkinMeta {
-                id: entry.id,
+                id: entry.id().to_string(),
                 name: colors.name.clone(),
                 name_en: colors.name_en.clone(),
                 colors,
+                has_bar,
+                has_lock,
+                has_preview,
             });
         }
         if let Some(def) = &self.core.skin.Custom {
@@ -348,6 +419,9 @@ impl CoreLoop {
                 name: "自定义".into(),
                 name_en: "Custom".into(),
                 colors,
+                has_bar: false,
+                has_lock: false,
+                has_preview: false,
             });
         }
         SkinsDto {
@@ -530,14 +604,34 @@ impl CoreLoop {
 
     /// v3.2 锁屏遮罩解锁：密码匹配（空密码 = 无需密码）→ 撤锁。休息中（AutoRest）
     /// → 提前收尾休息；纯锁屏 → 关遮罩 + 恢复计时。不匹配回 false（页面提示）。
+    /// ESP-1：宿主侧限速——解锁入口开放给皮肤页（经桥），防爆破必须是宿主职责：
+    /// 1 次/秒 + 连错 5 次冷却 60s；冷却期内一律 false（页面按密码错误提示）。
     fn try_unlock(&mut self, password: &str) -> bool {
+        let now = Instant::now();
+        if let Some(until) = self.unlock_cooldown_until {
+            if now < until {
+                return false;
+            }
+        }
+        if let Some(last) = self.unlock_last {
+            if now.duration_since(last) < Duration::from_secs(1) {
+                return false;
+            }
+        }
+        self.unlock_last = Some(now);
         if !self.is_locked {
             return true;
         }
         let expected = self.core.lock.Password.trim();
         if !expected.is_empty() && password.trim() != expected {
+            self.unlock_fails += 1;
+            if self.unlock_fails >= 5 {
+                self.unlock_fails = 0;
+                self.unlock_cooldown_until = Some(now + Duration::from_secs(60));
+            }
             return false;
         }
+        self.unlock_fails = 0;
         self.is_locked = false;
         self.stats_dirty = true;
         if self.is_resting {
@@ -615,7 +709,9 @@ impl CoreLoop {
         self.apply_timer_events(events);
     }
 
-    /// 悬浮条拖动结束写回逻辑坐标并立即保存 UI.json（清单 B6/Q9）
+    /// 悬浮条拖动结束写回逻辑坐标并保存 UI.json（清单 B6/Q9）。
+    /// ESP-1：web bar 的 Moved 事件逐帧触发本方法（bar_pos_dirty 攒批），
+    /// GDI 路径保持拖动结束一次性写。
     fn set_bar_position(&mut self, left: f64, top: f64) {
         self.core.ui.CoutdownWindowLeft = eyenurse_core::config::StjF64(left);
         self.core.ui.CoutdownWindowTop = eyenurse_core::config::StjF64(top);
@@ -625,15 +721,25 @@ impl CoreLoop {
             bar.saved_left = left;
             bar.saved_top = top;
         }
-        self.save_ui_json();
+        if self.bar_is_web {
+            self.bar_pos_dirty = true; // 1Hz tick 落盘（见 tick 尾部）
+        } else {
+            self.save_ui_json();
+        }
     }
 
-    /// 写 UI.json + PostMessage 驱动原生置顶（egui 版 WindowLevel 命令的等价路径）
+    /// 写 UI.json + PostMessage 驱动原生置顶（egui 版 WindowLevel 命令的等价路径）。
+    /// ESP-1：web bar 同步 set_always_on_top（barweb 窗口归宿主管理）。
     fn toggle_topmost(&mut self, on: bool) {
         self.core.ui.TopMost = on;
         self.save_ui_json();
         self.bar_lock().topmost = on;
         self.bar_post(bar::WM_APP_TOPMOST, usize::from(on), 0);
+        if self.bar_is_web {
+            if let Some(w) = self.app.get_webview_window("barweb") {
+                let _ = w.set_always_on_top(on);
+            }
+        }
     }
 
     /// 托盘双击 → bar 按 UI.json 持久化 TopMost/位置恢复显示（B11）。v2
@@ -642,12 +748,22 @@ impl CoreLoop {
     /// 取数走 CoreLoop 内存态 ui（单写者：与 UI.json 同步演进；进程内不并发读盘——
     /// 写盘非原子可能撕裂，§3 评审修订），经共享快照交给 bar 的 WM_APP_SHOW 应用。
     fn show_bar(&mut self) {
-        {
+        let (left, top, topmost) = {
             let mut bar = self.bar_lock();
             bar.saved_left = self.core.ui.CoutdownWindowLeft.0;
             bar.saved_top = self.core.ui.CoutdownWindowTop.0;
             // v2 `TopMost = uiConfig.TopMost`：复选显示值跟随持久化值（不回写磁盘）
             bar.topmost = self.core.ui.TopMost;
+            (bar.saved_left, bar.saved_top, bar.topmost)
+        };
+        if self.bar_is_web {
+            // web bar 等价路径：按持久化位置回放 + 跟随持久化置顶（不无条件置顶）
+            if let Some(w) = self.app.get_webview_window("barweb") {
+                let _ = w.set_position(tauri::LogicalPosition::new(left, top));
+                let _ = w.set_always_on_top(topmost);
+                let _ = w.show();
+            }
+            return;
         }
         self.bar_post(bar::WM_APP_SHOW, 0, 0);
     }
@@ -911,6 +1027,37 @@ impl CoreLoop {
         // 暂停 480s 渐变与倒计时数字都依赖快照每拍刷新
         if !self.is_resting {
             self.refresh_bar_snapshot();
+        }
+        // ESP-1：web bar 的 1Hz 状态广播（GDI 条读快照重绘的 WebView 等价物；
+        // 数据同源共享快照，载荷只含数字态——文案走 i18n-changed 低频路径）
+        if self.bar_is_web {
+            let (countdown, interval, paused_ms, resting, topmost) = {
+                let b = self.bar_lock();
+                (
+                    b.countdown,
+                    b.interval,
+                    b.paused_time.map(|p| p.as_millis() as u64),
+                    b.resting,
+                    b.topmost,
+                )
+            };
+            let _ = self.app.emit_to(
+                "barweb",
+                "eyenurse://bar-state",
+                BarStatePayload {
+                    countdown_ms: countdown.as_millis() as u64,
+                    interval_ms: interval.as_millis() as u64,
+                    paused_ms,
+                    resting,
+                    topmost,
+                },
+            );
+            // web bar 拖动攒批的位置落盘（Moved 逐帧触发 set_bar_position，
+            // 这里 1Hz 兜底刷盘；GDI 路径在拖动结束即时写）
+            if self.bar_pos_dirty {
+                self.bar_pos_dirty = false;
+                self.save_ui_json();
+            }
         }
     }
 

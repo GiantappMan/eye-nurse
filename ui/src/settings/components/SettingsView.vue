@@ -24,6 +24,8 @@ const props = defineProps<{
   currentSkinId: string;
   /** 当前生效配色 */
   effectiveSkin: SkinColors | null;
+  /** ESP-1：bar 当前运行模式（true = WebView 壳；bar 形态变化需重启） */
+  barIsWeb: boolean;
 }>();
 const emit = defineEmits<{
   /** 任一控件提交 → 父组件排 300ms 防抖保存 */
@@ -299,6 +301,7 @@ function onReset(): void {
         :skins="skins"
         :current-id="currentSkinId"
         :effective="effectiveSkin"
+        :bar-is-web="barIsWeb"
         @select="$emit('select-skin', $event)"
         @save-custom="$emit('save-custom-skin', $event)"
       />

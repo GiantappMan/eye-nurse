@@ -1,18 +1,26 @@
-//! 皮肤系统（v3.1 换肤）：悬浮条 + 锁屏窗的**运行时**配色。
+//! 皮肤系统（v3.1 换肤 → v3.2 开放皮肤协议 ESP-1）：悬浮条 + 锁屏窗的
+//! **运行时**配色与**表面（target）替换**。
 //!
 //! 真源与回退：`classic` 与编译期 `crates/eyenurse-app/src/ui/theme.json` 同值
 //! （theme.json 仍是「改经典色」的唯一入口，build.rs 校验不变；本文件字面量由
 //! app 侧锚点测试保护，见 eyenurse-app `ui/theme.rs` tests）。其他皮肤以 classic
 //! 为底做**逐键回退**——缺键或非法色值 → classic 对应键。
 //!
-//! 来源优先级（[`resolve_effective`]）：
+//! ESP-1 两级格式（docs/v3-skin-protocol.md）：
+//! - **Tier 0 颜色键**：`Assets/Skins/<id>.json` 裸文件（v3.1 格式，原样兼容）；
+//! - **Tier 1 目录包**：`Assets/Skins/<id>/` + `skin.json` manifest，可为
+//!   `bar` / `lock` 两个 target 各自提供 HTML 入口（`targets.bar.entry` 等），
+//!   亦可只带 `colors`（等价 Tier 0）。**每个 target 独立声明、独立回退**：
+//!   皮肤缺某 target 的入口 → 该 target 用内置界面（[`resolve_surfaces`]）。
+//!
+//! 来源优先级（[`resolve_effective`] / [`resolve_surfaces`]）：
 //! 1. 用户自定义：Skin.json 的 `Custom`（`Current == "custom"` 时生效）；
-//! 2. 磁盘皮肤：exe 旁 `Assets/Skins/<id>.json`，文件名 = id（延续 v2
-//!    「替换 json 即换文案」的惯例，第三方放文件即可分发）；
+//! 2. 磁盘皮肤（exe 旁 `Assets/Skins`，文件名/目录名 = id——延续 v2
+//!    「替换 json 即换文案」的惯例，第三方放文件/文件夹即可分发）；
 //! 3. 内置预设（[`BUILTIN_IDS`]）；
 //! 4. classic（兜底，任何失效路径最终都落到这里）。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::ConfigFile;
 
@@ -79,7 +87,7 @@ pub struct SkinDef {
 }
 
 /// Skin.json —— v3 新增（无 v2 对应文件；Current 手写 Default，不可 derive）
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct SkinConfig {
     /// 当前选中皮肤 id（内置 id / 磁盘文件名 / "custom"）
@@ -102,13 +110,17 @@ impl Default for SkinConfig {
 }
 
 /// 皮肤清单条目（设置页选择器数据源；colors = 该皮肤逐键回退后的完整配色，
-/// 供页面直接渲染迷你预览）
+/// 供页面直接渲染迷你预览）。has_bar/has_lock = 目录包提供的 HTML 表面徽标。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SkinMeta {
     pub id: String,
     pub name: String,
     pub name_en: String,
     pub colors: SkinColors,
+    pub has_bar: bool,
+    pub has_lock: bool,
+    /// Tier 1 包的 preview.png 是否存在（预览 URL 由 app 侧按协议拼装）
+    pub has_preview: bool,
 }
 
 /// `get_skins` 回包：清单 + 当前选中 id
@@ -118,11 +130,243 @@ pub struct SkinsDto {
     pub skins: Vec<SkinMeta>,
 }
 
-/// 磁盘皮肤条目（id = 文件名去 .json）
+/// 磁盘皮肤条目（id = 文件名去 .json / 目录名）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiskSkin {
     pub id: String,
     pub def: SkinDef,
+}
+
+// ============================================================================
+// ESP-1 Tier 1：目录包 manifest（docs/v3-skin-protocol.md §2）
+// ============================================================================
+
+/// manifest 文件名 / 协议标识 / 当前协议版本（高于宿主的包拒载，绝不半加载）
+pub const MANIFEST_FILE: &str = "skin.json";
+pub const SKIN_FORMAT: &str = "eyenurse-skin";
+pub const SKIN_FORMAT_VERSION: u32 = 1;
+
+/// manifest 展示名（`{"zh": "...", "en": "..."}`，双键必备——前端按当前语言取用）
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LocalizedName {
+    pub zh: String,
+    pub en: String,
+}
+
+/// bar target 声明：HTML 入口 + 窗口逻辑尺寸（DIP；缺省 80×20 由 app 侧兜底）
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TargetBarDef {
+    /// 包内相对路径（`bar/index.html`）；解析时做穿越校验 + 存在性校验
+    pub entry: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<SizeDef>,
+}
+
+/// bar 窗口逻辑尺寸（DIP；窗口管理仍归宿主，皮肤只声明想要多大）
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SizeDef {
+    pub w: f64,
+    pub h: f64,
+}
+
+/// lock target 声明：HTML 入口 + 宿主 chrome（密码框/解锁按钮）的摆放百分比
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TargetLockDef {
+    pub entry: String,
+    /// 宿主独占控件位置（百分比坐标；皮肤用数字对齐自己的设计，不做 DOM 测量）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chrome: Option<LockChromeDef>,
+}
+
+/// 宿主独占控件（密码框/解锁按钮）百分比位置（0-100，解析时 clamp）
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ChromePos {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// lock target 的宿主 chrome 摆放声明：密码框与解锁按钮由宿主独占渲染
+///（皮肤 iframe 不可达——安全边界），只通过百分比坐标对齐皮肤设计。
+/// 缺省位置由 app 侧兜底（密码框居中偏下、解锁按钮右下角）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct LockChromeDef {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<ChromePos>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlock: Option<ChromePos>,
+}
+
+/// manifest `targets`（两个 target 均可缺省——缺哪个，哪个表面回退内置界面）
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SkinTargets {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bar: Option<TargetBarDef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock: Option<TargetLockDef>,
+}
+
+/// ESP-1 manifest（`<包目录>/skin.json`）。`colors` 复用 [`SkinDef`]：
+/// 给 Tier 1 皮肤当「classic 回退底色」，也让纯配色包与裸 json 语义一致。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SkinManifest {
+    pub format: String,
+    #[serde(rename = "formatVersion")]
+    pub format_version: u32,
+    pub id: String,
+    pub name: LocalizedName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub targets: SkinTargets,
+    #[serde(default)]
+    pub colors: SkinDef,
+}
+
+impl Default for SkinManifest {
+    fn default() -> Self {
+        Self {
+            format: SKIN_FORMAT.into(),
+            format_version: SKIN_FORMAT_VERSION,
+            id: String::new(),
+            name: LocalizedName {
+                zh: String::new(),
+                en: String::new(),
+            },
+            author: None,
+            version: None,
+            targets: SkinTargets::default(),
+            colors: SkinDef::default(),
+        }
+    }
+}
+
+/// 磁盘皮肤条目：Tier 0 裸 json（Colors）或 Tier 1 目录包（Package）。
+/// SkinDef/manifest 装箱：抑制 clippy::large_enum_variant（Package 远大于 Colors）
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiskSkinEntry {
+    Colors { id: String, def: Box<SkinDef> },
+    Package { id: String, manifest: Box<SkinManifest>, dir: PathBuf },
+}
+
+impl DiskSkinEntry {
+    pub fn id(&self) -> &str {
+        match self {
+            DiskSkinEntry::Colors { id, .. } | DiskSkinEntry::Package { id, .. } => id,
+        }
+    }
+
+    /// 配色定义（Tier 1 = manifest.colors；供逐键回退与清单预览）
+    pub fn colors_def(&self) -> &SkinDef {
+        match self {
+            DiskSkinEntry::Colors { def, .. } => def,
+            DiskSkinEntry::Package { manifest, .. } => &manifest.colors,
+        }
+    }
+
+    /// 展示名（manifest.name 双语；Tier 0 走 def.name/name_en，可缺）
+    pub fn display_name(&self) -> (Option<String>, Option<String>) {
+        match self {
+            DiskSkinEntry::Colors { def, .. } => (def.name.clone(), def.name_en.clone()),
+            DiskSkinEntry::Package { manifest, .. } => {
+                (Some(manifest.name.zh.clone()), Some(manifest.name.en.clone()))
+            }
+        }
+    }
+
+    /// 是否提供各 target 的 HTML 表面（设置页徽标 + bar 模式判定）
+    pub fn has_surface(&self) -> (bool, bool) {
+        match self {
+            DiskSkinEntry::Colors { .. } => (false, false),
+            DiskSkinEntry::Package { manifest, .. } => {
+                (manifest.targets.bar.is_some(), manifest.targets.lock.is_some())
+            }
+        }
+    }
+
+    /// manifest 加载 + 全量校验（格式/版本/id/entry 路径穿越与存在性）。
+    /// 任何一项不过 → Err，调用方跳过该包（与坏 Tier 0 json 同待遇）。
+    pub fn load_package(dir: &Path) -> Result<Self, String> {
+        let dir = dir
+            .canonicalize()
+            .map_err(|e| format!("目录不可达: {e}"))?;
+        let Some(id) = dir.file_name().and_then(|s| s.to_str()) else {
+            return Err("目录名不可用".into());
+        };
+        if !is_valid_skin_id(id) {
+            return Err(format!("目录名 {id:?} 不符合 id 规范（[a-z0-9-]{{1,64}}）"));
+        }
+        let text = std::fs::read_to_string(dir.join(MANIFEST_FILE))
+            .map_err(|e| format!("读取 {} 失败: {e}", MANIFEST_FILE))?;
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        let manifest: SkinManifest = serde_json::from_str(text)
+            .map_err(|e| format!("manifest 解析失败: {e}"))?;
+        if manifest.format != SKIN_FORMAT {
+            return Err(format!("format {:?} 不是 {:?}", manifest.format, SKIN_FORMAT));
+        }
+        if manifest.format_version != SKIN_FORMAT_VERSION {
+            return Err(format!(
+                "formatVersion {} 高于宿主支持（宿主 = {}）",
+                manifest.format_version, SKIN_FORMAT_VERSION
+            ));
+        }
+        if manifest.id != id {
+            return Err(format!("manifest.id {:?} 与目录名 {:?} 不一致", manifest.id, id));
+        }
+        if manifest.name.zh.trim().is_empty() || manifest.name.en.trim().is_empty() {
+            return Err("name.zh / name.en 不能为空".into());
+        }
+        // entry 路径纪律：包内相对路径 + 规范化后必须仍在包目录内（穿越即拒）
+        let check_entry = |entry: &str, what: &str| -> Result<(), String> {
+            if entry.is_empty()
+                || entry.starts_with('/')
+                || entry.starts_with('\\')
+                || entry.contains(':')
+                || entry.split(['/', '\\']).any(|seg| seg == "..")
+            {
+                return Err(format!("{what} entry {entry:?} 不是合法的包内相对路径"));
+            }
+            if !entry.to_ascii_lowercase().ends_with(".html") {
+                return Err(format!("{what} entry {entry:?} 必须是 .html"));
+            }
+            let full = dir.join(entry);
+            let canonical = full
+                .canonicalize()
+                .map_err(|e| format!("{what} entry {entry:?} 不可达: {e}"))?;
+            if !canonical.starts_with(&dir) {
+                return Err(format!("{what} entry {entry:?} 越出包目录"));
+            }
+            Ok(())
+        };
+        if let Some(bar) = &manifest.targets.bar {
+            check_entry(&bar.entry, "bar")?;
+        }
+        if let Some(lock) = &manifest.targets.lock {
+            check_entry(&lock.entry, "lock")?;
+        }
+        Ok(DiskSkinEntry::Package {
+            id: id.to_string(),
+            manifest: Box::new(manifest),
+            dir,
+        })
+    }
+}
+
+/// 皮肤 id 规范：`[a-z0-9-]{1,64}`（目录名/裸 json 文件名同规则；"custom" 与
+/// 内置 id 不会撞——它们不经过磁盘扫描命名空间）
+fn is_valid_skin_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// app 侧复用的 id 校验入口（协议 handler 的第一段路径即 id）
+pub fn is_valid_skin_id_pub(id: &str) -> bool {
+    is_valid_skin_id(id)
 }
 
 // ============================================================================
@@ -220,6 +464,9 @@ pub fn builtin_metas() -> Vec<SkinMeta> {
                 name: colors.name.clone(),
                 name_en: colors.name_en.clone(),
                 colors,
+                has_bar: false,
+                has_lock: false,
+                has_preview: false,
             })
         })
         .collect()
@@ -261,39 +508,49 @@ pub fn resolve(def: &SkinDef, classic: &SkinColors) -> SkinColors {
     }
 }
 
-/// 扫描磁盘皮肤目录（`Assets/Skins/*.json`）：文件名（去扩展名）= id，
-/// 坏 JSON / 非文件项跳过；按 id 排序保证展示稳定。目录不存在 → 空表。
-pub fn scan_disk(dir: &Path) -> Vec<DiskSkin> {
+/// 扫描磁盘皮肤目录（`Assets/Skins`）：`<id>.json` = Tier 0 颜色键，
+/// `<id>/skin.json` = Tier 1 目录包。坏 JSON / 校验不过 / 非皮肤项跳过；
+/// 按 id 排序保证展示稳定。目录不存在 → 空表。
+pub fn scan_disk(dir: &Path) -> Vec<DiskSkinEntry> {
     let mut out = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return out;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
-            continue;
-        }
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        if let Ok(def) = serde_json::from_str::<SkinDef>(text) {
-            out.push(DiskSkin {
-                id: stem.to_string(),
-                def,
-            });
+        match path.extension().and_then(|e| e.to_str()) {
+            // Tier 0：裸颜色键 json（v3.1 格式原样兼容）
+            Some("json") => {
+                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+                if let Ok(def) = serde_json::from_str::<SkinDef>(text) {
+                    out.push(DiskSkinEntry::Colors {
+                        id: stem.to_string(),
+                        def: Box::new(def),
+                    });
+                }
+            }
+            // Tier 1：目录包（含 skin.json 才算；目录存在即尝试，校验不过静默跳过）
+            None if path.is_dir() => {
+                if let Ok(pkg) = DiskSkinEntry::load_package(&path) {
+                    out.push(pkg);
+                }
+            }
+            _ => {}
         }
     }
-    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out.sort_by(|a, b| a.id().cmp(b.id()));
     out
 }
 
 /// 生效配色解析（优先级见模块注释）。`disk` 由调用方扫描后传入
 ///（app 侧定位 exe 旁 Assets/Skins；core 不感知 exe 路径）。
-pub fn resolve_effective(config: &SkinConfig, disk: &[DiskSkin]) -> SkinColors {
+pub fn resolve_effective(config: &SkinConfig, disk: &[DiskSkinEntry]) -> SkinColors {
     let classic = classic();
     if config.Current == "custom" {
         if let Some(def) = &config.Custom {
@@ -303,10 +560,66 @@ pub fn resolve_effective(config: &SkinConfig, disk: &[DiskSkin]) -> SkinColors {
     if let Some(c) = builtin(&config.Current) {
         return c;
     }
-    if let Some(e) = disk.iter().find(|e| e.id == config.Current) {
-        return resolve(&e.def, &classic);
+    if let Some(e) = disk.iter().find(|e| e.id() == config.Current) {
+        let mut colors = resolve(e.colors_def(), &classic);
+        // Tier 1 的展示名来自 manifest.name（双语必备键），优先于 colors 回退名
+        let (zh, en) = e.display_name();
+        if let Some(zh) = zh {
+            colors.name = zh;
+        }
+        if let Some(en) = en {
+            colors.name_en = en;
+        }
+        return colors;
     }
     classic
+}
+
+// ============================================================================
+// ESP-1 表面（target）解析：每个 target 独立生效、独立回退
+// ============================================================================
+
+/// 单个 target 的解析结果（入口相对路径 + 包目录绝对路径；app 侧拼装
+/// `eyenurse-skin://` URL，core 不感知 URL 方案）
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedSurface {
+    pub dir: PathBuf,
+    /// 包内 HTML 入口（manifest 校验时已做穿越与存在性检查）
+    pub entry: String,
+    /// bar：窗口逻辑尺寸（DIP；None = app 侧用默认 80×20）
+    pub size: Option<SizeDef>,
+    /// lock：宿主独占控件（密码框/解锁按钮）百分比位置
+    pub chrome: Option<LockChromeDef>,
+}
+
+/// 生效皮肤的全量解析：配色（逐键回退）+ 两个 target 的 HTML 表面（各自独立，
+/// 缺哪个回退哪个的内置界面）。磁盘 id 失效 → 全 classic、无表面。
+pub fn resolve_surfaces(config: &SkinConfig, disk: &[DiskSkinEntry]) -> (SkinColors, Option<ResolvedSurface>, Option<ResolvedSurface>) {
+    let colors = resolve_effective(config, disk);
+    let found = match config.Current.as_str() {
+        "custom" => None,
+        id if builtin(id).is_some() => None,
+        id => disk.iter().find(|e| e.id() == id),
+    };
+    let Some(entry) = found else {
+        return (colors, None, None);
+    };
+    let DiskSkinEntry::Package { manifest, dir, .. } = entry else {
+        return (colors, None, None);
+    };
+    let bar = manifest.targets.bar.as_ref().map(|t| ResolvedSurface {
+        dir: dir.clone(),
+        entry: t.entry.clone(),
+        size: t.size,
+        chrome: None,
+    });
+    let lock = manifest.targets.lock.as_ref().map(|t| ResolvedSurface {
+        dir: dir.clone(),
+        entry: t.entry.clone(),
+        size: None,
+        chrome: t.chrome,
+    });
+    (colors, bar, lock)
 }
 
 #[cfg(test)]
@@ -360,12 +673,12 @@ mod tests {
     #[test]
     fn effective_priority_custom_over_builtin_over_disk_over_classic() {
         let mut config = SkinConfig::default();
-        let disk = vec![DiskSkin {
+        let disk = vec![DiskSkinEntry::Colors {
             id: "sunset".into(),
-            def: SkinDef {
+            def: Box::new(SkinDef {
                 name: Some("日落".into()),
                 ..SkinDef::default()
-            },
+            }),
         }];
 
         // classic
@@ -437,8 +750,157 @@ mod tests {
         std::fs::write(dir.join("note.txt"), "not a skin").unwrap();
 
         let skins = scan_disk(&dir);
-        let ids: Vec<&str> = skins.iter().map(|s| s.id.as_str()).collect();
+        let ids: Vec<&str> = skins.iter().map(|s| s.id()).collect();
         assert_eq!(ids, ["a", "b"]); // 坏 JSON 与非 json 跳过，按 id 排序
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // —— ESP-1 Tier 1：manifest 校验 + 表面解析 ——
+
+    /// 造一个最小合法包目录（含 entry HTML）
+    fn make_package(root: &Path, id: &str, manifest_body: &str) -> PathBuf {
+        let dir = root.join(id);
+        std::fs::create_dir_all(dir.join("bar")).unwrap();
+        std::fs::create_dir_all(dir.join("lock")).unwrap();
+        std::fs::write(dir.join("bar").join("index.html"), "<html></html>").unwrap();
+        std::fs::write(dir.join("lock").join("index.html"), "<html></html>").unwrap();
+        let body = manifest_body
+            .replace("%ID%", id)
+            .replace("%BAR_ENTRY%", "bar/index.html")
+            .replace("%LOCK_ENTRY%", "lock/index.html");
+        std::fs::write(dir.join(MANIFEST_FILE), body).unwrap();
+        dir
+    }
+
+    const VALID_MANIFEST: &str = r##"{
+        "format": "eyenurse-skin", "formatVersion": 1, "id": "%ID%",
+        "name": {"zh": "日落时钟", "en": "Sunset Clock"},
+        "author": "giantapp", "version": "1.0.0",
+        "targets": {
+            "bar":  {"entry": "%BAR_ENTRY%", "size": {"w": 120, "h": 32}},
+            "lock": {"entry": "%LOCK_ENTRY%", "chrome": {"password": {"x": 50, "y": 64}}}
+        },
+        "colors": {"bar": {"progress_fill": "#FF6B35"}, "mask": {"bg": "#1A0E08"}}
+    }"##;
+
+    #[test]
+    fn package_manifest_validates_and_surfaces_resolve_per_target() {
+        let root = std::env::temp_dir().join(format!("eyenurse-skin-pkg-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let dir = make_package(&root, "sunset-clock", VALID_MANIFEST);
+
+        let pkg = DiskSkinEntry::load_package(&dir).expect("合法包应通过校验");
+        assert_eq!(pkg.id(), "sunset-clock");
+        assert_eq!(pkg.has_surface(), (true, true));
+
+        // 表面解析：两个 target 各自带入口/尺寸/chrome
+        let config = SkinConfig {
+            Current: "sunset-clock".into(),
+            Custom: None,
+        };
+        let disk = scan_disk(&root);
+        let (colors, bar, lock) = resolve_surfaces(&config, &disk);
+        assert_eq!(colors.name, "日落时钟"); // manifest.name 优先
+        assert_eq!(colors.bar_progress_fill, "#FF6B35"); // colors 逐键回退仍生效
+        assert_eq!(colors.bar_progress_bg, "#F5F5DC"); // 缺键回退 classic
+        let bar = bar.expect("bar 表面应存在");
+        assert_eq!(bar.entry, "bar/index.html");
+        assert_eq!(bar.size, Some(SizeDef { w: 120.0, h: 32.0 }));
+        let lock = lock.expect("lock 表面应存在");
+        assert_eq!(
+            lock.chrome.and_then(|c| c.password),
+            Some(ChromePos { x: 50.0, y: 64.0 })
+        );
+
+        // 只做 lock 的包：bar 回退无表面（内置界面）
+        let lock_only = r#"{
+            "format": "eyenurse-skin", "formatVersion": 1, "id": "%ID%",
+            "name": {"zh": "只锁屏", "en": "LockOnly"},
+            "targets": {"lock": {"entry": "%LOCK_ENTRY%"}}
+        }"#;
+        let dir2 = make_package(&root, "lock-only", lock_only);
+        let pkg2 = DiskSkinEntry::load_package(&dir2).unwrap();
+        assert_eq!(pkg2.has_surface(), (false, true));
+        let config2 = SkinConfig {
+            Current: "lock-only".into(),
+            Custom: None,
+        };
+        let disk2 = scan_disk(&root);
+        let (_, bar2, lock2) = resolve_surfaces(&config2, &disk2);
+        assert!(bar2.is_none());
+        assert!(lock2.is_some());
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn package_manifest_rejects_bad_inputs() {
+        let root = std::env::temp_dir().join(format!("eyenurse-skin-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+
+        // formatVersion 高于宿主
+        let d = make_package(
+            &root,
+            "future-skin",
+            &VALID_MANIFEST.replace("\"formatVersion\": 1", "\"formatVersion\": 2"),
+        );
+        assert!(DiskSkinEntry::load_package(&d).is_err());
+
+        // manifest.id 与目录名不一致
+        let d = make_package(&root, "actual-name", &VALID_MANIFEST.replace("%ID%", "other-name"));
+        assert!(DiskSkinEntry::load_package(&d).is_err());
+
+        // entry 路径穿越
+        let d = make_package(
+            &root,
+            "escapee",
+            &VALID_MANIFEST.replace("%BAR_ENTRY%", "../../outside.html"),
+        );
+        assert!(DiskSkinEntry::load_package(&d).is_err());
+
+        // entry 不存在
+        let d = make_package(
+            &root,
+            "missing-entry",
+            &VALID_MANIFEST.replace("%LOCK_ENTRY%", "lock/missing.html"),
+        );
+        assert!(DiskSkinEntry::load_package(&d).is_err());
+
+        // id 不规范（大写）
+        let d = make_package(&root, "BadID", &VALID_MANIFEST.replace("%ID%", "BadID"));
+        assert!(DiskSkinEntry::load_package(&d).is_err());
+
+        // 无 manifest 的目录不算皮肤（scan_disk 跳过）
+        std::fs::create_dir_all(root.join("empty-dir")).unwrap();
+        let scanned = scan_disk(&root);
+        assert_eq!(scanned.len(), 0); // 全部坏包 → 空
+        assert!(DiskSkinEntry::load_package(&root.join("empty-dir")).is_err());
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn scan_disk_mixes_tier0_and_tier1_sorted_by_id() {
+        let dir = std::env::temp_dir().join(format!("eyenurse-skin-mix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("aaa.json"), "{\"name\":\"A\"}").unwrap();
+        make_package(&dir, "zzz-clock", VALID_MANIFEST);
+
+        let skins = scan_disk(&dir);
+        let ids: Vec<&str> = skins.iter().map(|s| s.id()).collect();
+        assert_eq!(ids, ["aaa", "zzz-clock"]);
+        assert_eq!(skins[0].has_surface(), (false, false)); // Tier 0 无表面
+        assert_eq!(skins[1].has_surface(), (true, true));
+
+        // Tier 1 也走 resolve_effective（配色 = manifest.colors 逐键回退）
+        let config = SkinConfig {
+            Current: "zzz-clock".into(),
+            Custom: None,
+        };
+        let colors = resolve_effective(&config, &skins);
+        assert_eq!(colors.name, "日落时钟");
+        assert_eq!(colors.name_en, "Sunset Clock");
+
         std::fs::remove_dir_all(&dir).ok();
     }
 }

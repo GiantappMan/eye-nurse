@@ -11,7 +11,11 @@
          - 纯休息：旋转圈 + 倒计时 + 右下解锁；
          - 纯锁屏：时钟 + （有密码时）密码框 + 解锁；
          - 锁屏+休息叠加：倒计时与锁屏面板同屏。
-         文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。 -->
+         文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。
+         ESP-1 皮肤宿主（shared/skinHost.ts）：当前皮肤声明 lock 表面时，
+         #skin-frame 以 sandbox iframe 加载皮肤页（opaque origin，皮肤拿不到
+         IPC/宿主 DOM）；#skin-pwd-row / #skin-lock-err 是皮肤模式下的宿主
+         独占 chrome（百分比摆放由皮肤 manifest 声明）——密码永远不过 iframe。 -->
     <div id="mask">
       <div class="center-stack">
         <div class="spinner-stack">
@@ -28,6 +32,12 @@
           <p id="lock-err" hidden></p>
         </div>
       </div>
+      <iframe id="skin-frame" sandbox="allow-scripts" title="skin"></iframe>
+      <div id="skin-pwd-row" hidden>
+        <input id="skin-pwd" type="password" autocomplete="off" spellcheck="false"
+               aria-label="lock password" />
+      </div>
+      <p id="skin-lock-err" hidden></p>
       <button id="unlock">
         <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

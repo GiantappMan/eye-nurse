@@ -17,6 +17,7 @@
 mod commands;
 mod core;
 mod events;
+mod skin_proto;
 mod smoke;
 mod tray;
 mod ui;
@@ -60,6 +61,13 @@ fn main() {
     let skin_cfg: eyenurse_core::skin::SkinConfig = cfg.load();
     let stats = StatsStore::new(cfg.dir());
     let i18n = load_i18n(&cfg, &lang);
+
+    // 2.1) ESP-1 开放皮肤协议：bar 运行模式**启动期定死**——当前皮肤声明了
+    //      bar HTML 表面 → bar 用 WebView 壳窗（barweb）；否则 GDI 原生条。
+    //      换肤时配色即时生效（CoreLoop 广播），bar 形态变化由设置页提示重启。
+    //      lock 表面无需预决策：遮罩窗每次休息现建，页面启动自取 get_skin_surface。
+    let (boot_skin_colors, boot_bar_surface, _boot_lock_surface) = skin_proto::resolve(&skin_cfg);
+    let bar_is_web = boot_bar_surface.is_some();
 
     // 2.5) 自启值名静默迁移（清单 Q6/G2）："Eye Nurse 2" → "Eye Nurse 3"，无 UI 提示；
     //      2.6) set_enabled(RunWhenStarts) **每次启动都应用**（对齐 v2 App.xaml.cs:43 →
@@ -105,9 +113,16 @@ fn main() {
     }
 
     // 4) tauri 应用（settings 窗由 tauri.conf.json 静态声明，启动即建、visible:false）
+    // ESP-1：web bar 拖动落位消息的命令侧句柄（on_window_event 闭包消费）
+    let tx_window = core_tx.clone();
     let result = tauri::Builder::default()
         .manage(commands::CoreHandle {
             tx: core_tx.clone(),
+        })
+        // ESP-1：eyenurse-skin:// 自定义协议——只服务 exe 旁 Assets/Skins/<id>/
+        // 包目录内的文件（白名单字符集 + 规范化越界断言 + 严格 CSP，见 skin_proto）
+        .register_uri_scheme_protocol("eyenurse-skin", |_ctx, request| {
+            skin_proto::handle_skin_request(request)
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
@@ -128,6 +143,10 @@ fn main() {
             commands::get_skin,
             commands::set_skin,
             commands::set_custom_skin,
+            commands::get_skin_surface,
+            commands::open_settings,
+            commands::bar_drag,
+            commands::set_topmost,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -143,7 +162,9 @@ fn main() {
                 let _ = w.set_title(&texts.app_name);
             }
 
-            // 4.2) 悬浮条（原生 Win32，独立线程，§6）
+            // 4.2) 悬浮条（ESP-1 双模式：皮肤声明 bar HTML → WebView 壳窗 barweb；
+            //      否则原生 Win32 独立线程，§6 原路径不动）。共享快照两模式共用
+            //      （CoreLoop 唯一写者；web 模式经 1Hz bar-state 事件广播）
             let interval = setting.RestInterval.as_duration();
             let bar_snapshot = Arc::new(Mutex::new(ui::bar::BarSnapshot {
                 countdown: interval,
@@ -155,20 +176,46 @@ fn main() {
                 saved_left: ui_cfg.CoutdownWindowLeft.0,
                 saved_top: ui_cfg.CoutdownWindowTop.0,
                 texts: texts.clone(),
-                // 皮肤初值 = 经典（theme.json 同值）；CoreLoop::run 启动即按
-                // Skin.json 的实际选择覆盖并广播（v3.1 换肤）
-                skin: ui::bar::BarSkinColors::of(&eyenurse_core::skin::classic()),
+                // 皮肤初值 = 启动解析结果（CoreLoop::run 启动仍会覆盖并广播）
+                skin: ui::bar::BarSkinColors::of(&boot_skin_colors),
             }));
-            let bar_handle = ui::bar::spawn(
-                core_tx.clone(),
-                bar_snapshot.clone(),
-                ui::bar::BarInit {
-                    left: ui_cfg.CoutdownWindowLeft.0,
-                    top: ui_cfg.CoutdownWindowTop.0,
-                    topmost: ui_cfg.TopMost,
-                },
-            )
-            .expect("悬浮条线程创建失败");
+            let bar_hwnd: Arc<std::sync::OnceLock<isize>>;
+            let bar_wiring = if bar_is_web {
+                let dto = skin_proto::surface_dto(&skin_cfg, true);
+                skin_proto::build_barweb_window(
+                    &handle,
+                    &dto,
+                    ui_cfg.CoutdownWindowLeft.0,
+                    ui_cfg.CoutdownWindowTop.0,
+                    ui_cfg.TopMost,
+                )
+                .expect("bar 皮肤壳窗（barweb）创建失败");
+                // web 模式无 GDI 窗口线程：hwnd 占位恒空（CoreLoop bar_post 空转，
+                // 控制路径走 bar-state 事件 / set_always_on_top 直调）
+                bar_hwnd = Arc::new(std::sync::OnceLock::new());
+                core::BarWiring {
+                    snapshot: bar_snapshot.clone(),
+                    hwnd: bar_hwnd.clone(),
+                    is_web: true,
+                }
+            } else {
+                let bar_handle = ui::bar::spawn(
+                    core_tx.clone(),
+                    bar_snapshot.clone(),
+                    ui::bar::BarInit {
+                        left: ui_cfg.CoutdownWindowLeft.0,
+                        top: ui_cfg.CoutdownWindowTop.0,
+                        topmost: ui_cfg.TopMost,
+                    },
+                )
+                .expect("悬浮条线程创建失败");
+                bar_hwnd = bar_handle.hwnd.clone();
+                core::BarWiring {
+                    snapshot: bar_snapshot.clone(),
+                    hwnd: bar_hwnd.clone(),
+                    is_web: false,
+                }
+            };
 
             // 4.3) GlobalTimer 启动（对齐 v2 EyeNurseViewModel.Init cs:98-102；
             //      interval < 1s 的手改配置回退默认 45 分钟，v2 构造会抛异常，v3 容错）
@@ -195,27 +242,19 @@ fn main() {
             //      smoke::run 只 spawn 线程立即返回，必须放在 CoreLoop::new 之前——
             //      handle / bar_handle.hwnd 在那里被 move，之后无从克隆
             if smoke {
-                smoke::run(handle.clone(), bar_handle.hwnd.clone());
+                smoke::run(handle.clone(), bar_hwnd);
             }
-            let core_loop = CoreLoop::new(
-                handle,
-                core_rx,
-                bundle,
-                startup,
-                tray,
-                bar_snapshot,
-                bar_handle.hwnd,
-            );
+            let core_loop = CoreLoop::new(handle, core_rx, bundle, startup, tray, bar_wiring);
             std::thread::Builder::new()
                 .name("eyenurse-core".into())
                 .spawn(move || core_loop.run())?;
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                match window.label() {
-                    "settings" => {
+        .on_window_event(move |window, event| {
+            match window.label() {
+                "settings" => {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         // §8.1：点 X → 先通知页面 flush 未到点的防抖保存，再
                         // prevent_close + hide（页面状态/未保存编辑天然不丢）
                         let _ = window
@@ -224,13 +263,29 @@ fn main() {
                         api.prevent_close();
                         let _ = window.hide();
                     }
-                    label if label.starts_with("mask") => {
+                }
+                label if label.starts_with("mask") => {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         // §5.3：用户 Alt+F4 遮罩一律拦截（destroy() 不走此路径，
                         // 关闭唯一入口是解锁按钮与倒计时）
                         api.prevent_close();
                     }
-                    _ => {}
                 }
+                // ESP-1：web bar——拖动逐帧落位（物理→逻辑，CoreLoop 攒批 1Hz
+                // 落盘 UI.json，等价 GDI 条 WM_EXITSIZEMOVE→SaveBarPosition 语义）；
+                // Alt+F4 一律拦截（bar 的关闭唯一入口是托盘退出）
+                "barweb" => match event {
+                    tauri::WindowEvent::Moved(pos) => {
+                        let scale = window.scale_factor().unwrap_or(1.0).max(0.01);
+                        let _ = tx_window.send(CoreMsg::SaveBarPosition {
+                            left: pos.x as f64 / scale,
+                            top: pos.y as f64 / scale,
+                        });
+                    }
+                    tauri::WindowEvent::CloseRequested { api, .. } => api.prevent_close(),
+                    _ => {}
+                },
+                _ => {}
             }
         })
         .run(tauri::generate_context!());

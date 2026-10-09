@@ -53,13 +53,23 @@ export interface StatsDay {
 
 // —— v3.1 换肤 ——
 
-/** 皮肤清单条目（get_skins；id = 内置 id / 磁盘文件名 / "custom"，名称由前端按语言二选一，
- * colors = 该皮肤逐键回退后的完整配色，供迷你预览直接渲染） */
+/** 皮肤清单条目（get_skins；id = 内置 id / 磁盘文件名或目录名 / "custom"，
+ * 名称由前端按语言二选一，colors = 该皮肤逐键回退后的完整配色，供迷你预览直接
+ * 渲染。ESP-1：has_bar/has_lock = 目录包声明的 HTML 表面徽标；has_preview =
+ * 包内 preview.png 存在（预览 URL = eyenurse-skin 协议 host + /<id>/preview.png）） */
 export interface SkinMeta {
   id: string;
   name: string;
   name_en: string;
   colors: SkinColors;
+  has_bar: boolean;
+  has_lock: boolean;
+  has_preview: boolean;
+}
+
+/** ESP-1 皮肤包 preview.png 的 URL（eyenurse-skin 协议；仅 has_preview 时有效） */
+export function skinPreviewUrl(id: string): string {
+  return `http://eyenurse-skin.localhost/${id}/preview.png`;
 }
 
 /** get_skins 回包 */

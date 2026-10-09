@@ -28,6 +28,7 @@ fn main() {
 
     generate_theme_consts();
     copy_languages_next_to_exe();
+    copy_example_skins();
     tauri_build();
 }
 
@@ -162,6 +163,54 @@ fn copy_languages_next_to_exe() {
     if std::fs::create_dir_all(&dest_dir).is_ok() {
         for (name, text) in [("zh.json", ZH_JSON), ("en.json", EN_JSON)] {
             let _ = std::fs::write(dest_dir.join(name), text);
+        }
+    }
+}
+
+// ============================================================================
+// 4) ESP-1 示例皮肤包拷贝（docs/v3-skin-protocol.md）：仓库 assets/skins-example/
+//    → target/{profile}/Assets/Skins/——dev 运行即有可用的 UGC 目录包样例
+//    （sunset-clock：lock+bar 双表面）。真源随仓库分发，拷贝 best-effort。
+// ============================================================================
+
+/// 仓库根 skins-example 目录（构建期固定锚点拼装，Mimosa L2 同款纪律）
+fn skins_example_dir() -> PathBuf {
+    canonicalized(&PathBuf::from(
+        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default(),
+    ))
+    .join("../../assets/skins-example")
+}
+
+fn copy_example_skins() {
+    println!("cargo:rerun-if-changed=../../assets/skins-example");
+    let src_root = skins_example_dir();
+    let Some(dest_root) = target_profile_dir() else {
+        return;
+    };
+    let dest_root = canonicalized(&dest_root).join("Assets").join("Skins");
+    // best-effort：样例缺失不阻塞构建（协议本身不依赖样例存在）
+    if std::fs::create_dir_all(&dest_root).is_ok() {
+        copy_dir_recursive(&src_root, &dest_root);
+    }
+}
+
+/// 递归拷贝（构建期固定锚点之间的内容复制；文件名来自 readdir，不含用户输入）
+fn copy_dir_recursive(src: &Path, dest: &Path) {
+    let Ok(entries) = std::fs::read_dir(src) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let ty = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let target = dest.join(entry.file_name());
+        if ty.is_dir() {
+            if std::fs::create_dir_all(&target).is_ok() {
+                copy_dir_recursive(&entry.path(), &target);
+            }
+        } else if ty.is_file() {
+            let _ = std::fs::copy(entry.path(), &target);
         }
     }
 }

@@ -11,6 +11,8 @@
 //! 无共享状态，命令线程直调不经 CoreLoop）。
 
 use crate::events::CoreMsg;
+use crate::skin_proto::SkinSurfaceDto;
+use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
 use eyenurse_core::autostart::DesktopStartup;
 use eyenurse_core::config::{LockScreenJson, SettingJson};
@@ -280,4 +282,41 @@ pub async fn set_custom_skin(
     def: SkinDef,
 ) -> Result<SkinColors, String> {
     ask_core(&state, |tx| CoreMsg::SetCustomSkin(Box::new(def), tx))
+}
+
+// —— v3.2 ESP-1 开放皮肤协议 ——
+
+/// 表面运行时（配色 + bar/lock 皮肤页 URL + lock chrome 摆放 + bar 运行模式）。
+/// mask/barweb 壳页的启动依赖；运行中变化经 `eyenurse://skin-surface-changed`
+/// 广播（载荷同型）
+#[tauri::command]
+pub async fn get_skin_surface(state: State<'_, CoreHandle>) -> Result<SkinSurfaceDto, String> {
+    ask_core(&state, CoreMsg::GetSkinSurface)
+}
+
+/// 打开设置窗（托盘「设置」同源动作 CoreMsg::Tray(Settings)；
+/// bar/lock 皮肤页经 postMessage 桥调用——皮肤 iframe 自身拿不到 IPC）
+#[tauri::command]
+pub async fn open_settings(state: State<'_, CoreHandle>) -> Result<(), String> {
+    state
+        .tx
+        .send(CoreMsg::Tray(TrayAction::Settings))
+        .map_err(|e| e.to_string())
+}
+
+/// bar 皮肤壳页的系统级拖动（皮肤 iframe 在 sandbox 内拿不到窗口 API，
+/// 经桥转到壳页后 invoke 本命令；语义 = GDI 条的 HTCAPTION 系统拖动）
+#[tauri::command]
+pub async fn bar_drag(window: tauri::WebviewWindow<tauri::Wry>) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
+}
+
+/// 置顶开关（bar 复选同源 CoreMsg::ToggleTopmost：写 UI.json + GDI WM_APP /
+/// barweb set_always_on_top 双路生效）
+#[tauri::command]
+pub async fn set_topmost(state: State<'_, CoreHandle>, on: bool) -> Result<(), String> {
+    state
+        .tx
+        .send(CoreMsg::ToggleTopmost(on))
+        .map_err(|e| e.to_string())
 }

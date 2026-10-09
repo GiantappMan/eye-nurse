@@ -48,10 +48,12 @@ interface TickPayload {
 }
 const tick = ref<TickPayload | null>(null);
 
-// —— 皮肤（v3.1 换肤）——
+// —— 皮肤（v3.1 换肤 / ESP-1 开放皮肤协议）——
 const skins = ref<SkinMeta[]>([]);
 const currentSkinId = ref("");
 const effectiveSkin = ref<SkinColors | null>(null);
+/** bar 当前运行模式（get_skin_surface.bar_is_web；bar 形态变化需重启的判定源） */
+const barIsWeb = ref(false);
 
 /** 清单 + 生效配色一次取全（启动与 skin-changed 共用） */
 async function refreshSkins(): Promise<void> {
@@ -66,6 +68,11 @@ async function refreshSkins(): Promise<void> {
     effectiveSkin.value = await invoke<SkinColors>("get_skin");
   } catch (e) {
     console.error("get_skin 失败", e);
+  }
+  try {
+    barIsWeb.value = (await invoke("get_skin_surface")).bar_is_web ?? false;
+  } catch (e) {
+    console.error("get_skin_surface 失败", e);
   }
 }
 
@@ -264,6 +271,10 @@ onMounted(async () => {
       effectiveSkin.value = e.payload;
       void refreshSkins();
     }),
+    await listen("eyenurse://skin-surface-changed", () => {
+      // ESP-1：表面运行时变化（重取 bar_is_web 供重启提示判定）
+      void refreshSkins();
+    }),
   );
 });
 
@@ -310,6 +321,7 @@ onUnmounted(() => {
         :skins="skins"
         :current-skin-id="currentSkinId"
         :effective-skin="effectiveSkin"
+        :bar-is-web="barIsWeb"
         @commit="scheduleSave"
         @reset="resetDefaults"
         @rest-now="restNow"

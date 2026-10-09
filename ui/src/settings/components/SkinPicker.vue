@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// 皮肤选择器（v3.1 换肤）：预设网格（双迷你预览：悬浮条 + 锁屏色块）+ 可折叠的
-// 自定义颜色编辑器（11 个取色器，按当前生效配色预填，保存即全量下发 set_custom_skin）。
+// 皮肤选择器（v3.1 换肤 → ESP-1 开放皮肤协议）：预设网格（目录包优先显示
+// preview.png + 表面徽标，纯配色皮肤保持双迷你色块）+ 可折叠的自定义颜色编辑器
+// （11 个取色器，按当前生效配色预填，保存即全量下发 set_custom_skin）。
 // 生效配色/清单由父组件经 props 下发（get_skins/get_skin + skin-changed 同步）。
+// bar 形态变化需重启（bar 运行模式启动期定死）：选中皮肤 has_bar 与运行模式
+// 不一致时显示 skinRestartHint（换色不受影响，即时生效）。
 import { computed, reactive, ref, watch } from "vue";
 import { currentLanguage, t } from "../i18n";
-import type { SkinColors, SkinDefPayload, SkinMeta } from "../types";
+import { skinPreviewUrl, type SkinColors, type SkinDefPayload, type SkinMeta } from "../types";
 
 const props = defineProps<{
   /** 可用皮肤（内置 + 磁盘 + 自定义槽） */
@@ -13,6 +16,8 @@ const props = defineProps<{
   currentId: string;
   /** 当前生效配色（编辑器预填源） */
   effective: SkinColors | null;
+  /** bar 当前运行模式（true = WebView 壳；启动期定死） */
+  barIsWeb: boolean;
 }>();
 const emit = defineEmits<{
   (e: "select", id: string): void;
@@ -24,6 +29,21 @@ function displayName(meta: SkinMeta): string {
   if (meta.id === "custom") return t("skinCustom");
   return currentLanguage.value === "zh" ? meta.name : meta.name_en;
 }
+
+/** 表面徽标（目录包声明了哪些 HTML 表面；纯配色皮肤为空数组） */
+function surfaceBadges(meta: SkinMeta): string[] {
+  const badges: string[] = [];
+  if (meta.has_bar) badges.push(t("skinTargetBar"));
+  if (meta.has_lock) badges.push(t("skinTargetLock"));
+  return badges;
+}
+
+/** 选中皮肤的 bar 形态与运行模式不一致 → 重启提示（仅对含 bar 表面的皮肤） */
+const restartHint = computed(() => {
+  const meta = props.skins.find((s) => s.id === props.currentId);
+  if (!meta || !meta.has_bar || meta.has_bar === props.barIsWeb) return false;
+  return true;
+});
 
 // —— 编辑器（展开时从生效配色预填；颜色即值，不做格式校验——非法值由后端回退） ——
 const editorOpen = ref(false);
@@ -100,8 +120,15 @@ function saveCustom(): void {
         :title="displayName(meta)"
         @click="emit('select', meta.id)"
       >
-        <!-- 迷你预览：上=悬浮条（底色 + 进度色），下=锁屏（底色 + 前景环） -->
-        <span class="preview">
+        <!-- 目录包预览图（preview.png）优先；纯配色皮肤保持双迷你色块 -->
+        <img
+          v-if="meta.has_preview"
+          class="pv-img"
+          :src="skinPreviewUrl(meta.id)"
+          :alt="displayName(meta)"
+          loading="lazy"
+        />
+        <span v-else class="preview">
           <span class="pv-bar" :style="{ background: meta.colors.bar_progress_bg }">
             <span class="pv-bar-fill" :style="{ background: meta.colors.bar_progress_fill }" />
           </span>
@@ -110,8 +137,13 @@ function saveCustom(): void {
           </span>
         </span>
         <span class="slot-name">{{ displayName(meta) }}</span>
+        <!-- ESP-1 表面徽标：该皮肤替换了哪些界面 -->
+        <span v-if="surfaceBadges(meta).length" class="badges">
+          <span v-for="b in surfaceBadges(meta)" :key="b" class="badge">{{ b }}</span>
+        </span>
       </button>
     </div>
+    <p v-if="restartHint" class="restart-hint">{{ t("skinRestartHint") }}</p>
 
     <!-- 自定义编辑器 -->
     <div class="editor">
@@ -226,6 +258,31 @@ function saveCustom(): void {
 .slot.active .slot-name {
   color: var(--accent-strong);
   font-weight: 600;
+}
+.pv-img {
+  width: 76px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+.badges {
+  display: flex;
+  gap: 3px;
+}
+.badge {
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.restart-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 .editor {

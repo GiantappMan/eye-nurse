@@ -35,7 +35,7 @@ pub fn run(app: tauri::AppHandle<Wry>, bar_hwnd: Arc<OnceLock<isize>>) {
         .spawn(move || {
             let settings = check_settings(&app);
             let mask = check_mask(&app);
-            let bar = check_bar(&bar_hwnd);
+            let bar = check_bar(&app, &bar_hwnd);
             let fmt = |name: &str, r: &Result<(), String>| match r {
                 Ok(()) => "ok".to_string(),
                 Err(e) => format!("fail({name}: {e})"),
@@ -126,14 +126,16 @@ fn check_mask(app: &tauri::AppHandle<Wry>) -> Result<(), String> {
     Ok(())
 }
 
-/// §11-3：FindWindowW(类名) 非空 → 可见 + 尺寸 = 80×20×DPI（±1px）
-fn check_bar(bar_hwnd: &Arc<OnceLock<isize>>) -> Result<(), String> {
-    // bar 线程建窗是异步的：先等 OnceLock 回填（bar_thread_main 建窗后即写），
-    // 再按 §11 的断言形态按类名 FindWindow
+/// §11-3：bar 双模式（ESP-1）——OnceLock 回填 → GDI 条断言（FindWindowW 类名 +
+/// 80×20×DPI）；超时未回填且 barweb 窗口存在且可见 → web bar 断言（当前皮肤
+/// 声明了 bar HTML 表面，GDI 条本就不该存在）
+fn check_bar(app: &tauri::AppHandle<Wry>, bar_hwnd: &Arc<OnceLock<isize>>) -> Result<(), String> {
+    // bar 线程建窗是异步的：先等 OnceLock 回填（bar_thread_main 建窗后即写）
     let deadline = Instant::now() + WINDOW_TIMEOUT;
     while bar_hwnd.get().is_none() {
         if Instant::now() >= deadline {
-            return Err("bar 线程未在时限内回填窗口句柄".into());
+            // web bar 模式：hwnd 恒不回填，验证 barweb 壳窗本体
+            return check_barweb(app);
         }
         std::thread::sleep(POLL_INTERVAL);
     }
@@ -145,6 +147,26 @@ fn check_bar(bar_hwnd: &Arc<OnceLock<isize>>) -> Result<(), String> {
     {
         Err("bar 为 Win32 原生窗口，仅 Windows 可验证".into())
     }
+}
+
+/// ESP-1 web bar 断言：barweb 窗口存在、可见、透明非销毁
+fn check_barweb(app: &tauri::AppHandle<Wry>) -> Result<(), String> {
+    let deadline = Instant::now() + WINDOW_TIMEOUT;
+    let w = loop {
+        if let Some(w) = app.get_webview_window("barweb") {
+            break w;
+        }
+        if Instant::now() >= deadline {
+            return Err(
+                "bar 线程未回填句柄且 barweb 窗口不存在（两种 bar 模式都未建窗）".into(),
+            );
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    };
+    if !w.is_visible().map_err(|e| format!("is_visible 失败: {e}"))? {
+        return Err("barweb 窗口不可见".into());
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]

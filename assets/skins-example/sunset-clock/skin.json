@@ -1,0 +1,22 @@
+{
+  "format": "eyenurse-skin",
+  "formatVersion": 1,
+  "id": "sunset-clock",
+  "name": { "zh": "日落时钟", "en": "Sunset Clock" },
+  "author": "巨应君",
+  "version": "1.0.0",
+  "targets": {
+    "bar": { "entry": "bar/index.html", "size": { "w": 110, "h": 30 } },
+    "lock": {
+      "entry": "lock/index.html",
+      "chrome": {
+        "password": { "x": 50, "y": 64 },
+        "unlock": { "x": 95, "y": 93 }
+      }
+    }
+  },
+  "colors": {
+    "mask": { "bg": "#1A0E08", "fg": "#FFE8D1" },
+    "bar": { "progress_fill": "#FF8A3C" }
+  }
+}

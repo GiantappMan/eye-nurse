@@ -2,7 +2,8 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-// tauri 架构文档 §1.6：MPA——两个窗口两个入口（settings 设置窗 / mask 遮罩）。
+// tauri 架构文档 §1.6：MPA——窗口入口（settings 设置窗 / mask 遮罩 /
+// barweb ESP-1 bar 皮肤壳）。
 // 端口 1420 strictPort 是 tauri.conf.json devUrl 的硬依赖，不能漂移。
 export default defineConfig({
   plugins: [vue()],
@@ -18,6 +19,7 @@ export default defineConfig({
       input: {
         settings: fileURLToPath(new URL("./index.html", import.meta.url)),
         mask: fileURLToPath(new URL("./mask.html", import.meta.url)),
+        barweb: fileURLToPath(new URL("./barweb.html", import.meta.url)),
       },
     },
   },

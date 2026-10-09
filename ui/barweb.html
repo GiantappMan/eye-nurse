@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CountdownWindow</title>
+  </head>
+  <body>
+    <!-- ESP-1 bar 皮肤壳页（skinHost 同款安全模型）：当前皮肤声明 bar 表面时，
+         #skin-frame 以 sandbox iframe 加载皮肤页（拖动/设置/置顶经 postMessage
+         白名单桥转 invoke）；iframe 未握手/损坏时回退 #builtin 条（配色 = 当前
+         皮肤逐键回退值），永不出现不可见的悬浮条。 -->
+    <div id="builtin" hidden>
+      <div id="progress"><div id="fill"></div></div>
+      <span id="label">00:00</span>
+    </div>
+    <iframe id="skin-frame" sandbox="allow-scripts" title="skin" hidden></iframe>
+    <script type="module" src="/src/barweb/main.ts"></script>
+  </body>
+</html>

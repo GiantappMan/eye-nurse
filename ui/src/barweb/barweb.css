@@ -1,0 +1,68 @@
+/* bar 皮肤壳页样式：透明窗体（Rust 侧 transparent(true)），回退迷你条复刻
+   GDI 条的视觉语义（底色 = bar_progress_bg，填充 = progress_fill 渐变
+   from→to，文字三段色随剩余时间——回退场景从简，只保底色+填充+可读文字） */
+:root {
+  --eyenurse-bar-progress-bg: #f5f5dc;
+  --eyenurse-bar-progress-fill: #3ac32e;
+  --eyenurse-bar-progress-from: #ecc071;
+  --eyenurse-bar-progress-to: #3e0d0d;
+  --eyenurse-bar-text-idle: #000000;
+}
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+#skin-frame {
+  position: absolute;
+  inset: 0;
+  display: none; /* 握手通过（body.skin-alive）才显示——防损坏皮肤白屏遮脸 */
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+body.skin-alive #skin-frame {
+  display: block;
+}
+#builtin {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  background: var(--eyenurse-bar-progress-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#builtin[hidden] {
+  display: none;
+}
+#progress {
+  position: absolute;
+  inset: 0;
+}
+#fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--eyenurse-bar-progress-fill),
+    var(--eyenurse-bar-progress-from),
+    var(--eyenurse-bar-progress-to)
+  );
+  transition: width 1s linear;
+}
+#label {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--eyenurse-bar-text-idle);
+  cursor: default;
+}

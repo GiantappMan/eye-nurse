@@ -12,6 +12,7 @@
 //! 如写盘失败）必须恰好回包一次；命令侧 `recv_timeout(2s)` 兜底，超时映射为
 //! Err 返回页面，不挂线程。
 
+use crate::skin_proto::SkinSurfaceDto;
 use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
 use eyenurse_core::config::{LockScreenJson, SettingJson};
@@ -77,6 +78,8 @@ pub enum CoreMsg {
     GetSkins(Reply<SkinsDto>),
     /// 当前生效配色（含逐键回退结果）
     GetSkin(Reply<SkinColors>),
+    /// ESP-1 表面运行时（配色 + bar/lock 皮肤页 URL + chrome 摆放 + bar 模式）
+    GetSkinSurface(Reply<SkinSurfaceDto>),
     // —— v3.2 仿锁屏 / 护眼统计 ——
     /// 键盘钩子：Win+L 被拦截 → 激活仿锁屏（锁屏设置开启才生效）
     LockActivate,
