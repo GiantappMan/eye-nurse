@@ -68,3 +68,69 @@ body {
 #unlock:hover {
   opacity: 1;
 }
+
+/* —— v3.2 仿锁屏：中央竖排（倒计时/旋转圈 + 锁屏面板） —— */
+.center-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+/* hidden 属性在 flex 容器内仍可能被布局规则覆盖，兜底强隐 */
+#mask [hidden] {
+  display: none !important;
+}
+#lock-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#locked-title {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 2px;
+  opacity: 0.65;
+}
+#clock {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 64px;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#lock-date {
+  font-size: 14px;
+  opacity: 0.65;
+}
+#pwd-row {
+  margin-top: 12px;
+}
+#pwd {
+  width: 220px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  text-align: center;
+  letter-spacing: 2px;
+  color: var(--eyenurse-mask-fg);
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+#pwd:focus {
+  border-color: rgb(255 255 255 / 0.7);
+  background: rgb(255 255 255 / 0.12);
+}
+#pwd::placeholder {
+  letter-spacing: 0;
+  font-size: 13px;
+  color: rgb(238 238 242 / 0.45);
+}
+#lock-err {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #ff8b8b;
+}

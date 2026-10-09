@@ -1,9 +1,11 @@
-// 休息遮罩页（无框架，纯 TS；tauri 架构文档 §5.1；实现者 D 所有）。
+// 休息/锁屏遮罩页（无框架，纯 TS；tauri 架构文档 §5.1 + v3.2 仿锁屏；实现者 D 所有）。
 // - 背景 #141418、文字 #EEEEF2（C2，v2 LockScreenWindow.xaml 值，真源 theme.json）；
-// - `listen("eyenurse://rest-tick")` 更新倒计时；mm:ss 渲染公式复刻 B2/Q13：
-//   mm = Math.floor(totalSeconds / 60) % 60（分钟分量，>59min 回绕），ss = totalSeconds % 60；
-// - 右下角解锁按钮（v2 LockUnLocked 图标 25×25，Margin 0,0,12,12）→ invoke("rest_done")
-//   （v2 CloseCommand，C5/C11）；
+// - `listen("eyenurse://rest-tick")` 驱动三态：resting（倒计时）/ locked（时钟+密码）/
+//   叠加；mm:ss 渲染公式复刻 B2/Q13：mm = Math.floor(totalSeconds / 60) % 60
+//   （分钟分量，>59min 回绕），ss = totalSeconds % 60；
+// - 右下角解锁按钮（v2 LockUnLocked 图标 25×25，Margin 0,0,12,12）：
+//   未锁 → invoke("rest_done")（v2 CloseCommand，C5/C11）；
+//   已锁 → invoke("lock_try_unlock", { password })，false = 密码错误（v3.2）；
 // - 文案走 i18n：`get_texts` 整包获取 + `listen("eyenurse://i18n-changed")` 重取；
 //   缺键回退 key 原文（与 I18n::get 第三级回退一致）。
 import { invoke } from "@tauri-apps/api/core";
@@ -13,18 +15,37 @@ import "./mask.css";
 
 interface RestTickPayload {
   remaining_ms: number;
+  resting: boolean;
+  locked: boolean;
+  has_password: boolean;
 }
 
 type TextMap = Record<string, string>;
 
+const spinnerStack = document.querySelector(".spinner-stack") as HTMLDivElement;
 const countdownEl = document.getElementById("countdown") as HTMLDivElement;
 const unlockEl = document.getElementById("unlock") as HTMLButtonElement;
+const lockPanel = document.getElementById("lock-panel") as HTMLDivElement;
+const lockedTitle = document.getElementById("locked-title") as HTMLParagraphElement;
+const clockEl = document.getElementById("clock") as HTMLDivElement;
+const lockDateEl = document.getElementById("lock-date") as HTMLDivElement;
+const pwdRow = document.getElementById("pwd-row") as HTMLDivElement;
+const pwdEl = document.getElementById("pwd") as HTMLInputElement;
+const lockErr = document.getElementById("lock-err") as HTMLParagraphElement;
 
-/** 文案应用：解锁按钮的悬停提示与读屏标签（v2 图标按钮无可见文字，i18n 走 aria/title） */
-function applyTexts(texts: TextMap): void {
-  const label = texts["unlock"] ?? "unlock";
+/** 后端显示态（rest-tick 每拍同步；未收到首拍前三态全关，面板隐藏） */
+let resting = false;
+let locked = false;
+let hasPassword = false;
+
+/** 文案应用：解锁按钮/密码框/错误提示（v2 图标按钮无可见文字，i18n 走 aria/title） */
+function applyTexts(map: TextMap): void {
+  const label = map["unlock"] ?? "unlock";
   unlockEl.title = label;
   unlockEl.setAttribute("aria-label", label);
+  lockedTitle.textContent = map["lockedTitle"] ?? "lockedTitle";
+  pwdEl.placeholder = map["lockUnlockPlaceholder"] ?? "lockUnlockPlaceholder";
+  lockErr.textContent = map["lockWrongPassword"] ?? "lockWrongPassword";
 }
 
 function formatMmss(totalSeconds: number): string {
@@ -35,15 +56,55 @@ function formatMmss(totalSeconds: number): string {
 }
 
 function renderTick(payload: RestTickPayload): void {
+  resting = payload.resting;
+  locked = payload.locked;
+  hasPassword = payload.has_password;
   countdownEl.textContent = formatMmss(Math.floor(payload.remaining_ms / 1000));
+  spinnerStack.style.display = resting ? "" : "none";
+  lockPanel.hidden = !locked;
+  pwdRow.hidden = !hasPassword;
+  if (!locked) lockErr.hidden = true;
+  if (locked && hasPassword) pwdEl.focus();
 }
 
-// 解锁（遮罩唯一关闭入口；窗口 close 被 Rust 侧 prevent_close 拦截，§5.3）
-unlockEl.addEventListener("click", () => {
-  invoke("rest_done").catch(() => {});
+/** 锁屏时钟：本地时间 HH:MM + 日期（1s 刷新；仅 locked 可见，空转成本忽略） */
+function renderClock(): void {
+  const now = new Date();
+  clockEl.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
+  lockDateEl.textContent = now.toLocaleDateString();
+}
+setInterval(renderClock, 1000);
+
+/** 解锁入口：未锁 = 结束休息；已锁 = 交密码（CoreLoop 验证，false = 密码错误） */
+function requestUnlock(): void {
+  if (!locked) {
+    invoke("rest_done").catch(() => {});
+    return;
+  }
+  invoke<boolean>("lock_try_unlock", { password: pwdEl.value })
+    .then((ok) => {
+      if (ok) {
+        lockErr.hidden = true;
+        pwdEl.value = "";
+      } else {
+        lockErr.hidden = false; // 密码错误
+        pwdEl.select();
+      }
+    })
+    .catch(() => {
+      /* CoreLoop 未应答：下一拍 tick 重同步状态 */
+    });
+}
+
+unlockEl.addEventListener("click", requestUnlock);
+pwdEl.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") requestUnlock();
 });
 
 applyThemeVars();
+renderClock();
 
 void (async () => {
   await listen<RestTickPayload>("eyenurse://rest-tick", (ev) => renderTick(ev.payload));

@@ -3,9 +3,10 @@
 // 提交时机（清单 I3）：文本框失焦/回车、开关点击、预设/恢复点击 → 父组件 300ms
 // 防抖保存；parse + clamp 在命令侧（清单 I4），页面只做展示与占位校验。
 import { computed, ref } from "vue";
-import type { SettingsDto } from "../types";
+import type { LockSettingsDto, SettingsDto } from "../types";
 import { t } from "../i18n";
 import SwitchToggle from "./SwitchToggle.vue";
+import StatsCard from "./StatsCard.vue";
 
 const props = defineProps<{
   /** 父组件持有的响应式草稿（直接绑定字段，保存回包整体合并） */
@@ -14,10 +15,14 @@ const props = defineProps<{
   saving: boolean;
   /** 页眉实时状态（eyenurse://tick；首拍到达前为 null → 按满进度展示） */
   tick: { remaining_ms: number; paused: boolean; resting: boolean } | null;
+  /** 锁屏草稿（v3.2；独立保存管线，回包整体合并） */
+  lockSettings: LockSettingsDto;
 }>();
 const emit = defineEmits<{
   /** 任一控件提交 → 父组件排 300ms 防抖保存 */
   (e: "commit"): void;
+  /** 锁屏设置任一控件提交 → 父组件排 300ms 防抖保存（v3.2） */
+  (e: "lock-commit"): void;
   /** 恢复默认（F11），两步确认后触发 */
   (e: "reset"): void;
   /** 立刻休息（Hero 按钮） */
@@ -213,6 +218,69 @@ function onReset(): void {
       </div>
     </section>
 
+    <!-- 锁屏（v3.2 仿锁屏） -->
+    <section class="card">
+      <h3 class="card-title">{{ t("lockTitle") }}</h3>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("lockEnable") }}</p>
+          <p class="row-hint">{{ t("lockEnableHint") }}</p>
+        </div>
+        <SwitchToggle v-model="lockSettings.Enabled" @update:model-value="$emit('lock-commit')" />
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("lockWinL") }}</p>
+          <p class="row-hint">{{ t("lockWinLHint") }}</p>
+        </div>
+        <SwitchToggle
+          v-model="lockSettings.InterceptWinL"
+          @update:model-value="$emit('lock-commit')"
+        />
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("lockCapture") }}</p>
+          <p class="row-hint">{{ t("lockCaptureHint") }}</p>
+        </div>
+        <SwitchToggle
+          v-model="lockSettings.CaptureThrough"
+          @update:model-value="$emit('lock-commit')"
+        />
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("lockAutoRest") }}</p>
+          <p class="row-hint">{{ t("lockAutoRestHint") }}</p>
+        </div>
+        <SwitchToggle v-model="lockSettings.AutoRest" @update:model-value="$emit('lock-commit')" />
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("lockPassword") }}</p>
+          <p class="row-hint">{{ t("lockPasswordHint") }}</p>
+        </div>
+        <input
+          v-model="lockSettings.Password"
+          type="password"
+          class="hms pwd"
+          :placeholder="t('lockPasswordHint')"
+          autocomplete="new-password"
+          spellcheck="false"
+          @blur="$emit('lock-commit')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+      </div>
+    </section>
+
+    <!-- 护眼统计（v3.2：今日摘要 + 近 7 天报表） -->
+    <StatsCard />
+
     <!-- 底部：恢复默认（两步确认） + 版权 -->
     <footer class="page-foot">
       <button type="button" class="ghost" :class="{ danger: confirmReset }" @click="onReset">
@@ -333,6 +401,11 @@ function onReset(): void {
   font-size: 13px;
   font-weight: 500;
 }
+.row-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
 .row-control {
   display: flex;
   align-items: center;
@@ -389,6 +462,11 @@ function onReset(): void {
 .hms.invalid {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px var(--danger-soft);
+}
+/* 锁屏密码框（v3.2）：同 hms 尺寸语言，加宽放下提示 */
+.hms.pwd {
+  width: 180px;
+  text-align: left;
 }
 
 /* —— 底部 —— */

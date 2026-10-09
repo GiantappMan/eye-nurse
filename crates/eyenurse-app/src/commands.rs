@@ -13,7 +13,7 @@
 use crate::events::CoreMsg;
 use crossbeam_channel::Sender;
 use eyenurse_core::autostart::DesktopStartup;
-use eyenurse_core::config::SettingJson;
+use eyenurse_core::config::{LockScreenJson, SettingJson};
 use eyenurse_core::HmsSpan;
 use std::time::Duration;
 use tauri::State;
@@ -68,6 +68,44 @@ impl SettingsDto {
             ResetTimeout: parse_or_default(&self.ResetTimeout, HmsSpan::from_hms(0, 5, 0)),
             RunWhenStarts: self.RunWhenStarts,
             ResetWhenSessionUnlock: self.ResetWhenSessionUnlock,
+        }
+    }
+}
+
+/// 锁屏设置 DTO（字段名与 LockScreenJson 一致，零映射；v3.2 仿锁屏）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[allow(non_snake_case)]
+pub struct LockSettingsDto {
+    /// 仿锁屏总开关
+    pub Enabled: bool,
+    /// Win+L 拦截激活（配套注册表 DisableLockWorkstation）
+    pub InterceptWinL: bool,
+    /// 截图穿透（WDA_EXCLUDEFROMCAPTURE）
+    pub CaptureThrough: bool,
+    /// 锁屏激活即进入休息
+    pub AutoRest: bool,
+    /// 解锁密码（空 = 无需密码）
+    pub Password: String,
+}
+
+impl LockSettingsDto {
+    pub fn of(s: &LockScreenJson) -> Self {
+        Self {
+            Enabled: s.Enabled,
+            InterceptWinL: s.InterceptWinL,
+            CaptureThrough: s.CaptureThrough,
+            AutoRest: s.AutoRest,
+            Password: s.Password.clone(),
+        }
+    }
+
+    pub fn into_core(self) -> LockScreenJson {
+        LockScreenJson {
+            Enabled: self.Enabled,
+            InterceptWinL: self.InterceptWinL,
+            CaptureThrough: self.CaptureThrough,
+            AutoRest: self.AutoRest,
+            Password: self.Password,
         }
     }
 }
@@ -175,4 +213,41 @@ pub async fn rest_done(state: State<'_, CoreHandle>) -> Result<(), String> {
         .tx
         .send(CoreMsg::RestDone)
         .map_err(|_| "CoreLoop 已退出".to_string())
+}
+
+// —— v3.2 仿锁屏 / 护眼统计 ——
+
+/// 当前锁屏设置（CoreLoop 内存态）
+#[tauri::command]
+pub async fn get_lock_settings(state: State<'_, CoreHandle>) -> Result<LockSettingsDto, String> {
+    let lock: LockScreenJson = ask_core(&state, CoreMsg::GetLockSettings)?;
+    Ok(LockSettingsDto::of(&lock))
+}
+
+/// 锁屏设置保存：写 LockScreen.json + 钩子开关 + 注册表策略 → 回包刷新
+#[tauri::command]
+pub async fn set_lock_settings(
+    state: State<'_, CoreHandle>,
+    dto: LockSettingsDto,
+) -> Result<LockSettingsDto, String> {
+    let applied: LockScreenJson =
+        ask_core(&state, |tx| CoreMsg::SaveLockSettings(dto.into_core(), tx))?;
+    Ok(LockSettingsDto::of(&applied))
+}
+
+/// 锁屏遮罩密码解锁：匹配 true 并撤锁；不匹配 false（页面提示密码错误）
+#[tauri::command]
+pub async fn lock_try_unlock(
+    state: State<'_, CoreHandle>,
+    password: String,
+) -> Result<bool, String> {
+    ask_core(&state, |tx| CoreMsg::LockTryUnlock(password, tx))
+}
+
+/// 近 30 天护眼统计（含今天，旧→新；缺失天补零）
+#[tauri::command]
+pub async fn get_stats(
+    state: State<'_, CoreHandle>,
+) -> Result<Vec<eyenurse_core::stats::StatsDay>, String> {
+    ask_core(&state, |tx| CoreMsg::GetStats(30, tx))
 }

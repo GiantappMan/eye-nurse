@@ -6,12 +6,27 @@
     <title>LockScreenWindow</title>
   </head>
   <body>
-    <!-- 休息遮罩页面（无框架，纯 TS：深底倒计时 + 解锁按钮；§5.1）。
-         解锁按钮的提示文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。 -->
+    <!-- 休息/锁屏遮罩页面（无框架，纯 TS：§5.1 + v3.2 仿锁屏）。
+         三态由 rest-tick 载荷驱动（resting/locked/has_password）：
+         - 纯休息：旋转圈 + 倒计时 + 右下解锁；
+         - 纯锁屏：时钟 + （有密码时）密码框 + 解锁；
+         - 锁屏+休息叠加：倒计时与锁屏面板同屏。
+         文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。 -->
     <div id="mask">
-      <div class="spinner-stack">
-        <div class="spinner"></div>
-        <div id="countdown">00:00</div>
+      <div class="center-stack">
+        <div class="spinner-stack">
+          <div class="spinner"></div>
+          <div id="countdown">00:00</div>
+        </div>
+        <div id="lock-panel" hidden>
+          <p id="locked-title"></p>
+          <div id="clock">--:--</div>
+          <div id="lock-date"></div>
+          <div id="pwd-row" hidden>
+            <input id="pwd" type="password" autocomplete="off" spellcheck="false" />
+          </div>
+          <p id="lock-err" hidden></p>
+        </div>
       </div>
       <button id="unlock">
         <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#EEEEF2"

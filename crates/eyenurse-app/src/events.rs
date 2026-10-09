@@ -14,7 +14,8 @@
 
 use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
-use eyenurse_core::config::SettingJson;
+use eyenurse_core::config::{LockScreenJson, SettingJson};
+use eyenurse_core::stats::StatsDay;
 use std::collections::BTreeMap;
 
 /// Win32 线程 → CoreLoop（复用自 egui 版，零改动）
@@ -64,4 +65,15 @@ pub enum CoreMsg {
     GetLanguages(Reply<Vec<String>>),
     /// 当前语言名
     GetCurrentLanguage(Reply<String>),
+    // —— v3.2 仿锁屏 / 护眼统计 ——
+    /// 键盘钩子：Win+L 被拦截 → 激活仿锁屏（锁屏设置开启才生效）
+    LockActivate,
+    /// 锁屏遮罩解锁：密码不匹配回 false（CoreLoop 侧验证）
+    LockTryUnlock(String, Reply<bool>),
+    /// 锁屏设置保存（写 LockScreen.json + 钩子开关 + 注册表策略）→ 回应用后的值
+    SaveLockSettings(LockScreenJson, Reply<LockScreenJson>),
+    /// 当前锁屏设置（CoreLoop 内存态，同 GetSettings 纪律）
+    GetLockSettings(Reply<LockScreenJson>),
+    /// 近 n 天护眼统计（含今天，旧→新，缺失天补零）
+    GetStats(u32, Reply<Vec<StatsDay>>),
 }

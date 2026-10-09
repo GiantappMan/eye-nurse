@@ -4,6 +4,7 @@
 //! 里没有任何运行时样式切换——置顶切换只作用于原生悬浮条——不存在 winit
 //! 「窗口标志回写抹掉补丁」的触发器；创建时打一次即可）。
 
+pub mod hotkey;
 pub mod monitors;
 pub mod session;
 pub mod single_instance;
@@ -30,3 +31,22 @@ pub fn ensure_toolwindow(hwnd: isize) {
 
 #[cfg(not(target_os = "windows"))]
 pub fn ensure_toolwindow(_hwnd: isize) {}
+
+/// 截图穿透（v3.2 仿锁屏）：WDA_EXCLUDEFROMCAPTURE 让窗口不进入截图/录屏合成，
+/// 截屏 API 看到的是遮罩**后面**的真实桌面（AI 工具可继续工作）。Win10 2004+
+/// 支持，更老系统调用失败静默忽略（退化为普通遮罩）。on=false 恢复 WDA_NONE。
+#[cfg(target_os = "windows")]
+pub fn ensure_capture_through(hwnd: isize, on: bool) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
+    };
+    let h = HWND(hwnd as _);
+    // SAFETY：仅改本进程窗口的显示亲和性
+    unsafe {
+        let _ = SetWindowDisplayAffinity(h, if on { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE });
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn ensure_capture_through(_hwnd: isize, _on: bool) {}

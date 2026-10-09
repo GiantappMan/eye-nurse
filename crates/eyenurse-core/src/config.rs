@@ -131,6 +131,29 @@ impl ConfigFile for LanguagesJson {
     const FILE_NAME: &'static str = "Languages.json";
 }
 
+/// LockScreen.json —— v3.2 仿锁屏新增（无 v2 对应文件；默认值全为零值，
+/// 可直接 derive Default）。密码明文存本地：软锁屏定位（防顺便瞄屏），
+/// 不是安全边界——真安全靠 Win+L 之外的系统锁。
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct LockScreenJson {
+    /// 仿锁屏总开关
+    pub Enabled: bool,
+    /// 拦截 Win+L 激活仿锁屏（替代系统锁屏；配套 HKCU DisableLockWorkstation）
+    pub InterceptWinL: bool,
+    /// 截图穿透：锁屏遮罩不进入截图/录屏（WDA_EXCLUDEFROMCAPTURE），
+    /// AI 等截屏工具继续看到真实桌面
+    pub CaptureThrough: bool,
+    /// 锁屏激活即进入休息（复用休息遮罩倒计时，计入休息统计）
+    pub AutoRest: bool,
+    /// 解锁密码（空 = 无需密码）
+    pub Password: String,
+}
+
+impl ConfigFile for LockScreenJson {
+    const FILE_NAME: &'static str = "LockScreen.json";
+}
+
 /// f64 的 System.Text.Json 字节兼容包装（整数值输出 "100" 而非 "100.0"）
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct StjF64(pub f64);
@@ -316,6 +339,31 @@ mod tests {
         assert!(s.RunWhenStarts); // 默认
         assert!(!s.ResetWhenSessionUnlock); // 默认
         assert_eq!(s.ResetTimeout, HmsSpan::from_hms(0, 5, 0)); // 默认
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn lock_screen_json_roundtrip() {
+        // v3.2 仿锁屏：缺文件 → 全关默认；保存 → 读回一致（无 v2 字节兼容负担）
+        let dir = temp_dir("lock");
+        let store = ConfigStore::with_dir(dir.clone());
+        assert_eq!(store.load::<LockScreenJson>(), LockScreenJson::default());
+
+        let cfg = LockScreenJson {
+            Enabled: true,
+            InterceptWinL: true,
+            CaptureThrough: true,
+            AutoRest: true,
+            Password: "1234".into(),
+        };
+        store.save(&cfg).unwrap();
+        assert_eq!(store.load::<LockScreenJson>(), cfg);
+        // 缺字段 → 该字段默认值（serde(default) 容器语义）
+        std::fs::write(dir.join(LockScreenJson::FILE_NAME), "{\"Enabled\":true}").unwrap();
+        let loaded = store.load::<LockScreenJson>();
+        assert!(loaded.Enabled);
+        assert!(!loaded.InterceptWinL);
+        assert_eq!(loaded.Password, "");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -24,8 +24,9 @@ mod win;
 
 use crate::core::{CoreBundle, CoreLoop};
 use events::CoreMsg;
-use eyenurse_core::config::{ConfigStore, LanguagesJson, SettingJson, UiJson};
+use eyenurse_core::config::{ConfigStore, LanguagesJson, LockScreenJson, SettingJson, UiJson};
 use eyenurse_core::i18n::I18n;
+use eyenurse_core::stats::StatsStore;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
@@ -55,6 +56,8 @@ fn main() {
     let setting: SettingJson = cfg.load();
     let ui_cfg: UiJson = cfg.load();
     let lang: LanguagesJson = cfg.load();
+    let lock_cfg: LockScreenJson = cfg.load();
+    let stats = StatsStore::new(cfg.dir());
     let i18n = load_i18n(&cfg, &lang);
 
     // 2.5) 自启值名静默迁移（清单 Q6/G2）："Eye Nurse 2" → "Eye Nurse 3"，无 UI 提示；
@@ -66,6 +69,9 @@ fn main() {
     if !smoke {
         startup.migrate_from("Eye Nurse 2");
         startup.set_enabled(setting.RunWhenStarts);
+        // 2.7) v3.2 锁屏接管策略：钩子开关 + DisableLockWorkstation（按当前设置
+        //      重设，顺带清理上次异常退出可能留下的注册表残留）
+        core::apply_lock_policy(&lock_cfg);
     }
 
     // 3) WTS 会话锁线程（失败降级：仅丢失会话锁暂停/重置能力）
@@ -91,6 +97,12 @@ fn main() {
             .expect("转发线程创建失败");
     }
 
+    // 3.6) v3.2 Win+L 低级键盘钩子线程（失败降级：仅失去 Win+L 拦截；开关按
+    //      锁屏设置热切换，smoke 不需要）
+    if !smoke {
+        win::hotkey::spawn(core_tx.clone()).ok();
+    }
+
     // 4) tauri 应用（settings 窗由 tauri.conf.json 静态声明，启动即建、visible:false）
     let result = tauri::Builder::default()
         .manage(commands::CoreHandle {
@@ -107,6 +119,10 @@ fn main() {
             commands::get_texts,
             commands::get_languages,
             commands::rest_done,
+            commands::get_lock_settings,
+            commands::set_lock_settings,
+            commands::lock_try_unlock,
+            commands::get_stats,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -163,6 +179,8 @@ fn main() {
                 lang,
                 i18n,
                 timer,
+                lock: lock_cfg,
+                stats,
             };
             // 4.5) --smoke：冒烟线程（三类窗口创建路径验证 → stdout + 退出码，§11）。
             //      smoke::run 只 spawn 线程立即返回，必须放在 CoreLoop::new 之前——
@@ -208,11 +226,13 @@ fn main() {
         })
         .run(tauri::generate_context!());
 
-    // 5) run 返回后：request_stop → WTS 注销 → 线程自然退出 → join（§7.3）
+    // 5) run 返回后：request_stop → WTS 注销 → 线程自然退出 → join（§7.3）；
+    //    v3.2：键盘钩子线程同路径收尾（Unhook 在其线程内完成）
     if let Some(session) = session {
         session.request_stop();
         session.join();
     }
+    win::hotkey::request_stop();
 
     if let Err(e) = result {
         eprintln!("tauri 运行失败: {e}");

@@ -12,7 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, reactive, ref, toRaw } from "vue";
 import { currentLanguage, languages, loadLanguageList, loadTexts, t } from "./i18n";
-import { emptySettings, type SettingsDto } from "./types";
+import { emptyLockSettings, emptySettings, type LockSettingsDto, type SettingsDto } from "./types";
 import SettingsView from "./components/SettingsView.vue";
 
 /** 防抖窗口（v2 Settings.vue：lodash/debounce 300ms，清单 I3） */
@@ -22,6 +22,10 @@ const SAVE_DEBOUNCE_MS = 300;
 const settings = reactive<SettingsDto>(emptySettings());
 const saving = ref(false);
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 锁屏草稿（v3.2）：独立文件 LockScreen.json，保存管线与主设置同款 300ms 防抖 */
+const lockSettings = reactive<LockSettingsDto>(emptyLockSettings());
+let lockSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 保存成功的短暂提示（顶栏 ✓，1.6s 后淡出） */
 const justSaved = ref(false);
@@ -50,6 +54,34 @@ function discardScheduledSave(): void {
   if (saveTimer !== null) {
     clearTimeout(saveTimer);
     saveTimer = null;
+  }
+}
+
+/** 锁屏保存管线（v3.2）：与主设置同款防抖；复用 saving 顶栏提示 */
+function scheduleLockSave(): void {
+  if (lockSaveTimer !== null) clearTimeout(lockSaveTimer);
+  lockSaveTimer = setTimeout(() => {
+    lockSaveTimer = null;
+    void flushLockSave();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function flushLockSave(): Promise<void> {
+  if (lockSaveTimer !== null) {
+    clearTimeout(lockSaveTimer);
+    lockSaveTimer = null;
+  }
+  saving.value = true;
+  try {
+    const applied = await invoke<LockSettingsDto>("set_lock_settings", {
+      dto: { ...toRaw(lockSettings) },
+    });
+    Object.assign(lockSettings, applied);
+    flashSaved();
+  } catch (e) {
+    console.error("set_lock_settings 失败", e);
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -126,6 +158,16 @@ async function refreshFromBackend(): Promise<void> {
   }
 }
 
+/** 锁屏设置加载（v3.2）：启动依赖与 settings-shown 重同步共用 */
+async function refreshLockSettings(): Promise<void> {
+  if (saving.value) return;
+  try {
+    Object.assign(lockSettings, await invoke<LockSettingsDto>("get_lock_settings"));
+  } catch (e) {
+    console.error("get_lock_settings 失败", e);
+  }
+}
+
 /** Q10/F10：注册表实测勾选态（窗口被托盘重新唤起时重同步；不碰文本草稿，§8.2） */
 async function syncAutostart(): Promise<void> {
   try {
@@ -138,11 +180,12 @@ async function syncAutostart(): Promise<void> {
 const unlisteners: Array<() => void> = [];
 
 onMounted(async () => {
-  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）
+  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）+ 锁屏设置
   await Promise.all([
     loadTexts().catch((e) => console.error("get_texts 失败", e)),
     loadLanguageList().catch((e) => console.error("语言清单加载失败", e)),
     refreshFromBackend(),
+    refreshLockSettings(),
   ]);
   unlisteners.push(
     await listen("eyenurse://i18n-changed", () => {
@@ -153,10 +196,12 @@ onMounted(async () => {
     }),
     await listen("eyenurse://settings-shown", () => {
       void syncAutostart();
+      void refreshLockSettings();
     }),
     await listen("eyenurse://settings-closing", () => {
       // §8.1：未到点的防抖修改立即 flush；无编辑不发（避免无谓重启计时器）
       if (saveTimer !== null) void flushSave();
+      if (lockSaveTimer !== null) void flushLockSave();
     }),
     await listen<TickPayload>("eyenurse://tick", (e) => {
       tick.value = e.payload;
@@ -203,9 +248,11 @@ onUnmounted(() => {
         :settings="settings"
         :saving="saving"
         :tick="tick"
+        :lock-settings="lockSettings"
         @commit="scheduleSave"
         @reset="resetDefaults"
         @rest-now="restNow"
+        @lock-commit="scheduleLockSave"
       />
     </main>
   </div>

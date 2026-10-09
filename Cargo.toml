@@ -24,6 +24,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Registry",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",       # CreateMutexW 单实例（参数类型在 Win32_Security）
+    "Win32_System_SystemInformation", # GetLocalTime（护眼统计本地日期键，v3.2 锁屏）
     "Win32_Security",               # SECURITY_ATTRIBUTES：CreateMutexW 签名依赖
     "Win32_UI_Shell",               # SHGetKnownFolderPath / ShellExecuteW
     "Win32_System_Com",             # CoTaskMemFree：释放 SHGetKnownFolderPath 返回的 PWSTR

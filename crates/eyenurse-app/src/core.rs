@@ -22,8 +22,9 @@ use crate::ui::bar::{self, BarSnapshot};
 use crate::win::monitors::MonitorRects;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use eyenurse_core::autostart::DesktopStartup;
-use eyenurse_core::config::{ConfigStore, LanguagesJson, SettingJson, UiJson};
+use eyenurse_core::config::{ConfigStore, LanguagesJson, LockScreenJson, SettingJson, UiJson};
 use eyenurse_core::i18n::I18n;
+use eyenurse_core::stats::{local_today, StatsStore};
 use eyenurse_core::timer::{GlobalTimer, TimerEvent};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -32,10 +33,15 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 /// 托盘/窗口图标（单一来源：仓库根 assets/logo.png；随 AppModel 迁入，原 app.rs:16 不变）
 pub const LOGO_PNG: &[u8] = include_bytes!("../../../assets/logo.png");
 
-/// 休息倒计时事件（§4.2）：CoreLoop → 每个 mask 标签，1Hz，仅休息期间发
+/// 休息/锁屏遮罩事件（§4.2 + v3.2 锁屏）：CoreLoop → 每个 mask 标签，1Hz，遮罩
+/// 存续期间发。resting/locked/has_password 驱动页面在三态间切换（纯休息 / 纯锁屏 /
+/// 锁屏+休息叠加）；页面未及加载也不丢账——下一拍 tick 继续发。
 #[derive(serde::Serialize, Clone, Copy, Debug)]
 pub struct RestTickPayload {
     pub remaining_ms: u64,
+    pub resting: bool,
+    pub locked: bool,
+    pub has_password: bool,
 }
 
 /// 设置窗页眉的实时状态事件（§4.2 增补）：主倒计时 + 暂停/休息态，随 tick 发
@@ -47,7 +53,7 @@ pub struct SettingsTickPayload {
     pub resting: bool,
 }
 
-/// core 聚合（egui 版 CoreBundle 原样搬移；字段对 C/D 不透明）
+/// core 聚合（egui 版 CoreBundle 原样搬移；v3.2 增锁屏配置与统计；字段对 C/D 不透明）
 pub struct CoreBundle {
     pub cfg: ConfigStore,
     pub setting: SettingJson,
@@ -55,6 +61,10 @@ pub struct CoreBundle {
     pub lang: LanguagesJson,
     pub i18n: I18n,
     pub timer: GlobalTimer,
+    /// 仿锁屏设置（LockScreen.json）
+    pub lock: LockScreenJson,
+    /// 护眼时间统计（Stats.json；CoreLoop 独占写者）
+    pub stats: StatsStore,
 }
 
 /// §5.2 单个遮罩窗的**生产创建路径本体**（CoreLoop::create_mask_window 与 smoke
@@ -118,6 +128,14 @@ pub(crate) fn build_mask_window(
     Ok(win)
 }
 
+/// v3.2 锁屏接管策略热应用：钩子开关 + HKCU DisableLockWorkstation。
+/// Enabled && InterceptWinL 才接管；关闭即恢复系统默认（启动路径 main 亦调用）。
+pub(crate) fn apply_lock_policy(lock: &LockScreenJson) {
+    let on = lock.Enabled && lock.InterceptWinL;
+    crate::win::hotkey::set_enabled(on);
+    let _ = crate::win::hotkey::set_disable_lock_workstation(on);
+}
+
 /// CoreLoop 线程（`run` 消费 Self；由 main 的 setup 钩子 spawn）
 pub struct CoreLoop {
     app: AppHandle<Wry>,
@@ -139,6 +157,13 @@ pub struct CoreLoop {
     locked_at: Option<Instant>,
     /// 当前打开的遮罩窗口标签（emit_to 与 destroy 都要用，§5.2）
     mask_labels: Vec<String>,
+    // —— v3.2 仿锁屏 / 统计 ——
+    /// 仿锁屏激活中（与休息态正交：AutoRest 路径两者同真）
+    is_locked: bool,
+    /// 统计有未落盘变更（60s 周期 + 关键事件即时落盘）
+    stats_dirty: bool,
+    /// 上次统计落盘时刻
+    last_stats_save: Instant,
 }
 
 impl CoreLoop {
@@ -167,6 +192,9 @@ impl CoreLoop {
             paused_since: None,
             locked_at: None,
             mask_labels: Vec::new(),
+            is_locked: false,
+            stats_dirty: false,
+            last_stats_save: Instant::now(),
         }
     }
 
@@ -187,8 +215,9 @@ impl CoreLoop {
                 self.tick(now);
             }
         }
-        // 退出兜底：保存 UI.json（位置/置顶）——egui 版 on_exit 的等价路径
+        // 退出兜底：保存 UI.json（位置/置顶）与统计——egui 版 on_exit 的等价路径
         self.save_ui_json();
+        self.core.stats.save();
     }
 
     // —— 消息应用（§2 唯一入口；凡 Reply 变体在所有路径恰好回包一次）——
@@ -221,6 +250,20 @@ impl CoreLoop {
             CoreMsg::GetCurrentLanguage(reply) => {
                 self.reply(reply, self.core.i18n.current().to_string())
             }
+            // —— v3.2 仿锁屏 / 护眼统计 ——
+            CoreMsg::LockActivate => self.lock_now(),
+            CoreMsg::LockTryUnlock(password, reply) => {
+                let ok = self.try_unlock(&password);
+                self.reply(reply, ok);
+            }
+            CoreMsg::SaveLockSettings(s, reply) => {
+                let applied = self.apply_lock_settings(s);
+                self.reply(reply, applied);
+            }
+            CoreMsg::GetLockSettings(reply) => self.reply(reply, self.core.lock.clone()),
+            CoreMsg::GetStats(days, reply) => {
+                self.reply(reply, self.core.stats.data.last_days(days, &local_today()))
+            }
         }
     }
 
@@ -251,8 +294,13 @@ impl CoreLoop {
             TrayAction::Reset => self.reset_timer(),
             TrayAction::RestNow => self.rest_now(),
             TrayAction::Exit => {
-                // §8.1：退出路径的 UI.json 兜底保存由 CoreLoop 在此完成
+                // §8.1：退出路径的 UI.json 兜底保存由 CoreLoop 在此完成；
+                // v3.2：统计落盘 + 撤销锁屏接管（注册表 DisableLockWorkstation
+                // 必须恢复，否则应用退出后用户 Win+L 全废）
                 self.save_ui_json();
+                self.core.stats.save();
+                crate::win::hotkey::set_enabled(false);
+                crate::win::hotkey::set_disable_lock_workstation(false);
                 self.app.exit(0);
             }
         }
@@ -275,6 +323,12 @@ impl CoreLoop {
                 self.pause();
             }
             WinEvent::SessionUnlock => {
+                // v3.2：仿锁屏未撤下时不恢复计时——期间夹杂的真会话解锁
+                // （锁屏界面穿透/快速用户切换）不得绕过仿锁屏的密码门
+                if self.is_locked {
+                    self.locked_at = None; // 真锁屏时长不计，计时仍由仿锁屏冻结
+                    return;
+                }
                 self.resume(); // 同门控：未处于暂停态时返回 false，无事发生
                 if let Some(locked_at) = self.locked_at.take() {
                     if Instant::now().duration_since(locked_at)
@@ -289,9 +343,9 @@ impl CoreLoop {
                 }
             }
             WinEvent::DisplayChanged => {
-                // §5.2：休息中显示器布局变化 → 重枚举 rcWork，按新列表差分——
+                // §5.2 + v3.2：休息或锁屏中显示器布局变化 → 重枚举，按新列表差分——
                 // 新显示器补建遮罩、消失显示器的遮罩关闭；枚举空（切换瞬态）保留旧值
-                if self.is_resting {
+                if self.is_resting || self.is_locked {
                     let monitors = crate::win::monitors::get_monitor_infos();
                     if !monitors.is_empty() {
                         self.sync_mask_windows(monitors);
@@ -303,13 +357,17 @@ impl CoreLoop {
 
     // —— 状态机（AppModel 同名方法逐行移植）——
 
-    /// §6.2 rest_now 状态机（对齐 EyeNurseViewModel.cs:177-202）
+    /// §6.2 rest_now 状态机（对齐 EyeNurseViewModel.cs:177-202；v3.2 增统计入账
+    /// 与仿锁屏复用路径）
     pub fn rest_now(&mut self) {
         if self.is_resting {
             return; // v2 同款互斥（cs:178-180，清单 C9）
         }
         let now = Instant::now();
         self.is_resting = true;
+        // v3.2 统计：会话次数在开始时记（0 秒会话也计）
+        self.core.stats.add_rest_session(&local_today());
+        self.stats_dirty = true;
         if !self.core.timer.stop(now) {
             // v2 Stop() 未启动也会发一次 CheckTrigger（怪癖 1）
             let events = self.core.timer.poll(now);
@@ -319,10 +377,94 @@ impl CoreLoop {
         // 先定 lock_countdown 再建窗：begin_rest 收尾即发出首个 rest-tick（v2
         // 先显示满值再 Task.Delay(1000)，首个递减发生在 +1s）
         self.lock_countdown = self.core.setting.RestDuration.as_duration();
-        let monitors = crate::win::monitors::get_monitor_infos();
-        self.begin_rest(monitors);
+        if self.is_locked {
+            // 仿锁屏（AutoRest 路径 / 锁屏中手动休息）：遮罩已亮着，复用现有窗口，
+            // 不重建（label 冲突），仅切换页面显示态
+            self.push_mask_state();
+        } else {
+            let monitors = crate::win::monitors::get_monitor_infos();
+            self.begin_rest(monitors);
+        }
         // 基准：首个 1s 递减发生在 +1s（v2 先显示满值再 Task.Delay(1000)）
         self.last_rest_tick = Some(now);
+    }
+
+    /// v3.2 激活仿锁屏（Win+L 钩子入口）：替代系统锁屏。AutoRest → 直接走
+    /// rest_now（休息遮罩 + 锁屏 UI 叠加，计入休息统计）；否则 pause 冻结计时
+    /// （对齐真会话锁语义），无遮罩时按显示器补建（纯锁屏 UI）。
+    /// 已锁或功能未开时幂等无事。
+    fn lock_now(&mut self) {
+        if self.is_locked || !self.core.lock.Enabled {
+            return;
+        }
+        self.is_locked = true;
+        self.stats_dirty = true;
+        if self.core.lock.AutoRest {
+            self.rest_now();
+        } else {
+            self.pause(); // 离席：计时冻结（resting 中 pause 被门控，无副作用）
+            if self.mask_labels.is_empty() {
+                let monitors = crate::win::monitors::get_monitor_infos();
+                for mon in &monitors {
+                    self.create_mask_window(mon);
+                }
+            }
+            self.push_mask_state();
+        }
+        // 截图穿透：锁屏期对全部遮罩打 WDA_EXCLUDEFROMCAPTURE（遮罩本体在
+        // create_mask_window 已打一次，这里兜底；tick 每拍重打）
+        if self.core.lock.CaptureThrough {
+            for label in &self.mask_labels {
+                self.apply_capture_to(label);
+            }
+        }
+    }
+
+    /// v3.2 锁屏遮罩解锁：密码匹配（空密码 = 无需密码）→ 撤锁。休息中（AutoRest）
+    /// → 提前收尾休息；纯锁屏 → 关遮罩 + 恢复计时。不匹配回 false（页面提示）。
+    fn try_unlock(&mut self, password: &str) -> bool {
+        if !self.is_locked {
+            return true;
+        }
+        let expected = self.core.lock.Password.trim();
+        if !expected.is_empty() && password.trim() != expected {
+            return false;
+        }
+        self.is_locked = false;
+        self.stats_dirty = true;
+        if self.is_resting {
+            // 人回来了：AutoRest 休息提前结束（is_locked 已撤 → 正常关窗收尾）
+            self.end_rest_and_restart();
+        } else {
+            self.destroy_mask_windows();
+            // 计时器可能处于停止态（异常序列兜底）：重置为满间隔再恢复
+            if !self.core.timer.is_started() {
+                let now = Instant::now();
+                self.core.timer.reset(now);
+                self.core.timer.start(now);
+            }
+            self.resume();
+            self.refresh_bar_snapshot();
+        }
+        true
+    }
+
+    /// 锁屏设置保存：写 LockScreen.json + 热应用钩子/注册表策略（启动路径
+    /// main 亦调用同一策略函数）
+    fn apply_lock_settings(&mut self, s: LockScreenJson) -> LockScreenJson {
+        self.core.lock = s;
+        let _ = self.core.cfg.save(&self.core.lock);
+        apply_lock_policy(&self.core.lock);
+        self.core.lock.clone()
+    }
+
+    /// 给单个遮罩窗口打截图穿透（幂等）
+    fn apply_capture_to(&self, label: &str) {
+        if let Some(w) = self.app.get_webview_window(label) {
+            if let Ok(hwnd) = w.hwnd() {
+                crate::win::ensure_capture_through(hwnd.0 as isize, true);
+            }
+        }
     }
 
     /// timer.pause(now) 成功才置 paused 展示态并 poll（§4.2 怪癖 2、§6.3 门控 D8）
@@ -475,23 +617,28 @@ impl CoreLoop {
         self.push_mask_state();
     }
 
-    /// DisplayChanged 差分（§5.2）：按新显示器列表补建/关闭遮罩。
+    /// DisplayChanged 差分（§5.2 + v3.2 锁屏）：按新显示器列表补建/关闭遮罩。
     /// 骨架实现：关闭全部旧窗再按新列表重建（差分优化留给实现期，行为等价）。
-    /// 休息展示态（bar.resting）全程保持 true：rest-tick 由 is_resting 门控且
-    /// 重建在本同步调用内完成（无 tick 插入窗口），关窗不改状态位。
+    /// 展示态（bar.resting）保持原值：休息展示态全程 true；纯锁屏保持 false——
+    /// rest-tick 由 is_resting 门控且重建在本同步调用内完成，关窗不改状态位。
     fn sync_mask_windows(&mut self, monitors: Vec<MonitorRects>) {
+        let resting = self.is_resting;
         self.destroy_mask_windows();
-        self.bar_lock().resting = true;
+        self.bar_lock().resting = resting;
         for mon in &monitors {
             self.create_mask_window(mon);
         }
         self.push_mask_state();
     }
 
-    /// 单个遮罩窗（§5.2；创建本体在模块级 `build_mask_window`，与 smoke 共用）
+    /// 单个遮罩窗（§5.2；创建本体在模块级 `build_mask_window`，与 smoke 共用）。
+    /// v3.2：锁屏 + 截图穿透时建窗即打 WDA_EXCLUDEFROMCAPTURE（后续 tick 兜底重打）。
     fn create_mask_window(&mut self, mon: &MonitorRects) {
         let label = format!("mask{}", self.mask_labels.len()); // 全字母数字
         if build_mask_window(&self.app, &label, mon).is_ok() {
+            if self.is_locked && self.core.lock.CaptureThrough {
+                self.apply_capture_to(&label);
+            }
             self.mask_labels.push(label);
         }
         // 单屏建窗失败不拖垮其余屏幕
@@ -509,21 +656,33 @@ impl CoreLoop {
         }
     }
 
-    /// 建窗后立即下发当前剩余（v2 先显示满值再开始 1s 递减，等价语义）：
+    /// 建窗后立即下发当前显示态（v2 先显示满值再开始 1s 递减，等价语义）：
     /// 页面若已挂上监听即拿到起始值；未及加载也不丢账——下一拍 tick 继续发。
     fn push_mask_state(&self) {
-        let payload = RestTickPayload {
-            remaining_ms: self.lock_countdown.as_millis() as u64,
-        };
+        let payload = self.mask_payload();
         for label in &self.mask_labels {
             let _ = self.app.emit_to(label, "eyenurse://rest-tick", payload);
         }
     }
 
-    /// end_rest + 计时器收尾（AppModel::end_rest_and_restart 逐行移植）
+    /// 遮罩显示态快照（倒计时 + 三态标志；页面据此切换 休息/锁屏/叠加 布局）
+    fn mask_payload(&self) -> RestTickPayload {
+        RestTickPayload {
+            remaining_ms: self.lock_countdown.as_millis() as u64,
+            resting: self.is_resting,
+            locked: self.is_locked,
+            has_password: !self.core.lock.Password.trim().is_empty(),
+        }
+    }
+
+    /// end_rest + 计时器收尾（AppModel::end_rest_and_restart 逐行移植；
+    /// v3.2 锁屏守卫：仍在仿锁屏中时不关窗、计时转冻结——AutoRest 倒计时走完
+    /// 但人未解锁，遮罩继续亮，解锁后从满间隔恢复）
     fn end_rest_and_restart(&mut self) {
         let now = Instant::now();
-        self.destroy_mask_windows();
+        if !self.is_locked {
+            self.destroy_mask_windows();
+        }
         // 休息展示态随窗关闭同步撤销（rest-tick 由 is_resting 门控，此后不再发）
         self.bar_lock().resting = false;
         self.lock_countdown = Duration::ZERO;
@@ -538,7 +697,15 @@ impl CoreLoop {
         // v2：Reset 后立即刷新（怪癖 3）
         let events = self.core.timer.poll(now);
         self.apply_timer_events(events);
-        self.core.timer.start(now);
+        if self.is_locked {
+            // 仍在锁屏：重启计时后立即冻结（pause 作用于已停止的计时器会失败，
+            // 必须先 start；解锁 resume 后从满间隔恢复），遮罩切换回纯锁屏 UI
+            self.core.timer.start(now);
+            self.pause();
+            self.push_mask_state();
+        } else {
+            self.core.timer.start(now);
+        }
         self.refresh_bar_snapshot();
     }
 
@@ -559,20 +726,22 @@ impl CoreLoop {
                 }
                 self.lock_countdown = self.lock_countdown.saturating_sub(Duration::from_secs(1));
                 // §5.4 兜底自愈：DPI 变化等后续窗口标志回写会抹掉 WS_EX_TOOLWINDOW，
-                // 休息期每拍重打（ensure_ 幂等，稳态只是一次 GetWindowLongPtrW 读）
+                // 休息期每拍重打（ensure_ 幂等，稳态只是一次 GetWindowLongPtrW 读）；
+                // v3.2：截图穿透同拍重打（SetWindowDisplayAffinity 同为幂等）
                 #[cfg(target_os = "windows")]
                 for label in &self.mask_labels {
                     if let Some(w) = self.app.get_webview_window(label) {
                         if let Ok(hwnd) = w.hwnd() {
                             crate::win::ensure_toolwindow(hwnd.0 as isize);
+                            if self.is_locked && self.core.lock.CaptureThrough {
+                                crate::win::ensure_capture_through(hwnd.0 as isize, true);
+                            }
                         }
                     }
                 }
             }
             // §4.2：CoreLoop 每拍 emit_to 每个 mask 标签（仅休息期间发）
-            let payload = RestTickPayload {
-                remaining_ms: self.lock_countdown.as_millis() as u64,
-            };
+            let payload = self.mask_payload();
             for label in &self.mask_labels {
                 let _ = self.app.emit_to(label, "eyenurse://rest-tick", payload);
             }
@@ -588,6 +757,34 @@ impl CoreLoop {
                     }
                 }
             }
+        }
+        // v3.2 纯锁屏（非休息）也要 1Hz 推显示态：页面建窗后异步加载，建窗即发的
+        // push_mask_state 可能赶不上挂监听，倒计时/休息路径有逐拍重发兜底，锁屏
+        // 路径在这里补齐（叠加态由休息分支覆盖）
+        if self.is_locked && !self.is_resting && !self.mask_labels.is_empty() {
+            let payload = self.mask_payload();
+            for label in &self.mask_labels {
+                let _ = self.app.emit_to(label, "eyenurse://rest-tick", payload);
+            }
+        }
+        // v3.2 护眼统计入账（1Hz；休息/锁屏/工作三桶互斥，暂停不记）。
+        // 由 Trigger 早退的拍漏记 1s：该拍已转入休息，下一拍起按休息记，可接受。
+        if self.is_resting {
+            self.core.stats.add_tick(&local_today(), 0, 1, 0);
+            self.stats_dirty = true;
+        } else if self.is_locked {
+            self.core.stats.add_tick(&local_today(), 0, 0, 1);
+            self.stats_dirty = true;
+        } else if !self.is_paused && self.core.timer.is_started() {
+            self.core.stats.add_tick(&local_today(), 1, 0, 0);
+            self.stats_dirty = true;
+        }
+        // 统计周期落盘（60s；关键事件另有即时 save）
+        if self.stats_dirty && now.duration_since(self.last_stats_save) >= Duration::from_secs(60)
+        {
+            self.core.stats.save();
+            self.stats_dirty = false;
+            self.last_stats_save = now;
         }
         // 暂停时长 1Hz 累加（v2 PausedTime）
         if let Some(since) = self.paused_since {

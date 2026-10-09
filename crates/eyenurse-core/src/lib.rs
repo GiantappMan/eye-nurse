@@ -11,11 +11,12 @@
 pub mod autostart;
 pub mod config;
 pub mod i18n;
+pub mod stats;
 pub mod time;
 pub mod timer;
 
 // 公共 re-export：app 侧最常用的类型
-pub use config::{ConfigFile, ConfigStore, LanguagesJson, SettingJson, StjF64, UiJson};
+pub use config::{ConfigFile, ConfigStore, LanguagesJson, LockScreenJson, SettingJson, StjF64, UiJson};
 pub use i18n::I18n;
 pub use time::HmsSpan;
 pub use timer::{GlobalTimer, IntervalTooShort, TimerEvent};
