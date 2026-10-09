@@ -109,13 +109,15 @@ impl Default for SkinConfig {
     }
 }
 
-/// 皮肤清单条目（设置页选择器数据源；colors = 该皮肤逐键回退后的完整配色，
+/// 皮肤清单条目（皮肤中心卡片数据源；colors = 该皮肤逐键回退后的完整配色，
 /// 供页面直接渲染迷你预览）。has_bar/has_lock = 目录包提供的 HTML 表面徽标。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SkinMeta {
     pub id: String,
     pub name: String,
     pub name_en: String,
+    /// 作者（内置 = 巨应君；Tier 1 = manifest.author；Tier 0/自定义 = None）
+    pub author: Option<String>,
     pub colors: SkinColors,
     pub has_bar: bool,
     pub has_lock: bool,
@@ -489,6 +491,7 @@ pub fn builtin(id: &str) -> Option<SkinColors> {
 pub fn builtin_package(id: &str) -> Option<SkinManifest> {
     let mut m = SkinManifest {
         id: id.to_string(),
+        author: Some("巨应君".into()),
         ..SkinManifest::default()
     };
     match id {
@@ -525,7 +528,7 @@ pub fn builtin_package(id: &str) -> Option<SkinManifest> {
     }
 }
 
-/// 内置皮肤清单（设置页固定置顶；表面徽标来自 [`builtin_package`] 声明）
+/// 内置皮肤清单（皮肤中心固定置顶；表面徽标来自 [`builtin_package`] 声明）
 pub fn builtin_metas() -> Vec<SkinMeta> {
     BUILTIN_IDS
         .iter()
@@ -539,6 +542,7 @@ pub fn builtin_metas() -> Vec<SkinMeta> {
                     id: (*id).into(),
                     name: colors.name.clone(),
                     name_en: colors.name_en.clone(),
+                    author: Some("巨应君".into()),
                     colors,
                     has_bar,
                     has_lock,

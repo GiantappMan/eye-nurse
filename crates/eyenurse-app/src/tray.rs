@@ -22,6 +22,8 @@ use tauri::{AppHandle, Wry};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I18nTexts {
     pub app_name: String,
+    /// 皮肤中心窗口标题（ESP-1 独立窗口；main setup + set_language 同步刷新）
+    pub skin_center: String,
     pub about: String,
     pub setting: String,
     pub pause: String,
@@ -54,6 +56,7 @@ impl I18nTexts {
     pub fn from_i18n(i18n: &I18n) -> Self {
         Self {
             app_name: i18n.get("app_name"),
+            skin_center: i18n.get("skin_center"),
             about: i18n.get("about"),
             setting: i18n.get("setting"),
             pause: i18n.get("pause"),

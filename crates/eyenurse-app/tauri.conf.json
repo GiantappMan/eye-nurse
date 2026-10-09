@@ -21,6 +21,18 @@
         "resizable": true,
         "visible": false,
         "center": true
+      },
+      {
+        "label": "skincenter",
+        "url": "skincenter.html",
+        "title": "EyeNurse",
+        "width": 900,
+        "height": 620,
+        "minWidth": 640,
+        "minHeight": 460,
+        "resizable": true,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {

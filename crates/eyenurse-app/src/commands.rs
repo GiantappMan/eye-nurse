@@ -304,6 +304,21 @@ pub async fn open_settings(state: State<'_, CoreHandle>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// 打开皮肤中心（ESP-1 独立常驻窗口；tauri.conf.json 静态声明 + 关闭即藏）。
+/// 只做窗口显形（show + unminimize + focus），无 CoreLoop 状态参与
+#[tauri::command]
+pub async fn open_skin_center(app: tauri::AppHandle<tauri::Wry>) -> Result<(), String> {
+    use tauri::Manager;
+    let w = app
+        .get_webview_window("skincenter")
+        .ok_or_else(|| "skincenter 窗口不存在".to_string())?;
+    if !w.is_visible().map_err(|e| e.to_string())? {
+        w.show().map_err(|e| e.to_string())?;
+    }
+    w.unminimize().map_err(|e| e.to_string())?;
+    w.set_focus().map_err(|e| e.to_string())
+}
+
 /// bar 皮肤壳页的系统级拖动（皮肤 iframe 在 sandbox 内拿不到窗口 API，
 /// 经桥转到壳页后 invoke 本命令；语义 = GDI 条的 HTCAPTION 系统拖动）
 #[tauri::command]

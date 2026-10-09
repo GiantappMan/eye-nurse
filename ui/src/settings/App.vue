@@ -17,8 +17,6 @@ import {
   emptySettings,
   type LockSettingsDto,
   type SettingsDto,
-  type SkinColors,
-  type SkinDefPayload,
   type SkinMeta,
   type SkinsDto,
 } from "./types";
@@ -48,54 +46,35 @@ interface TickPayload {
 }
 const tick = ref<TickPayload | null>(null);
 
-// —— 皮肤（v3.1 换肤 / ESP-1 开放皮肤协议）——
+// —— 皮肤（ESP-1：选择/编辑在独立皮肤中心窗口；本页只显示当前皮肤摘要）——
 const skins = ref<SkinMeta[]>([]);
 const currentSkinId = ref("");
-const effectiveSkin = ref<SkinColors | null>(null);
-/** bar 当前运行模式（get_skin_surface.bar_is_web；bar 形态变化需重启的判定源） */
-const barIsWeb = ref(false);
+/** 当前皮肤展示名（按语言；卡片摘要用） */
+const currentSkinName = ref("");
 
-/** 清单 + 生效配色一次取全（启动与 skin-changed 共用） */
+/** 清单一次取全（启动与 skin-changed 共用；skincenter 窗口自管编辑管线） */
 async function refreshSkins(): Promise<void> {
   try {
     const dto = await invoke<SkinsDto>("get_skins");
     skins.value = dto.skins;
     currentSkinId.value = dto.current;
+    const meta = dto.skins.find((s) => s.id === dto.current);
+    if (meta) {
+      currentSkinName.value =
+        meta.id === "custom"
+          ? t("skinCustom")
+          : currentLanguage.value === "zh"
+            ? meta.name
+            : meta.name_en;
+    }
   } catch (e) {
     console.error("get_skins 失败", e);
   }
-  try {
-    effectiveSkin.value = await invoke<SkinColors>("get_skin");
-  } catch (e) {
-    console.error("get_skin 失败", e);
-  }
-  try {
-    barIsWeb.value = (await invoke("get_skin_surface")).bar_is_web ?? false;
-  } catch (e) {
-    console.error("get_skin_surface 失败", e);
-  }
 }
 
-/** 选择皮肤：切换即生效（bar/遮罩由 CoreLoop 驱动，页面配色随 skin-changed 刷新） */
-async function selectSkin(id: string): Promise<void> {
-  if (id === currentSkinId.value) return;
-  try {
-    await invoke("set_skin", { id });
-    currentSkinId.value = id;
-  } catch (e) {
-    console.error("set_skin 失败", e);
-  }
-}
-
-/** 保存自定义配色并启用（后端逐键回退后回包生效值） */
-async function saveCustomSkin(def: SkinDefPayload): Promise<void> {
-  try {
-    effectiveSkin.value = await invoke<SkinColors>("set_custom_skin", { def });
-    currentSkinId.value = "custom";
-    await refreshSkins(); // 自定义槽首次出现
-  } catch (e) {
-    console.error("set_custom_skin 失败", e);
-  }
+/** 打开皮肤中心窗口（独立常驻，关闭即藏） */
+function openSkinCenter(): void {
+  invoke("open_skin_center").catch((e) => console.error("open_skin_center 失败", e));
 }
 
 // —— 保存管线 ——
@@ -266,13 +245,8 @@ onMounted(async () => {
     await listen<TickPayload>("eyenurse://tick", (e) => {
       tick.value = e.payload;
     }),
-    await listen<SkinColors>("eyenurse://skin-changed", (e) => {
-      // 生效配色直达；清单同步重取（custom 槽首现/磁盘皮肤增删）
-      effectiveSkin.value = e.payload;
-      void refreshSkins();
-    }),
-    await listen("eyenurse://skin-surface-changed", () => {
-      // ESP-1：表面运行时变化（重取 bar_is_web 供重启提示判定）
+    await listen("eyenurse://skin-changed", () => {
+      // 清单/当前名重取（custom 槽首现/磁盘皮肤增删/选中变化）
       void refreshSkins();
     }),
   );
@@ -318,79 +292,16 @@ onUnmounted(() => {
         :saving="saving"
         :tick="tick"
         :lock-settings="lockSettings"
-        :skins="skins"
-        :current-skin-id="currentSkinId"
-        :effective-skin="effectiveSkin"
-        :bar-is-web="barIsWeb"
+        :current-skin-name="currentSkinName"
         @commit="scheduleSave"
         @reset="resetDefaults"
         @rest-now="restNow"
         @lock-commit="scheduleLockSave"
-        @select-skin="selectSkin"
-        @save-custom-skin="saveCustomSkin"
+        @open-skin-center="openSkinCenter"
       />
     </main>
   </div>
 </template>
-
-<style>
-/* —— 设计系统：护眼绿点缀，浅/深随系统 —— */
-:root {
-  --bg: #f3f5f7;
-  --surface: #ffffff;
-  --surface-2: #f7f9fa;
-  --border: #e4e8ec;
-  --text: #1b2129;
-  --text-2: #67727e;
-  --accent: #0e9f6e;
-  --accent-soft: #e2f6ee;
-  --accent-strong: #0b7f58;
-  --danger: #dc4b4b;
-  --danger-soft: #fdeeee;
-  --hero-from: #10715a;
-  --hero-to: #0e9f6e;
-  --hero-text: #f2fbf7;
-  --hero-dim: #cfe9de;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16181c;
-    --surface: #1f2227;
-    --surface-2: #262a30;
-    --border: #30353c;
-    --text: #e7eaee;
-    --text-2: #99a1ab;
-    --accent: #34c48d;
-    --accent-soft: #1d332b;
-    --accent-strong: #2aa877;
-    --danger: #f07171;
-    --danger-soft: #3a2426;
-    --hero-from: #17453a;
-    --hero-to: #1d5c47;
-    --hero-text: #eafaf3;
-    --hero-dim: #9fc9b8;
-    color-scheme: dark;
-  }
-}
-* {
-  box-sizing: border-box;
-}
-html,
-body {
-  margin: 0;
-  font-family:
-    "Segoe UI",
-    "Microsoft YaHei",
-    "PingFang SC",
-    sans-serif;
-  font-size: 14px;
-  color: var(--text);
-}
-button {
-  font-family: inherit;
-}
-</style>
 
 <style scoped>
 .app-root {

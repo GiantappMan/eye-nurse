@@ -1,0 +1,57 @@
+/* 设计系统共享 tokens（settings / skincenter 两窗口共用；护眼绿点缀，浅/深
+   随系统——原 App.vue 内联块迁出，避免两窗口漂移） */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --surface-2: #f7f9fa;
+  --border: #e4e8ec;
+  --text: #1b2129;
+  --text-2: #67727e;
+  --accent: #0e9f6e;
+  --accent-soft: #e2f6ee;
+  --accent-strong: #0b7f58;
+  --danger: #dc4b4b;
+  --danger-soft: #fdeeee;
+  --hero-from: #10715a;
+  --hero-to: #0e9f6e;
+  --hero-text: #f2fbf7;
+  --hero-dim: #cfe9de;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --surface: #1f2227;
+    --surface-2: #262a30;
+    --border: #30353c;
+    --text: #e7eaee;
+    --text-2: #99a1ab;
+    --accent: #34c48d;
+    --accent-soft: #1d332b;
+    --accent-strong: #2aa877;
+    --danger: #f07171;
+    --danger-soft: #3a2426;
+    --hero-from: #17453a;
+    --hero-to: #1d5c47;
+    --hero-text: #eafaf3;
+    --hero-dim: #9fc9b8;
+    color-scheme: dark;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  font-family:
+    "Segoe UI",
+    "Microsoft YaHei",
+    "PingFang SC",
+    sans-serif;
+  font-size: 14px;
+  color: var(--text);
+}
+button {
+  font-family: inherit;
+}

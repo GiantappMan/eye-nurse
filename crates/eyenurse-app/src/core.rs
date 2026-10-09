@@ -415,10 +415,15 @@ impl CoreLoop {
                 &entry,
                 DiskSkinEntry::Package { dir, .. } if dir.join("preview.png").is_file()
             );
+            let author = match &entry {
+                DiskSkinEntry::Package { manifest, .. } => manifest.author.clone(),
+                DiskSkinEntry::Colors { .. } => None,
+            };
             skins.push(SkinMeta {
                 id: entry.id().to_string(),
                 name: colors.name.clone(),
                 name_en: colors.name_en.clone(),
+                author,
                 colors,
                 has_bar,
                 has_lock,
@@ -431,6 +436,7 @@ impl CoreLoop {
                 id: "custom".into(),
                 name: "自定义".into(),
                 name_en: "Custom".into(),
+                author: None,
                 colors,
                 has_bar: false,
                 has_lock: false,
@@ -792,9 +798,12 @@ impl CoreLoop {
         self.tray.update_texts(&texts);
         self.bar_lock().texts = texts.clone();
         self.bar_post(bar::WM_APP_LANGUAGE, 0, 0);
-        // 设置窗标题（v2 XAML 绑定 app_name 的等价）
+        // 设置窗标题（v2 XAML 绑定 app_name 的等价）+ 皮肤中心窗口标题
         if let Some(w) = self.app.get_webview_window("settings") {
             let _ = w.set_title(&texts.app_name);
+        }
+        if let Some(w) = self.app.get_webview_window("skincenter") {
+            let _ = w.set_title(&texts.skin_center);
         }
         // 页面层重取 get_texts（§4.2）
         let _ = self.app.emit("eyenurse://i18n-changed", ());

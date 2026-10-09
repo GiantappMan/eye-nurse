@@ -215,16 +215,20 @@ target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
   **内置 id 跳过**，按 id 排序）> 内置（classic/devtest 为目录包，
   night/sakura/ocean 为纯配色）。
 
-## 6. 设置页与工具链
+## 6. 皮肤中心与工具链
 
-- **SkinPicker（已实现）**：目录包显示 `preview.png`（经协议 host 加载，
-  tauri.conf.json CSP 已放行 img-src）+ 「悬浮条/锁屏」表面徽标 + bar 形态
-  重启提示；纯配色皮肤维持迷你色卡。
-- **导入**：v1 手动放置（`Assets/Skins/<id>/` 拖入即装）；`.eyeskin` 后缀与
-  文件关联留 P2。
+- **皮肤中心（独立窗口，ESP-1）**：tauri.conf.json 静态声明 `skincenter`
+  常驻窗（关闭即藏，`open_skin_center` 命令显形；标题随语言）。大卡片墙 =
+  `preview.png`（协议 host 加载）或配色渐变兜底 + 名称 + 作者 + 表面徽标 +
+  「✓ 使用中」标记，点卡片即应用；bar 形态重启提示横幅；自定义颜色编辑器
+  自设置页迁入。设置页外观卡片只留「当前皮肤 + 打开皮肤中心」。
+- **导入**：v1 手动放置——皮肤中心工具栏「打开皮肤文件夹」按钮
+  （`open_skins_folder` 命令，目录不存在则先建）；`.eyeskin` 后缀与文件
+  关联留 P2。
 - **开发体验**：仓库 `assets/skins-example/sunset-clock/` 即模板（build.rs
-  拷到 exe 旁 Assets/Skins，dev 直接可试）；包根 `eyenurse-api.js` 是桥适配
-  脚本。改包内文件后重进休息/重启应用生效（无热重载，P2）。
+  拷到 exe 旁 Assets/Skins，dev 直接可试）；桥脚本由协议内置回退提供
+  （`/eyenurse-api.js`，包内可覆盖）。改包内文件后重进休息/重启应用生效
+  （无热重载，P2）。
 
 ## 7. 非目标（v1 明确砍掉）
 

@@ -2,6 +2,7 @@
 // 挂载 + 配色真源注入；视图与保存管线在 App.vue 及其子组件。
 import { createApp } from "vue";
 import { applyThemeVars } from "../shared/theme";
+import "../shared/design.css";
 import App from "./App.vue";
 
 // theme.json → :root CSS 变量（bar_xxx → --eyenurse-bar-xxx，§3 单一配色真源）

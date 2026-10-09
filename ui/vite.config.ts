@@ -18,6 +18,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         settings: fileURLToPath(new URL("./index.html", import.meta.url)),
+        skincenter: fileURLToPath(new URL("./skincenter.html", import.meta.url)),
         mask: fileURLToPath(new URL("./mask.html", import.meta.url)),
         barweb: fileURLToPath(new URL("./barweb.html", import.meta.url)),
       },

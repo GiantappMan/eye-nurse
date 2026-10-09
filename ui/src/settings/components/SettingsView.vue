@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// 设置页主区（v3.1 重设计）：实时倒计时 Hero + 两张分组卡片 + 底部操作栏。
+// 设置页主区（v3.1 重设计）：实时倒计时 Hero + 分组卡片 + 底部操作栏。
 // 提交时机（清单 I3）：文本框失焦/回车、开关点击、预设/恢复点击 → 父组件 300ms
 // 防抖保存；parse + clamp 在命令侧（清单 I4），页面只做展示与占位校验。
+// 皮肤选择整体迁入独立「皮肤中心」窗口（ESP-1）——本页外观卡片只留当前皮肤
+// 摘要 + 入口按钮。
 import { computed, ref } from "vue";
-import type { LockSettingsDto, SettingsDto, SkinColors, SkinDefPayload, SkinMeta } from "../types";
+import type { LockSettingsDto, SettingsDto } from "../types";
 import { t } from "../i18n";
 import SwitchToggle from "./SwitchToggle.vue";
 import StatsCard from "./StatsCard.vue";
-import SkinPicker from "./SkinPicker.vue";
 
 const props = defineProps<{
   /** 父组件持有的响应式草稿（直接绑定字段，保存回包整体合并） */
@@ -18,14 +19,8 @@ const props = defineProps<{
   tick: { remaining_ms: number; paused: boolean; resting: boolean } | null;
   /** 锁屏草稿（v3.2；独立保存管线，回包整体合并） */
   lockSettings: LockSettingsDto;
-  /** 可用皮肤清单（内置 + 磁盘 + 自定义槽；v3.1 换肤） */
-  skins: SkinMeta[];
-  /** 当前选中皮肤 id */
-  currentSkinId: string;
-  /** 当前生效配色 */
-  effectiveSkin: SkinColors | null;
-  /** ESP-1：bar 当前运行模式（true = WebView 壳；bar 形态变化需重启） */
-  barIsWeb: boolean;
+  /** 当前皮肤展示名（按语言；皮肤中心负责选择与编辑） */
+  currentSkinName: string;
 }>();
 const emit = defineEmits<{
   /** 任一控件提交 → 父组件排 300ms 防抖保存 */
@@ -36,10 +31,8 @@ const emit = defineEmits<{
   (e: "reset"): void;
   /** 立刻休息（Hero 按钮） */
   (e: "rest-now"): void;
-  /** 选择皮肤（v3.1 换肤） */
-  (e: "select-skin", id: string): void;
-  /** 保存自定义配色并启用 */
-  (e: "save-custom-skin", def: SkinDefPayload): void;
+  /** 打开皮肤中心（ESP-1 独立窗口） */
+  (e: "open-skin-center"): void;
 }>();
 
 /** 休息间隔预设（分钟） */
@@ -294,17 +287,18 @@ function onReset(): void {
     <!-- 护眼统计（v3.2：今日摘要 + 近 7 天报表） -->
     <StatsCard />
 
-    <!-- 外观（v3.1 换肤：预设网格 + 自定义颜色编辑器） -->
+    <!-- 外观（皮肤中心入口 + 当前皮肤摘要；选择/编辑在独立皮肤中心窗口） -->
     <section class="card">
       <h3 class="card-title">{{ t("appearance") }}</h3>
-      <SkinPicker
-        :skins="skins"
-        :current-id="currentSkinId"
-        :effective="effectiveSkin"
-        :bar-is-web="barIsWeb"
-        @select="$emit('select-skin', $event)"
-        @save-custom="$emit('save-custom-skin', $event)"
-      />
+      <div class="skin-summary">
+        <div class="skin-current">
+          <span class="skin-current-label">{{ t("skinCurrent") }}</span>
+          <span class="skin-current-name">{{ currentSkinName }}</span>
+        </div>
+        <button type="button" class="skin-center-btn" @click="$emit('open-skin-center')">
+          {{ t("skin_center") }}
+        </button>
+      </div>
     </section>
 
     <!-- 底部：恢复默认（两步确认） + 版权 -->
@@ -526,5 +520,44 @@ function onReset(): void {
 .copyright {
   font-size: 11px;
   color: var(--text-2);
+}
+.skin-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.skin-current {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.skin-current-label {
+  font-size: 12px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.skin-current-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skin-center-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.skin-center-btn:hover {
+  background: var(--accent-strong);
 }
 </style>
