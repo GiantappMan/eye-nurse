@@ -54,6 +54,7 @@
   "statsEmpty": "暂无数据，使用后自动记录",
   "hours": "小时",
   "lockedTitle": "已锁定",
+  "lock_now_menu": "立即锁屏",
   "lockUnlockPlaceholder": "输入密码解锁",
   "lockWrongPassword": "密码错误",
   "appearance": "外观",

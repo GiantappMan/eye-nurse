@@ -139,12 +139,16 @@ pub(crate) fn apply_lock_policy(lock: &LockScreenJson) {
     crate::win::hotkey::set_enabled(on);
     if !crate::win::hotkey::set_disable_lock_workstation(on) {
         // 实测：该键可能被域策略/安全软件锁 ACL（拒绝访问，手动 reg add 同样失败）。
-        // 降级为仅钩子拦截：非提权前台照常生效；钩子漏键（提权前台）会退化成系统锁屏。
+        // 降级为仅钩子拦截：非提权前台照常生效；钩子漏键（提权前台/驱动层拦截）
+        // 还有 Ctrl+Alt+L 热键与托盘入口兜底。
         eprintln!(
             "[eyenurse] DisableLockWorkstation registry write failed (policies key locked?); \
              Win+L interception runs hook-only"
         );
     }
+    // Ctrl+Alt+L 激活热键：跟随 Enabled（部分管控软件在驱动层拦 Win+L，实测
+    // 本机如此——热键是键盘兜底，托盘「立即锁屏」是最后入口）
+    crate::win::hotkey::set_hotkey(lock.Enabled);
 }
 
 /// CoreLoop 线程（`run` 消费 Self；由 main 的 setup 钩子 spawn）
@@ -380,6 +384,8 @@ impl CoreLoop {
             }
             TrayAction::Reset => self.reset_timer(),
             TrayAction::RestNow => self.rest_now(),
+            // v3.2 立即锁屏：仿锁屏未启用时 lock_now 幂等无事（菜单项常驻）
+            TrayAction::LockNow => self.lock_now(),
             TrayAction::Exit => {
                 // §8.1：退出路径的 UI.json 兜底保存由 CoreLoop 在此完成；
                 // v3.2：统计落盘 + 撤销锁屏接管（注册表 DisableLockWorkstation
@@ -481,14 +487,6 @@ impl CoreLoop {
     /// （对齐真会话锁语义），无遮罩时按显示器补建（纯锁屏 UI）。
     /// 已锁或功能未开时幂等无事。
     fn lock_now(&mut self) {
-        eprintln!(
-            "[eyenurse] lock_now: enabled={} intercept={} autorest={} is_locked={} is_resting={}",
-            self.core.lock.Enabled,
-            self.core.lock.InterceptWinL,
-            self.core.lock.AutoRest,
-            self.is_locked,
-            self.is_resting
-        );
         if self.is_locked || !self.core.lock.Enabled {
             return;
         }
@@ -750,6 +748,8 @@ impl CoreLoop {
                 self.apply_capture_to(&label);
             }
             self.mask_labels.push(label);
+        } else {
+            eprintln!("[eyenurse] mask window FAILED: {label}");
         }
         // 单屏建窗失败不拖垮其余屏幕
     }

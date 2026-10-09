@@ -45,6 +45,9 @@ pub struct I18nTexts {
     pub copyright: String,
     pub zh: String,
     pub en: String,
+    /// v3.2 托盘「立即锁屏」（仿锁屏激活入口；Win+L 被管控软件拦截的机器上的
+    /// 兜底路径之一，另有 Ctrl+Alt+L 热键）
+    pub lock_now_menu: String,
 }
 
 impl I18nTexts {
@@ -72,6 +75,7 @@ impl I18nTexts {
             copyright: i18n.get("copyright"),
             zh: i18n.get("zh"),
             en: i18n.get("en"),
+            lock_now_menu: i18n.get("lock_now_menu"),
         }
     }
 }
@@ -85,6 +89,8 @@ pub enum TrayAction {
     Resume,
     Reset,
     RestNow,
+    /// v3.2 立即锁屏（仿锁屏激活；未启用时 CoreLoop 侧幂等无事）
+    LockNow,
     Exit,
 }
 
@@ -97,6 +103,7 @@ pub fn menu_action(id: &str) -> Option<TrayAction> {
         "resume" => TrayAction::Resume,
         "reset" => TrayAction::Reset,
         "rest_now" => TrayAction::RestNow,
+        "lock_now_menu" => TrayAction::LockNow,
         "exit" => TrayAction::Exit,
         _ => return None,
     })
@@ -123,6 +130,7 @@ struct MenuItems {
     resume: MenuItem<Wry>,
     reset: MenuItem<Wry>,
     rest_now: MenuItem<Wry>,
+    lock_now_menu: MenuItem<Wry>,
     exit: MenuItem<Wry>,
 }
 
@@ -139,9 +147,11 @@ pub fn build(app: &AppHandle<Wry>, tx: Sender<CoreMsg>, texts: &I18nTexts) -> ta
     let resume = MenuItem::with_id(app, "resume", &texts.resume, true, None::<&str>)?;
     let reset = MenuItem::with_id(app, "reset", &texts.reset, true, None::<&str>)?;
     let rest_now = MenuItem::with_id(app, "rest_now", &texts.rest_now, true, None::<&str>)?;
+    let lock_now_menu =
+        MenuItem::with_id(app, "lock_now_menu", &texts.lock_now_menu, true, None::<&str>)?;
     let exit = MenuItem::with_id(app, "exit", &texts.exit, true, None::<&str>)?;
 
-    // about(0) setting(1) ─(2) pause(3) reset(4) rest_now(5) ─(6) exit(7)
+    // about(0) setting(1) ─(2) pause(3) reset(4) rest_now(5) lock_now_menu(6) ─(7) exit(8)
     for item in [&about, &setting] {
         menu.append(item)?;
     }
@@ -149,6 +159,7 @@ pub fn build(app: &AppHandle<Wry>, tx: Sender<CoreMsg>, texts: &I18nTexts) -> ta
     menu.append(&pause)?;
     menu.append(&reset)?;
     menu.append(&rest_now)?;
+    menu.append(&lock_now_menu)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&exit)?;
     let pause_index = 3;
@@ -187,6 +198,7 @@ pub fn build(app: &AppHandle<Wry>, tx: Sender<CoreMsg>, texts: &I18nTexts) -> ta
             resume,
             reset,
             rest_now,
+            lock_now_menu,
             exit,
         },
         pause_index,
@@ -205,6 +217,7 @@ impl Tray {
         let _ = self.items.resume.set_text(&texts.resume);
         let _ = self.items.reset.set_text(&texts.reset);
         let _ = self.items.rest_now.set_text(&texts.rest_now);
+        let _ = self.items.lock_now_menu.set_text(&texts.lock_now_menu);
         let _ = self.items.exit.set_text(&texts.exit);
         let _ = self.tray.set_tooltip(Some(&texts.app_name));
     }

@@ -54,6 +54,7 @@
   "statsEmpty": "No data yet — recorded automatically",
   "hours": "h",
   "lockedTitle": "Locked",
+  "lock_now_menu": "Lock Now",
   "lockUnlockPlaceholder": "Password to unlock",
   "lockWrongPassword": "Wrong password",
   "appearance": "Appearance",

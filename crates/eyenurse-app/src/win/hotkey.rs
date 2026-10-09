@@ -26,12 +26,17 @@ static HOTKEY_ON: AtomicBool = AtomicBool::new(false);
 static HOOK_TX: std::sync::OnceLock<Sender<CoreMsg>> = std::sync::OnceLock::new();
 static THREAD_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
-/// 钩子线程私有消息：请求注册/注销 Ctrl+Alt+L（wParam 1=注册 0=注销）
+/// 钩子线程私有消息偏移：请求注册/注销 Ctrl+Alt+L（wParam 1=注册 0=注销），
+/// 实际消息 = WM_APP + 本值
 #[cfg(target_os = "windows")]
-const WM_APP_HOTKEY: u32 = 5; // WM_APP = 0x8000
+const WM_APP_HOTKEY: u32 = 5;
 /// RegisterHotKey 的热键 id（线程热键，hwnd = None）
 #[cfg(target_os = "windows")]
 const HOTKEY_ID: i32 = 1;
+/// 候选组合（Ctrl+Alt+vk 依次尝试，首个注册成功的生效——Ctrl+Alt+L 在不少
+/// 机器上已被其他软件占用，实测本机即如此）
+#[cfg(target_os = "windows")]
+const HOTKEY_VK_CANDIDATES: [u16; 3] = [0x4C, 0x4B, 0x4F]; // L, K, O
 
 /// 装配 + 启动钩子线程（进程级单次；重复调用静默拒绝）
 pub fn spawn(tx: Sender<CoreMsg>) -> std::io::Result<()> {
@@ -150,12 +155,11 @@ fn hotkey_thread_main() {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, MOD_ALT, MOD_CONTROL, VK_LWIN, VK_RWIN,
+        GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_CONTROL, VK_LWIN, VK_RWIN,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, GetMessageW, RegisterHotKey, SetWindowsHookExW, UnhookWindowsHook,
-        UnregisterHotKey, KBDLLHOOKSTRUCT, LLKHF_INJECTED, WH_KEYBOARD_LL, WM_HOTKEY,
-        WM_KEYDOWN, WM_SYSKEYDOWN, MSG,
+        CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, KBDLLHOOKSTRUCT,
+        WH_KEYBOARD_LL, WM_HOTKEY, WM_KEYDOWN, WM_SYSKEYDOWN, MSG,
     };
 
     const VK_L: u16 = 0x4C; // 'L'
@@ -169,29 +173,46 @@ fn hotkey_thread_main() {
             let win_down = unsafe {
                 (GetAsyncKeyState(VK_LWIN.0 as i32) | GetAsyncKeyState(VK_RWIN.0 as i32)) < 0
             };
-            if keydown && kb.vkCode == u32::from(VK_L) && win_down {
-                if HOOK_ENABLED.load(Ordering::Relaxed) {
-                    // debug 构建有控制台；命中才算热点路径，日志量可忽略
-                    eprintln!("[eyenurse] Win+L intercepted -> lock");
-                    if let Some(tx) = HOOK_TX.get() {
-                        let _ = tx.send(CoreMsg::LockActivate);
-                    }
-                    return LRESULT(1); // 吞掉 Win+L，系统不再锁屏
+            if keydown
+                && kb.vkCode == u32::from(VK_L)
+                && win_down
+                && HOOK_ENABLED.load(Ordering::Relaxed)
+            {
+                // debug 构建有控制台；命中才算热点路径，日志量可忽略
+                eprintln!("[eyenurse] Win+L intercepted -> lock");
+                if let Some(tx) = HOOK_TX.get() {
+                    let _ = tx.send(CoreMsg::LockActivate);
                 }
+                return LRESULT(1); // 吞掉 Win+L，系统不再锁屏
             }
         }
         CallNextHookEx(None, code, w, l)
     }
 
-    // Ctrl+Alt+L 注册/注销（HOTKEY_ON 为准；WM_HOTKEY → LockActivate）
+    // Ctrl+Alt+L/K/O 依次注册（HOTKEY_ON 为准；WM_HOTKEY → LockActivate）。
+    // id 恒为 HOTKEY_ID，Unregister 无需知道具体 vk。
     fn sync_hotkey_registration() {
         // SAFETY：线程热键（hwnd=None），消息投递到本线程
         unsafe {
             if HOTKEY_ON.load(Ordering::Relaxed) {
-                match RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_L as u32) {
-                    Ok(()) => eprintln!("[eyenurse] Ctrl+Alt+L hotkey registered"),
-                    Err(e) => eprintln!("[eyenurse] RegisterHotKey(Ctrl+Alt+L) failed: {e}"),
+                for vk in HOTKEY_VK_CANDIDATES {
+                    match RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT, vk as u32) {
+                        Ok(()) => {
+                            eprintln!(
+                                "[eyenurse] lock hotkey registered: Ctrl+Alt+{}",
+                                vk as u8 as char
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "[eyenurse] RegisterHotKey(Ctrl+Alt+{}) taken: {e}",
+                                vk as u8 as char
+                            );
+                        }
+                    }
                 }
+                eprintln!("[eyenurse] all lock hotkey candidates taken; tray menu only");
             } else {
                 let _ = UnregisterHotKey(None, HOTKEY_ID);
             }
@@ -228,7 +249,6 @@ fn hotkey_thread_main() {
                 break;
             }
             if msg.message == WM_HOTKEY && msg.wParam.0 == HOTKEY_ID as usize {
-                eprintln!("[eyenurse] Ctrl+Alt+L hotkey -> lock");
                 if let Some(tx) = HOOK_TX.get() {
                     let _ = tx.send(CoreMsg::LockActivate);
                 }
@@ -238,7 +258,7 @@ fn hotkey_thread_main() {
             }
         }
 
-        let _ = UnhookWindowsHook(hook);
+        let _ = UnhookWindowsHookEx(hook);
     }
 }
 
