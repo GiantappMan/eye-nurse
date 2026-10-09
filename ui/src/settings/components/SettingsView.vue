@@ -1,181 +1,426 @@
 <script setup lang="ts">
-// 设置页主区（实现者 D 所有）：复刻 v2 Settings.vue 的四行设置 + 标题旁“保存中”
-// spinner；v3 增补第 5 行“恢复默认”入口（清单 F11，v2 的 ResetSettings 有后端无前端入口）。
-// 提交时机（清单 I3）：文本框失焦/回车、开关点击 → 父组件 300ms 防抖保存；
-// parse + clamp 在命令侧，页面只做 HH:mm:ss 占位（清单 I4）。
+// 设置页主区（v3.1 重设计）：实时倒计时 Hero + 两张分组卡片 + 底部操作栏。
+// 提交时机（清单 I3）：文本框失焦/回车、开关点击、预设/恢复点击 → 父组件 300ms
+// 防抖保存；parse + clamp 在命令侧（清单 I4），页面只做展示与占位校验。
+import { computed, ref } from "vue";
 import type { SettingsDto } from "../types";
 import { t } from "../i18n";
 import SwitchToggle from "./SwitchToggle.vue";
 
-defineProps<{
-  /** 父组件持有的响应式草稿（v2 同款：直接绑定字段，保存回包整体合并） */
+const props = defineProps<{
+  /** 父组件持有的响应式草稿（直接绑定字段，保存回包整体合并） */
   settings: SettingsDto;
-  /** invoke 未决期 = “保存中”（标题旁 spinner，v2 loading） */
+  /** invoke 未决期 = 保存中 */
   saving: boolean;
+  /** 页眉实时状态（eyenurse://tick；首拍到达前为 null → 按满进度展示） */
+  tick: { remaining_ms: number; paused: boolean; resting: boolean } | null;
 }>();
-defineEmits<{
+const emit = defineEmits<{
   /** 任一控件提交 → 父组件排 300ms 防抖保存 */
   (e: "commit"): void;
-  /** 恢复默认（F11） */
+  /** 恢复默认（F11），两步确认后触发 */
   (e: "reset"): void;
+  /** 立刻休息（Hero 按钮） */
+  (e: "rest-now"): void;
 }>();
+
+/** 休息间隔预设（分钟） */
+const PRESETS = [20, 30, 45, 60, 90];
+
+/** HH:mm:ss（.NET "c" 紧凑格式）宽松校验：仅控制输入态红框，解析在命令侧 */
+function hmsValid(s: string): boolean {
+  return /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.test(s.trim());
+}
+
+/** HH:mm:ss → 秒（非法返回 NaN，调用方自行兜底） */
+function hmsSecs(s: string): number {
+  const m = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.exec(s.trim());
+  if (!m) return NaN;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+}
+
+/** 秒 → 倒计时文本：>1h 显示 H:MM:SS，否则 MM:SS */
+function fmtCountdown(totalSecs: number): string {
+  const s = Math.max(0, Math.floor(totalSecs));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const two = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${two(m)}:${two(ss)}` : `${two(m)}:${two(ss)}`;
+}
+
+/** HH:mm:ss → 人话时长：45 分钟 / 2 分钟 30 秒；含小时或非法 → 原样回显 */
+function friendly(s: string): string {
+  const total = hmsSecs(s);
+  if (!Number.isFinite(total)) return s;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const ss = total % 60;
+  if (h > 0) return s;
+  if (m > 0 && ss > 0) return `${m} ${t("minutes")} ${ss} ${t("seconds")}`;
+  if (m > 0) return `${m} ${t("minutes")}`;
+  return `${ss} ${t("seconds")}`;
+}
+
+const intervalSecs = computed(() => hmsSecs(props.settings.RestInterval) || 45 * 60);
+
+/** 预设命中（当前间隔恰好等于某预设） */
+const activePreset = computed(() => {
+  const total = hmsSecs(props.settings.RestInterval);
+  return PRESETS.find((m) => m * 60 === total);
+});
+
+function setPreset(mins: number): void {
+  props.settings.RestInterval = `00:${String(mins).padStart(2, "0")}:00`;
+  emit("commit");
+}
+
+/** 作息摘要：休息间隔 45 分钟 · 休息时长 2 分钟 30 秒 */
+const scheduleSummary = computed(
+  () =>
+    `${t("restInterval")} ${friendly(props.settings.RestInterval)} · ${t(
+      "restDuration",
+    )} ${friendly(props.settings.RestDuration)}`,
+);
+
+// —— Hero 实时区 ——
+const remainingMs = computed(() => props.tick?.remaining_ms ?? intervalSecs.value * 1000);
+const pausedState = computed(() => props.tick?.paused ?? false);
+const restingState = computed(() => props.tick?.resting ?? false);
+const countdownText = computed(() => fmtCountdown(remainingMs.value / 1000));
+const progressPct = computed(() => {
+  const total = intervalSecs.value;
+  if (total <= 0) return 100;
+  return Math.min(100, Math.max(0, (remainingMs.value / 1000 / total) * 100));
+});
+
+// —— 恢复默认：两步确认（3s 内二次点击生效），替代 confirm() 弹窗 ——
+const confirmReset = ref(false);
+let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+function onReset(): void {
+  if (!confirmReset.value) {
+    confirmReset.value = true;
+    if (confirmTimer !== null) clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => (confirmReset.value = false), 3000);
+    return;
+  }
+  if (confirmTimer !== null) clearTimeout(confirmTimer);
+  confirmReset.value = false;
+  emit("reset");
+}
 </script>
 
 <template>
-  <div class="settings-page">
-    <div class="px-4 sm:px-6">
-      <!-- 标题行：clientSettings + 保存中 spinner（v2 animate-spin，仅保存期间出现） -->
-      <div class="flex items-center">
-        <h2 class="page-title">{{ t("clientSettings") }}</h2>
-        <svg v-if="saving" class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path
-            class="opacity-75"
-            fill="#14b8a6"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          />
-        </svg>
+  <div class="page">
+    <!-- Hero：实时倒计时 + 立刻休息 -->
+    <section class="hero">
+      <div class="hero-info">
+        <p class="hero-label">
+          {{ restingState ? t("resting") : pausedState ? t("paused") : t("nextRest") }}
+        </p>
+        <p class="hero-count">{{ countdownText }}</p>
+        <p class="hero-sub">{{ scheduleSummary }}</p>
+      </div>
+      <button type="button" class="rest-btn" @click="$emit('rest-now')">
+        {{ t("rest_now") }}
+      </button>
+      <div class="hero-track" aria-hidden="true">
+        <span class="hero-fill" :style="{ width: progressPct + '%' }" />
+      </div>
+    </section>
+
+    <!-- 休息计划 -->
+    <section class="card">
+      <h3 class="card-title">{{ t("planTitle") }}</h3>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("restInterval") }}</p>
+          <div class="chips">
+            <button
+              v-for="m in PRESETS"
+              :key="m"
+              type="button"
+              class="chip"
+              :class="{ active: activePreset === m }"
+              @click="setPreset(m)"
+            >
+              {{ m }} {{ t("minutes") }}
+            </button>
+          </div>
+        </div>
+        <input
+          v-model="settings.RestInterval"
+          type="text"
+          class="hms"
+          :class="{ invalid: !hmsValid(settings.RestInterval) }"
+          placeholder="HH:mm:ss"
+          spellcheck="false"
+          @blur="$emit('commit')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
       </div>
 
-      <ul role="list" class="rows">
-        <!-- 行 1：开机启动开关（勾选态 = 注册表实测值，Q10/F10 由 get_settings 覆盖） -->
-        <li class="row">
-          <p class="label">{{ t("runWhenStarts") }}</p>
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("restDuration") }}</p>
+        </div>
+        <input
+          v-model="settings.RestDuration"
+          type="text"
+          class="hms"
+          :class="{ invalid: !hmsValid(settings.RestDuration) }"
+          placeholder="HH:mm:ss"
+          spellcheck="false"
+          @blur="$emit('commit')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+      </div>
+    </section>
+
+    <!-- 系统 -->
+    <section class="card">
+      <h3 class="card-title">{{ t("systemTitle") }}</h3>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("runWhenStarts") }}</p>
+        </div>
+        <SwitchToggle v-model="settings.RunWhenStarts" @update:model-value="$emit('commit')" />
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <p class="row-title">{{ t("resetWhenSessionUnlock") }}</p>
+        </div>
+        <div class="row-control">
+          <input
+            v-if="settings.ResetWhenSessionUnlock"
+            v-model="settings.ResetTimeout"
+            type="text"
+            class="hms"
+            :class="{ invalid: !hmsValid(settings.ResetTimeout) }"
+            placeholder="HH:mm:ss"
+            spellcheck="false"
+            @blur="$emit('commit')"
+            @keydown.enter="($event.target as HTMLInputElement).blur()"
+          />
           <SwitchToggle
-            v-model="settings.RunWhenStarts"
+            v-model="settings.ResetWhenSessionUnlock"
             @update:model-value="$emit('commit')"
           />
-        </li>
+        </div>
+      </div>
+    </section>
 
-        <!-- 行 2：锁屏后重置开关 +（开关打开时）超时输入（v2 v-if 同款） -->
-        <li class="row">
-          <p class="label">{{ t("resetWhenSessionUnlock") }}</p>
-          <div class="right">
-            <input
-              v-if="settings.ResetWhenSessionUnlock"
-              v-model="settings.ResetTimeout"
-              type="text"
-              class="hms"
-              placeholder="HH:mm:ss"
-              @blur="$emit('commit')"
-              @keydown.enter="($event.target as HTMLInputElement).blur()"
-            />
-            <SwitchToggle
-              v-model="settings.ResetWhenSessionUnlock"
-              @update:model-value="$emit('commit')"
-            />
-          </div>
-        </li>
-
-        <!-- 行 3：休息间隔 -->
-        <li class="row">
-          <p class="label">{{ t("restInterval") }}</p>
-          <input
-            v-model="settings.RestInterval"
-            type="text"
-            class="hms"
-            placeholder="HH:mm:ss"
-            @blur="$emit('commit')"
-            @keydown.enter="($event.target as HTMLInputElement).blur()"
-          />
-        </li>
-
-        <!-- 行 4：休息时长 -->
-        <li class="row">
-          <p class="label">{{ t("restDuration") }}</p>
-          <input
-            v-model="settings.RestDuration"
-            type="text"
-            class="hms"
-            placeholder="HH:mm:ss"
-            @blur="$emit('commit')"
-            @keydown.enter="($event.target as HTMLInputElement).blur()"
-          />
-        </li>
-
-        <!-- 行 5：恢复默认（F11）——语义 = v2 ClientApi.ResetSettings（写默认盘 + 自启 +
-             计时器重启），由父组件 invoke("reset_settings") 并用回包刷新 -->
-        <li class="row">
-          <button type="button" class="reset-btn" @click="$emit('reset')">
-            {{ t("restoreDefaults") }}
-          </button>
-        </li>
-      </ul>
-    </div>
+    <!-- 底部：恢复默认（两步确认） + 版权 -->
+    <footer class="page-foot">
+      <button type="button" class="ghost" :class="{ danger: confirmReset }" @click="onReset">
+        {{ confirmReset ? t("confirmRestore") : t("restoreDefaults") }}
+      </button>
+      <span class="copyright" v-html="t('copyright')"></span>
+    </footer>
   </div>
 </template>
 
 <style scoped>
-.settings-page {
-  max-width: 80rem; /* v2 max-w-7xl */
+.page {
+  max-width: 640px;
   margin: 0 auto;
-  padding-top: 24px; /* v2 pt-6 */
+  padding: 20px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
 }
-.page-title {
-  font-size: 18px; /* v2 text-lg */
-  line-height: 24px; /* v2 leading-6 */
-  font-weight: 500; /* v2 font-medium */
-  color: var(--tw-gray-900);
+
+/* —— Hero —— */
+.hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 26px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+  color: var(--hero-text);
+  overflow: hidden;
 }
-.spinner {
-  margin-left: 8px; /* v2 ml-2 */
-  width: 24px; /* v2 w-6 */
-  height: 24px;
-  color: var(--tw-gray-900);
-  animation: spin 1s linear infinite; /* v2 animate-spin */
+.hero-label {
+  margin: 0 0 2px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--hero-dim);
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.hero-count {
+  margin: 0;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.rows {
-  margin-top: 8px; /* v2 mt-2 */
-  border-top: 1px solid var(--tw-gray-200); /* v2 divide-y divide-gray-200 */
+.hero-sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--hero-dim);
+}
+.rest-btn {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hero-from);
+  background: var(--hero-text);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.rest-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
+}
+.rest-btn:active {
+  transform: translateY(0);
+}
+.hero-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgb(255 255 255 / 0.18);
+}
+.hero-fill {
+  display: block;
+  height: 100%;
+  background: rgb(255 255 255 / 0.85);
+  transition: width 1s linear;
+}
+
+/* —— 卡片与行 —— */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 18px;
+}
+.card-title {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text-2);
 }
 .row {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* v2 justify-between */
-  padding: 16px 0; /* v2 py-4 */
-  border-bottom: 1px solid var(--tw-gray-200);
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
 }
-.label {
-  font-size: 14px; /* v2 text-sm */
-  font-weight: 500; /* v2 font-medium */
-  color: var(--tw-gray-900);
+.row:first-of-type {
+  border-top: none;
 }
-.right {
+.row-main {
+  min-width: 0;
+}
+.row-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.row-control {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
-/* v2: w-28 text-center px-5 sm:text-sm border-gray-300 rounded-md
-   focus:ring-teal-500 focus:border-teal-500 */
+
+/* —— 预设 chips —— */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* —— 时间输入 —— */
 .hms {
-  width: 112px; /* v2 w-28 */
+  width: 104px;
   text-align: center;
-  padding: 6px 20px; /* v2 px-5 + 默认纵向内边距 */
-  font-size: 14px;
-  line-height: 20px;
-  border: 1px solid var(--tw-gray-300);
-  border-radius: 6px; /* v2 rounded-md */
+  padding: 7px 10px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .hms:focus {
-  border-color: var(--tw-teal-500);
-  box-shadow: 0 0 0 1px var(--tw-teal-500); /* v2 focus:ring-teal-500 */
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
-.reset-btn {
-  font-size: 14px;
-  line-height: 20px;
-  padding: 6px 16px;
-  border: 1px solid var(--tw-gray-300);
-  border-radius: 6px;
-  color: var(--tw-gray-900);
-  background: #fff;
+.hms.invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+/* —— 底部 —— */
+.page-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+}
+.ghost {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
   cursor: pointer;
+  transition: all 0.12s ease;
 }
-.reset-btn:hover {
-  background: var(--tw-gray-50);
+.ghost:hover {
+  color: var(--text);
+  border-color: var(--text-2);
+}
+.ghost.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  font-weight: 600;
+}
+.copyright {
+  font-size: 11px;
+  color: var(--text-2);
 }
 </style>

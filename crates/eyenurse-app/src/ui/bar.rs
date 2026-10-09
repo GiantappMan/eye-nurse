@@ -485,6 +485,87 @@ fn in_check_zone(x: i32, client_w: i32, dpi: u32) -> bool {
     x >= client_w - scale_px(CHECK_LOGICAL, dpi)
 }
 
+/// 弹出条身右键菜单（`WM_CONTEXTMENU` 与 `WM_NCRBUTTONUP` 共用，触发条件见
+/// wndproc 内注释）：原生 `TrackPopupMenuEx` 顶层弹出，绝无 80×20 表面内裁剪
+/// 问题；状态变化时重建，id/顺序对齐 tray.rs（about/setting/—/[pause|resume
+/// 互换]/reset/rest_now/—/exit）
+#[cfg(target_os = "windows")]
+fn show_bar_menu(
+    hwnd: windows::Win32::Foundation::HWND,
+    state: &mut BarState,
+    l: windows::Win32::Foundation::LPARAM,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, PostMessageW,
+        SetForegroundWindow, TrackPopupMenuEx, MF_SEPARATOR, TPM_NONOTIFY, TPM_RETURNCMD,
+        TPM_RIGHTBUTTON, WM_NULL,
+    };
+
+    let bar = snapshot_clone(state);
+    let hmenu = match unsafe { CreatePopupMenu() } {
+        Ok(m) => m,
+        Err(_) => return LRESULT(0),
+    };
+    let t = &bar.texts;
+    append_menu_item(hmenu, 1, &t.about);
+    append_menu_item(hmenu, 2, &t.setting);
+    let _ = unsafe { AppendMenuW(hmenu, MF_SEPARATOR, 0, windows::core::PCWSTR::null()) };
+    if bar.paused_menu_shown {
+        append_menu_item(hmenu, 3, &t.resume);
+    } else {
+        append_menu_item(hmenu, 3, &t.pause);
+    }
+    append_menu_item(hmenu, 4, &t.reset);
+    append_menu_item(hmenu, 5, &t.rest_now);
+    let _ = unsafe { AppendMenuW(hmenu, MF_SEPARATOR, 0, windows::core::PCWSTR::null()) };
+    append_menu_item(hmenu, 6, &t.exit);
+
+    // 弹出位置：鼠标（键盘唤起 lParam=-1 → 取当前光标）
+    let (mut x, mut y) = ((l.0 as i16) as i32, ((l.0 >> 16) as i16) as i32);
+    if (x, y) == (-1, -1) {
+        let mut p = POINT::default();
+        let _ = unsafe { GetCursorPos(&mut p) };
+        (x, y) = (p.x, p.y);
+    }
+    // KB135788：非前台窗口的 TrackPopupMenu 点外部不消失——先置前台，
+    // 菜单关闭后补投 WM_NULL 清队列残留
+    let _ = unsafe { SetForegroundWindow(hwnd) };
+    // TPM_RETURNCMD：返回值即所选 id（模态）；uflags 参数是裸 u32（0.62）
+    let chosen = unsafe {
+        TrackPopupMenuEx(
+            hmenu,
+            TPM_RETURNCMD.0 | TPM_RIGHTBUTTON.0 | TPM_NONOTIFY.0,
+            x,
+            y,
+            hwnd,
+            None,
+        )
+    }
+    .0;
+    let _ = unsafe { DestroyMenu(hmenu) };
+    let _ = unsafe { PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0)) };
+    // id → TrayAction（与托盘共用同一动作入口，v2 ContextMenu = App.Menu）
+    let paused_shown = bar.paused_menu_shown;
+    let action = match chosen {
+        1 => Some(TrayAction::About),
+        2 => Some(TrayAction::Settings),
+        3 => Some(if paused_shown {
+            TrayAction::Resume
+        } else {
+            TrayAction::Pause
+        }),
+        4 => Some(TrayAction::Reset),
+        5 => Some(TrayAction::RestNow),
+        6 => Some(TrayAction::Exit),
+        _ => None,
+    };
+    if let Some(a) = action {
+        let _ = state.cmd_tx.send(CoreMsg::Tray(a));
+    }
+    LRESULT(0)
+}
+
 /// WM_CONTEXTMENU 菜单项追加（文本缓冲只需活到调用返回）
 #[cfg(target_os = "windows")]
 fn append_menu_item(
@@ -692,20 +773,20 @@ unsafe extern "system" fn bar_wndproc(
     w: windows::Win32::Foundation::WPARAM,
     l: windows::Win32::Foundation::LPARAM,
 ) -> windows::Win32::Foundation::LRESULT {
-    use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM};
+    use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, RECT};
     use windows::Win32::Graphics::Gdi::{InvalidateRect, ScreenToClient};
     use windows::Win32::UI::HiDpi::GetDpiForWindow;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         TrackMouseEvent, TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        AppendMenuW, CreatePopupMenu, DefWindowProcW, DestroyMenu, DestroyWindow, GetClientRect,
-        GetCursorPos, GetWindowLongPtrW, GetWindowRect, KillTimer, PostMessageW, PostQuitMessage,
-        SendMessageW, SetForegroundWindow, SetTimer, SetWindowPos, ShowWindow, TrackPopupMenuEx,
-        GWLP_USERDATA, HTCAPTION, HTCLIENT, MF_SEPARATOR, SWP_NOACTIVATE, SWP_NOSIZE,
-        SWP_NOZORDER, SW_SHOW, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_CONTEXTMENU,
+        DefWindowProcW, DestroyWindow, GetClientRect,
+        GetWindowLongPtrW, GetWindowRect, KillTimer, PostQuitMessage,
+        SendMessageW, SetForegroundWindow, SetTimer, SetWindowPos, ShowWindow,
+        GWLP_USERDATA, HTCAPTION, HTCLIENT, SWP_NOACTIVATE, SWP_NOSIZE,
+        SWP_NOZORDER, SW_SHOW, WM_CONTEXTMENU,
         WM_DPICHANGED, WM_EXITSIZEMOVE, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCMOUSELEAVE,
-        WM_NCMOUSEMOVE, WM_NCDESTROY, WM_NCHITTEST, WM_NULL, WM_PAINT, WM_TIMER,
+        WM_NCMOUSEMOVE, WM_NCDESTROY, WM_NCHITTEST, WM_NCRBUTTONUP, WM_PAINT, WM_TIMER,
     };
 
     // WM_MOUSELEAVE（0x02A3）：windows crate 把它放在 Win32::UI::Controls（会拖入
@@ -833,71 +914,10 @@ unsafe extern "system" fn bar_wndproc(
             }
             LRESULT(0)
         }
-        WM_CONTEXTMENU => {
-            // 教训 2：右键菜单 = 原生弹出菜单（TrackPopupMenuEx 顶层弹出，绝无
-            // 80×20 表面内裁剪问题）；状态变化时重建，id/顺序对齐 egui 版 tray.rs
-            // （about/setting/—/[pause|resume 互换]/reset/rest_now/—/exit）
-            let bar = snapshot_clone(state);
-            let hmenu = match CreatePopupMenu() {
-                Ok(m) => m,
-                Err(_) => return LRESULT(0),
-            };
-            let t = &bar.texts;
-            append_menu_item(hmenu, 1, &t.about);
-            append_menu_item(hmenu, 2, &t.setting);
-            let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, windows::core::PCWSTR::null());
-            if bar.paused_menu_shown {
-                append_menu_item(hmenu, 3, &t.resume);
-            } else {
-                append_menu_item(hmenu, 3, &t.pause);
-            }
-            append_menu_item(hmenu, 4, &t.reset);
-            append_menu_item(hmenu, 5, &t.rest_now);
-            let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, windows::core::PCWSTR::null());
-            append_menu_item(hmenu, 6, &t.exit);
-
-            // 弹出位置：鼠标（键盘唤起 lParam=-1 → 取当前光标）
-            let (mut x, mut y) = ((l.0 as i16) as i32, ((l.0 >> 16) as i16) as i32);
-            if (x, y) == (-1, -1) {
-                let mut p = POINT::default();
-                let _ = GetCursorPos(&mut p);
-                (x, y) = (p.x, p.y);
-            }
-            // KB135788：非前台窗口的 TrackPopupMenu 点外部不消失——先置前台，
-            // 菜单关闭后补投 WM_NULL 清队列残留
-            let _ = SetForegroundWindow(hwnd);
-            // TPM_RETURNCMD：返回值即所选 id（模态）；uflags 参数是裸 u32（0.62）
-            let chosen = TrackPopupMenuEx(
-                hmenu,
-                TPM_RETURNCMD.0 | TPM_RIGHTBUTTON.0 | TPM_NONOTIFY.0,
-                x,
-                y,
-                hwnd,
-                None,
-            )
-            .0;
-            let _ = DestroyMenu(hmenu);
-            let _ = PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0));
-            // id → TrayAction（与托盘共用同一动作入口，v2 ContextMenu = App.Menu）
-            let paused_shown = bar.paused_menu_shown;
-            let action = match chosen {
-                1 => Some(TrayAction::About),
-                2 => Some(TrayAction::Settings),
-                3 => Some(if paused_shown {
-                    TrayAction::Resume
-                } else {
-                    TrayAction::Pause
-                }),
-                4 => Some(TrayAction::Reset),
-                5 => Some(TrayAction::RestNow),
-                6 => Some(TrayAction::Exit),
-                _ => None,
-            };
-            if let Some(a) = action {
-                let _ = state.cmd_tx.send(CoreMsg::Tray(a));
-            }
-            LRESULT(0)
-        }
+        // 右键菜单两路并接：条身 HTCAPTION，右键抬起落在**非客户区**，DefWindowProc
+        // 不会为标题栏区域的 WM_NCRBUTTONUP 生成 WM_CONTEXTMENU（菜单“消失”的根因），
+        // 故直连 WM_NCRBUTTONUP；WM_CONTEXTMENU 仍保留，覆盖 Shift+F10 / 键盘唤起
+        WM_CONTEXTMENU | WM_NCRBUTTONUP => show_bar_menu(hwnd, state, l),
         m if m == WM_APP_TOPMOST => {
             // 置顶切换由 CoreLoop 经消息驱动（§6.3-1）；样式与 SetWindowPos 同步改
             apply_topmost(hwnd, w.0 == 1);

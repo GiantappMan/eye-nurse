@@ -120,6 +120,16 @@ pub async fn reset_settings(state: State<'_, CoreHandle>) -> Result<SettingsDto,
     Ok(SettingsDto::of(&applied))
 }
 
+/// 立刻休息（设置窗 Hero 按钮用）：与托盘「立刻休息」同一动作入口
+/// （`CoreMsg::Tray(RestNow)`），火后不理——遮罩窗口由 CoreLoop 统一创建
+#[tauri::command]
+pub async fn rest_now(state: State<'_, CoreHandle>) -> Result<(), String> {
+    state
+        .tx
+        .send(CoreMsg::Tray(crate::tray::TrayAction::RestNow))
+        .map_err(|e| e.to_string())
+}
+
 /// 新增专用口：注册表实测自启态（无共享状态，命令线程直查，§4.1）
 #[tauri::command]
 pub async fn get_autostart() -> bool {

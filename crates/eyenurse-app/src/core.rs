@@ -38,6 +38,15 @@ pub struct RestTickPayload {
     pub remaining_ms: u64,
 }
 
+/// 设置窗页眉的实时状态事件（§4.2 增补）：主倒计时 + 暂停/休息态，随 tick 发
+/// （设置窗静态存在，emit_to 恒有接收方；页面用它渲染“下次休息”Hero 区）
+#[derive(serde::Serialize, Clone, Copy, Debug)]
+pub struct SettingsTickPayload {
+    pub remaining_ms: u64,
+    pub paused: bool,
+    pub resting: bool,
+}
+
 /// core 聚合（egui 版 CoreBundle 原样搬移；字段对 C/D 不透明）
 pub struct CoreBundle {
     pub cfg: ConfigStore,
@@ -582,6 +591,14 @@ impl CoreLoop {
         if let Some(since) = self.paused_since {
             self.bar_lock().paused_time = Some(now.duration_since(since));
         }
+        // 设置窗页眉“下次休息”实时倒计时（每拍随发；触发 rest_now 的早退分支
+        // 会漏掉一拍，下一拍即补上，页眉无感知）
+        let tick_payload = SettingsTickPayload {
+            remaining_ms: self.bar_lock().countdown.as_millis() as u64,
+            paused: self.is_paused,
+            resting: self.is_resting,
+        };
+        let _ = self.app.emit_to("settings", "eyenurse://tick", tick_payload);
         // 暂停 480s 渐变与倒计时数字都依赖快照每拍刷新
         if !self.is_resting {
             self.refresh_bar_snapshot();

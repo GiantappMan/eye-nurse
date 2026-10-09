@@ -23,5 +23,14 @@
   "settings": "Settings",
   "setting": "Setting",
   "unlock": "Unlock",
-  "zh": "简体中文"
+  "zh": "简体中文",
+  "nextRest": "Next break",
+  "working": "Focusing",
+  "paused": "Paused",
+  "saved": "Saved",
+  "confirmRestore": "Click again to confirm",
+  "minutes": "min",
+  "seconds": "s",
+  "planTitle": "Break Plan",
+  "systemTitle": "System"
 }

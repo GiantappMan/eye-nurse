@@ -23,5 +23,14 @@
   "settings": "设置",
   "setting": "设置",
   "unlock": "解锁",
-  "zh": "简体中文"
+  "zh": "简体中文",
+  "nextRest": "下次休息",
+  "working": "专注中",
+  "paused": "已暂停",
+  "saved": "已保存",
+  "confirmRestore": "再点一次确认恢复",
+  "minutes": "分钟",
+  "seconds": "秒",
+  "planTitle": "休息计划",
+  "systemTitle": "系统"
 }
