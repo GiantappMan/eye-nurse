@@ -266,6 +266,15 @@ pub fn handle_skin_request(request: tauri::http::Request<Vec<u8>>) -> tauri::htt
             .unwrap()
     };
     let raw_path = request.uri().path();
+    // 源根绝对路径的桥脚本（皮肤页 `<script src="/eyenurse-api.js">` 的解析形态
+    // = 源根，不含 id 段）——先于 id 解析处理；`/<id>/eyenurse-api.js` 的包内
+    // 覆盖形态走正常分支（包内文件优先，缺省内嵌回退）
+    if raw_path == "/eyenurse-api.js" {
+        return respond_ok(
+            "text/javascript; charset=utf-8",
+            embedded::BRIDGE_JS.as_bytes().to_vec(),
+        );
+    }
     let mut segments = raw_path.split('/').filter(|s| !s.is_empty());
     // 第一段 = 皮肤 id（目录名，[a-z0-9-]{1,64}——与 core 校验同规范）
     let Some(id) = segments.next() else {
@@ -327,8 +336,12 @@ pub fn handle_skin_request(request: tauri::http::Request<Vec<u8>>) -> tauri::htt
 // ============================================================================
 
 /// 建 bar 的 WebView 壳窗（main setup 钩子调用，主线程——tauri 要求）。
-/// 行为对齐 GDI 条的初始摆放：UI.json 逻辑 DIP 位置 + TopMost；透明、无装饰、
-/// 不进任务栏、不抢焦点。标签固定 "barweb"（CoreLoop 事件路由与冒烟互不影响）。
+/// **必须加载壳页 `barweb.html`**（与 mask 同构）：壳页经 get_skin_surface 取
+/// 皮肤页 URL 后以 sandbox iframe 内嵌——皮肤页顶层直载是架构违规（事件无人
+/// 转发 → 状态永远停在初始值；更严重的是皮肤页顶层持有 barweb 窗口的完整
+/// IPC 权限，沙箱模型被静默击穿）。行为对齐 GDI 条的初始摆放：UI.json 逻辑
+/// DIP 位置 + TopMost；透明、无装饰、不进任务栏、不抢焦点。标签固定
+/// "barweb"（CoreLoop 事件路由与冒烟互不影响）。
 pub fn build_barweb_window(
     app: &tauri::AppHandle<tauri::Wry>,
     dto: &SkinSurfaceDto,
@@ -336,11 +349,11 @@ pub fn build_barweb_window(
     top: f64,
     topmost: bool,
 ) -> tauri::Result<tauri::WebviewWindow<tauri::Wry>> {
-    let url = dto.bar_url.clone().expect("bar_is_web 时必有皮肤页 URL");
+    let _ = &dto.bar_url; // 皮肤页 URL 由壳页自取（壳页职责，见上）
     let win = tauri::WebviewWindowBuilder::new(
         app,
         "barweb",
-        tauri::WebviewUrl::External(url.parse().expect("皮肤 bar URL 必合法")),
+        tauri::WebviewUrl::App("barweb.html".into()),
     )
     .title("CountdownWindow") // 沿用 GDI 条标题（工具窗口识别惯例）
     .decorations(false)

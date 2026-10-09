@@ -108,7 +108,9 @@ const LOCK_VW = 1280;
 const LOCK_VH = 800;
 const LOCK_SCALE = 0.469; // 600 / 1280（弹窗内容宽固定 600px）
 
-/** 预览用模拟显示态：锁屏 = 纯锁屏脸（时钟+标题，带密码提示位）；bar = 45min 间隔剩余 17min */
+/** 预览用模拟显示态：锁屏脸**按本机锁屏配置取真**（AutoRest → 休息+锁屏叠加态，
+ * 否则纯锁屏脸——预览与实际锁屏所见一致，openPreview 时刷新）；bar = 45min
+ * 间隔剩余 17min 的中间态 */
 const LOCK_DEMO = { remainingMs: 95_000, resting: false, locked: true, hasPassword: true };
 const BAR_DEMO = {
   countdownMs: 17 * 60 * 1000,
@@ -121,6 +123,14 @@ const BAR_DEMO = {
 async function openPreview(meta: SkinMeta): Promise<void> {
   previewMeta.value = meta;
   previewDto.value = null;
+  try {
+    const lock = await invoke<{ AutoRest: boolean; Password: string }>("get_lock_settings");
+    LOCK_DEMO.resting = lock.AutoRest;
+    LOCK_DEMO.locked = true;
+    LOCK_DEMO.hasPassword = Boolean(lock.Password);
+  } catch {
+    /* 无后端时保持默认纯锁屏脸 */
+  }
   try {
     previewDto.value = await invoke<SkinPreviewDto>("get_skin_preview", { id: meta.id });
   } catch {

@@ -77,6 +77,9 @@ export function createSkinHost(
   let surface: SkinSurfaceDto | null = null;
   let alive = false;
   let helloTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 本代 src 是否已握手（iframe 的 load 事件可能触发两次——二次 load 不得
+   * 重上看门狗，否则已握手的皮肤会被 3s 无二次 hello 误判死亡，状态断供） */
+  let helloed = false;
 
   const setAlive = (value: boolean): void => {
     if (alive === value) return;
@@ -101,6 +104,7 @@ export function createSkinHost(
       clearHelloTimer();
       setAlive(false);
       frame.removeAttribute("src");
+      helloed = false;
       return;
     }
     if (url === prevUrl && alive) {
@@ -113,6 +117,7 @@ export function createSkinHost(
       return;
     }
     setAlive(false);
+    helloed = false;
     frame.src = url;
   };
 
@@ -121,6 +126,7 @@ export function createSkinHost(
     const data = ev.data as Record<string, unknown> | null;
     if (!data || typeof data !== "object") return;
     if (data.type === "eyenurse-hello") {
+      helloed = true;
       clearHelloTimer();
       setAlive(true);
       // 握手即补发配色（皮肤页 CSS 变量数据源；表面切换时下方 applySurface 再推）
@@ -139,10 +145,11 @@ export function createSkinHost(
   };
   window.addEventListener("message", onMessage);
 
-  // 看门狗：iframe onload 起 3s 内无握手 → 皮肤损坏，撤下回退内置界面
+  // 看门狗：iframe load 起 3s 内无握手 → 皮肤损坏，撤下回退内置界面。
+  // 已握手的皮肤（helloed）在二次 load 时不重上看门狗（load 可能触发两次）
   frame.addEventListener("load", () => {
     clearHelloTimer();
-    if (!frame.src) return;
+    if (!frame.src || helloed) return;
     helloTimer = setTimeout(() => setAlive(false), HELLO_TIMEOUT_MS);
   });
 
