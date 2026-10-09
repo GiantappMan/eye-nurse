@@ -393,8 +393,17 @@ pub fn classic() -> SkinColors {
     }
 }
 
-/// 内置预设 id（顺序 = 设置页展示顺序）
-pub const BUILTIN_IDS: [&str; 4] = ["classic", "night", "sakura", "ocean"];
+/// 内置皮肤 id（顺序 = 设置页展示顺序）。ESP-1 headless 化后：
+/// - `classic`/`devtest` 是**内置目录包**（[`builtin_package`]，HTML 表面编译进
+///   二进制，经 eyenurse-skin:// 协议与磁盘皮肤同管线服务）；
+/// - `night`/`sakura`/`ocean` 仍是纯配色（bar 走 GDI 原生、lock 经 colors 桥
+///   套 classic 包的锁屏形态）。
+pub const BUILTIN_IDS: [&str; 5] = ["classic", "night", "sakura", "ocean", "devtest"];
+
+/// 是否内置 id（磁盘扫描跳过这些目录/文件名——内嵌皮肤不可被磁盘包遮蔽）
+pub fn is_builtin_id(id: &str) -> bool {
+    BUILTIN_IDS.contains(&id)
+}
 
 /// 内置预设（编译进二进制；色值与深底/浅底的自洽由人工评审保证：
 /// 深色 progress_bg 必须配浅色 text_idle 与浅色 check_hover_bg 上的深色 glyph）
@@ -404,6 +413,7 @@ pub fn builtin(id: &str) -> Option<SkinColors> {
         "night" => ("暗夜", "Night"),
         "sakura" => ("樱粉", "Sakura"),
         "ocean" => ("海蓝", "Ocean"),
+        "devtest" => ("测试皮肤", "Dev Test"),
         _ => return None,
     };
     let mut c = classic();
@@ -449,24 +459,91 @@ pub fn builtin(id: &str) -> Option<SkinColors> {
             c.mask_bg = "#0E1F2A".into();
             c.mask_fg = "#E3F2FD".into();
         }
+        // devtest：高对比霓虹（协议验证皮肤——每个表面一眼可辨）
+        "devtest" => {
+            c.bar_progress_bg = "#101014".into();
+            c.bar_progress_fill = "#00E676".into();
+            c.bar_progress_from = "#FFD600".into();
+            c.bar_progress_to = "#FF1744".into();
+            c.bar_text_idle = "#00E676".into();
+            c.bar_text_from = "#FFD600".into();
+            c.bar_text_to = "#FF1744".into();
+            c.bar_check_glyph = "#00E676".into();
+            c.bar_check_hover_bg = "#1B2E24".into();
+            c.mask_bg = "#0D001A".into();
+            c.mask_fg = "#76FF03".into();
+        }
         _ => {}
     }
     Some(c)
 }
 
-/// 内置皮肤清单（设置页固定置顶）
+/// 内置目录包（ESP-1 headless）：`classic` 的锁屏界面与 `devtest` 全表面。
+/// manifest 与 app 侧内嵌资产（skin_proto::embedded）一一对应——改 entry 必须
+/// 同步内嵌文件映射。`dir` 语义为空：内嵌内容由协议按 id 直接服务。
+///
+/// - classic：无 bar entry（bar 走 GDI 原生——WebView2 冷启动可达秒级，默认
+///   悬浮条保持零延迟；GDI 是 headless 宿主唯一的原生表面渲染器）；
+/// - devtest：bar+lock 全 HTML 表面 + 异常位 chrome（密码框 y=74%、解锁按钮
+///   居中）——专用于真机验证协议链路（表面加载/握手/状态推送/chrome 摆放）。
+pub fn builtin_package(id: &str) -> Option<SkinManifest> {
+    let mut m = SkinManifest {
+        id: id.to_string(),
+        ..SkinManifest::default()
+    };
+    match id {
+        "classic" => {
+            m.name = LocalizedName {
+                zh: "经典".into(),
+                en: "Classic".into(),
+            };
+            m.targets.lock = Some(TargetLockDef {
+                entry: "lock/index.html".into(),
+                chrome: None,
+            });
+            Some(m)
+        }
+        "devtest" => {
+            m.name = LocalizedName {
+                zh: "测试皮肤".into(),
+                en: "Dev Test".into(),
+            };
+            m.targets.bar = Some(TargetBarDef {
+                entry: "bar/index.html".into(),
+                size: Some(SizeDef { w: 160.0, h: 44.0 }),
+            });
+            m.targets.lock = Some(TargetLockDef {
+                entry: "lock/index.html".into(),
+                chrome: Some(LockChromeDef {
+                    password: Some(ChromePos { x: 50.0, y: 74.0 }),
+                    unlock: Some(ChromePos { x: 50.0, y: 88.0 }),
+                }),
+            });
+            Some(m)
+        }
+        _ => None,
+    }
+}
+
+/// 内置皮肤清单（设置页固定置顶；表面徽标来自 [`builtin_package`] 声明）
 pub fn builtin_metas() -> Vec<SkinMeta> {
     BUILTIN_IDS
         .iter()
         .filter_map(|id| {
-            builtin(id).map(|colors| SkinMeta {
-                id: (*id).into(),
-                name: colors.name.clone(),
-                name_en: colors.name_en.clone(),
-                colors,
-                has_bar: false,
-                has_lock: false,
-                has_preview: false,
+            builtin(id).map(|colors| {
+                let pkg = builtin_package(id);
+                let (has_bar, has_lock) = pkg
+                    .map(|m| (m.targets.bar.is_some(), m.targets.lock.is_some()))
+                    .unwrap_or((false, false));
+                SkinMeta {
+                    id: (*id).into(),
+                    name: colors.name.clone(),
+                    name_en: colors.name_en.clone(),
+                    colors,
+                    has_bar,
+                    has_lock,
+                    has_preview: false,
+                }
             })
         })
         .collect()
@@ -510,6 +587,7 @@ pub fn resolve(def: &SkinDef, classic: &SkinColors) -> SkinColors {
 
 /// 扫描磁盘皮肤目录（`Assets/Skins`）：`<id>.json` = Tier 0 颜色键，
 /// `<id>/skin.json` = Tier 1 目录包。坏 JSON / 校验不过 / 非皮肤项跳过；
+/// **内置 id（[`is_builtin_id`]）的文件/目录跳过**——内嵌皮肤不可被磁盘遮蔽；
 /// 按 id 排序保证展示稳定。目录不存在 → 空表。
 pub fn scan_disk(dir: &Path) -> Vec<DiskSkinEntry> {
     let mut out = Vec::new();
@@ -524,6 +602,9 @@ pub fn scan_disk(dir: &Path) -> Vec<DiskSkinEntry> {
                 let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
                     continue;
                 };
+                if is_builtin_id(stem) {
+                    continue;
+                }
                 let Ok(text) = std::fs::read_to_string(&path) else {
                     continue;
                 };
@@ -537,6 +618,12 @@ pub fn scan_disk(dir: &Path) -> Vec<DiskSkinEntry> {
             }
             // Tier 1：目录包（含 skin.json 才算；目录存在即尝试，校验不过静默跳过）
             None if path.is_dir() => {
+                let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                if is_builtin_id(name) {
+                    continue;
+                }
                 if let Ok(pkg) = DiskSkinEntry::load_package(&path) {
                     out.push(pkg);
                 }
@@ -592,34 +679,63 @@ pub struct ResolvedSurface {
     pub chrome: Option<LockChromeDef>,
 }
 
-/// 生效皮肤的全量解析：配色（逐键回退）+ 两个 target 的 HTML 表面（各自独立，
-/// 缺哪个回退哪个的内置界面）。磁盘 id 失效 → 全 classic、无表面。
-pub fn resolve_surfaces(config: &SkinConfig, disk: &[DiskSkinEntry]) -> (SkinColors, Option<ResolvedSurface>, Option<ResolvedSurface>) {
+/// 生效皮肤的全量解析：配色（逐键回退）+ 两个 target 的 HTML 表面（各自独立）。
+///
+/// **headless 回退规则**：宿主壳页没有内置界面——
+/// - lock **永不为 None**：激活皮肤无 lock 表面（纯配色/自定义/内置纯色预设/
+///   磁盘 id 失效）→ 回退内置 `classic` 包的锁屏（经 colors 桥吃当前配色，
+///   Tier 0 换色照常生效）；
+/// - bar 为 None = GDI 原生条（渲染器级回退，也是默认悬浮条——零冷启动延迟）。
+///
+/// 磁盘 id 失效 → 配色落 classic、lock 落 classic 包。
+pub fn resolve_surfaces(
+    config: &SkinConfig,
+    disk: &[DiskSkinEntry],
+) -> (
+    SkinColors,
+    Option<ResolvedSurface>,
+    Option<ResolvedSurface>,
+) {
     let colors = resolve_effective(config, disk);
-    let found = match config.Current.as_str() {
-        "custom" => None,
-        id if builtin(id).is_some() => None,
-        id => disk.iter().find(|e| e.id() == id),
+    let (bar, lock) = match config.Current.as_str() {
+        "custom" => (None, None),
+        id => match builtin_package(id) {
+            Some(m) => surfaces_of(&m, &PathBuf::new()),
+            None => match disk.iter().find(|e| e.id() == id) {
+                Some(DiskSkinEntry::Package { manifest, dir, .. }) => {
+                    surfaces_of(manifest, dir)
+                }
+                _ => (None, None),
+            },
+        },
     };
-    let Some(entry) = found else {
-        return (colors, None, None);
-    };
-    let DiskSkinEntry::Package { manifest, dir, .. } = entry else {
-        return (colors, None, None);
-    };
+    let lock = lock.or_else(|| {
+        builtin_package("classic").and_then(|m| m.targets.lock).map(|t| ResolvedSurface {
+            dir: PathBuf::new(),
+            entry: t.entry,
+            size: None,
+            chrome: t.chrome,
+        })
+    });
+    (colors, bar, lock)
+}
+
+/// manifest targets → 解析表面（dir 由调用方给：磁盘包为真实目录，内置包为空
+/// 占位——内嵌内容由协议 handler 按 id 服务，不落盘）
+fn surfaces_of(manifest: &SkinManifest, dir: &Path) -> (Option<ResolvedSurface>, Option<ResolvedSurface>) {
     let bar = manifest.targets.bar.as_ref().map(|t| ResolvedSurface {
-        dir: dir.clone(),
+        dir: dir.to_path_buf(),
         entry: t.entry.clone(),
         size: t.size,
         chrome: None,
     });
     let lock = manifest.targets.lock.as_ref().map(|t| ResolvedSurface {
-        dir: dir.clone(),
+        dir: dir.to_path_buf(),
         entry: t.entry.clone(),
         size: None,
         chrome: t.chrome,
     });
-    (colors, bar, lock)
+    (bar, lock)
 }
 
 #[cfg(test)]
@@ -900,6 +1016,98 @@ mod tests {
         let colors = resolve_effective(&config, &skins);
         assert_eq!(colors.name, "日落时钟");
         assert_eq!(colors.name_en, "Sunset Clock");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // —— ESP-1 headless：内置包 + 永不空锁屏 ——
+
+    #[test]
+    fn builtin_packages_declare_surfaces() {
+        // classic：仅 lock（bar = GDI 原生，零冷启动）
+        let c = builtin_package("classic").expect("classic 包应存在");
+        assert!(c.targets.bar.is_none());
+        assert_eq!(c.targets.lock.as_ref().unwrap().entry, "lock/index.html");
+        // devtest：bar+lock 全表面 + 异常位 chrome（协议验证点）
+        let d = builtin_package("devtest").expect("devtest 包应存在");
+        assert_eq!(
+            d.targets.bar.as_ref().unwrap().size,
+            Some(SizeDef { w: 160.0, h: 44.0 })
+        );
+        let chrome = d.targets.lock.as_ref().unwrap().chrome.unwrap();
+        assert_eq!(chrome.password, Some(ChromePos { x: 50.0, y: 74.0 }));
+        // 纯色预设无包
+        assert!(builtin_package("night").is_none());
+        assert!(builtin_package("custom").is_none());
+        // 清单徽标
+        let metas = builtin_metas();
+        let classic = metas.iter().find(|m| m.id == "classic").unwrap();
+        assert!(!classic.has_bar && classic.has_lock);
+        let devtest = metas.iter().find(|m| m.id == "devtest").unwrap();
+        assert!(devtest.has_bar && devtest.has_lock);
+        assert_eq!(devtest.colors.bar_progress_fill, "#00E676");
+    }
+
+    #[test]
+    fn lock_surface_never_none_and_bar_falls_back_to_gdi() {
+        // classic：lock = 自己的包，bar = None（GDI）
+        let config = SkinConfig {
+            Current: "classic".into(),
+            Custom: None,
+        };
+        let (_, bar, lock) = resolve_surfaces(&config, &[]);
+        assert!(bar.is_none());
+        assert_eq!(lock.unwrap().entry, "lock/index.html");
+
+        // 纯色预设 night：lock 回退 classic 包（colors 桥吃 night 配色），bar = GDI
+        let config = SkinConfig {
+            Current: "night".into(),
+            Custom: None,
+        };
+        let (colors, bar, lock) = resolve_surfaces(&config, &[]);
+        assert_eq!(colors.mask_bg, "#101216");
+        assert!(bar.is_none());
+        assert_eq!(lock.unwrap().entry, "lock/index.html");
+
+        // 自定义编辑器：同规则
+        let config = SkinConfig {
+            Current: "custom".into(),
+            Custom: Some(SkinDef::default()),
+        };
+        let (_, _, lock) = resolve_surfaces(&config, &[]);
+        assert!(lock.is_some());
+
+        // 磁盘 id 失效：lock 仍不空
+        let config = SkinConfig {
+            Current: "gone-skin".into(),
+            Custom: None,
+        };
+        let (colors, _, lock) = resolve_surfaces(&config, &[]);
+        assert_eq!(colors.name, "经典");
+        assert!(lock.is_some());
+
+        // devtest：bar 有表面（WebView 壳）
+        let config = SkinConfig {
+            Current: "devtest".into(),
+            Custom: None,
+        };
+        let (_, bar, _) = resolve_surfaces(&config, &[]);
+        assert_eq!(bar.unwrap().entry, "bar/index.html");
+    }
+
+    #[test]
+    fn scan_disk_skips_builtin_ids() {
+        let dir = std::env::temp_dir().join(format!("eyenurse-skin-shadow-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // 磁盘伪装内置：两种形态都不得入选（内嵌皮肤不可被遮蔽）
+        std::fs::write(dir.join("classic.json"), "{\"name\":\"假经典\"}").unwrap();
+        std::fs::create_dir_all(dir.join("devtest")).unwrap();
+        std::fs::write(dir.join("devtest").join(MANIFEST_FILE), "{}").unwrap();
+        std::fs::write(dir.join("real.json"), "{\"name\":\"R\"}").unwrap();
+
+        let skins = scan_disk(&dir);
+        let ids: Vec<&str> = skins.iter().map(|s| s.id()).collect();
+        assert_eq!(ids, ["real"]);
 
         std::fs::remove_dir_all(&dir).ok();
     }

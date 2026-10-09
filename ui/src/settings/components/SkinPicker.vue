@@ -6,8 +6,14 @@
 // bar 形态变化需重启（bar 运行模式启动期定死）：选中皮肤 has_bar 与运行模式
 // 不一致时显示 skinRestartHint（换色不受影响，即时生效）。
 import { computed, reactive, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { currentLanguage, t } from "../i18n";
 import { skinPreviewUrl, type SkinColors, type SkinDefPayload, type SkinMeta } from "../types";
+
+/** 打开磁盘皮肤目录（安装入口：包文件夹拖入即装） */
+function openSkinsFolder(): void {
+  invoke("open_skins_folder").catch(() => {});
+}
 
 const props = defineProps<{
   /** 可用皮肤（内置 + 磁盘 + 自定义槽） */
@@ -144,6 +150,15 @@ function saveCustom(): void {
       </button>
     </div>
     <p v-if="restartHint" class="restart-hint">{{ t("skinRestartHint") }}</p>
+
+    <!-- UGC 安装入口：皮肤包文件夹丢进 Assets/Skins 即装（重开设置页可见）。
+         dev 布局由 build.rs 拷示例皮肤；安装包同目录。 -->
+    <div class="skins-actions">
+      <button type="button" class="folder-btn" @click="openSkinsFolder">
+        {{ t("openSkinsFolder") }}
+      </button>
+      <span class="hint">{{ t("skinsFolderHint") }}</span>
+    </div>
 
     <!-- 自定义编辑器 -->
     <div class="editor">
@@ -282,6 +297,30 @@ function saveCustom(): void {
 .restart-hint {
   margin: 8px 0 0;
   font-size: 12px;
+  color: var(--text-2);
+}
+.skins-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.folder-btn {
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.folder-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+.hint {
+  font-size: 11px;
   color: var(--text-2);
 }
 

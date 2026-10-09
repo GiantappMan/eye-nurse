@@ -1,0 +1,157 @@
+<!doctype html>
+<!-- devtest 测试皮肤 · 锁屏表面：协议验证专用。紫红测试条纹 + 实时状态转储，
+     把桥上能看到的一切画在脸上，肉眼即可核对：
+     - state：remainingMs / resting / locked / hasPassword（1Hz 刷新）；
+     - texts：键数量（get_texts 整包到达即 +）；
+     - colors：mask_bg 实际值（纯配色皮肤切到 devtest 时应跟随变化）；
+     - chrome 摆放：虚线占位框画在 manifest 声明的坐标上——宿主渲染的密码框
+       （y=74%）与解锁按钮（y=88%）应与虚线框重合（对齐 = chrome 协议通过）。
+     未锁定时点击任意处 = 结束休息（endRest）；已锁定必须走宿主密码框。 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        user-select: none;
+        color: #76ff03;
+        background: repeating-linear-gradient(
+          45deg,
+          #0d001a 0px,
+          #0d001a 42px,
+          #26003d 42px,
+          #26003d 84px
+        );
+        font-family: Consolas, "Cascadia Mono", monospace;
+        cursor: pointer;
+      }
+      body.locked {
+        cursor: default;
+      }
+      #tag {
+        position: absolute;
+        top: 18px;
+        left: 24px;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        color: #ff41f8;
+      }
+      #clock {
+        position: absolute;
+        top: 22%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 110px;
+        font-weight: 700;
+        letter-spacing: 6px;
+        text-shadow: 0 0 28px rgb(118 255 3 / 0.35);
+      }
+      #dump {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        min-width: 340px;
+        padding: 14px 18px;
+        border: 1px solid #ff41f8;
+        border-radius: 8px;
+        background: rgb(13 0 26 / 0.82);
+        font-size: 13px;
+        line-height: 1.7;
+        white-space: pre;
+      }
+      #dump b {
+        color: #ff41f8;
+      }
+      /* chrome 占位对齐框（坐标 = 本皮肤 manifest 的 chrome 声明） */
+      .chrome-hint {
+        position: absolute;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 1px dashed rgb(255 65 248 / 0.55);
+        border-radius: 10px;
+        color: rgb(255 65 248 / 0.8);
+        font-size: 11px;
+        letter-spacing: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #pwd-hint {
+        top: 74%;
+        width: 248px;
+        height: 44px;
+      }
+      #unlock-hint {
+        top: 88%;
+        width: 60px;
+        height: 32px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="tag">DEV-TEST LOCK</div>
+    <div id="clock">--:--</div>
+    <div id="dump">waiting state…</div>
+    <div id="pwd-hint" class="chrome-hint">PWD @ 50%,74%</div>
+    <div id="unlock-hint" class="chrome-hint">UNLOCK @ 50%,88%</div>
+    <script src="/eyenurse-api.js"></script>
+    <script>
+      (function () {
+        "use strict";
+        var clockEl = document.getElementById("clock");
+        var dumpEl = document.getElementById("dump");
+        var state = null;
+        var texts = {};
+        var colors = {};
+
+        function two(n) { return String(n).padStart(2, "0"); }
+        function renderClock() {
+          var now = new Date();
+          clockEl.textContent = two(now.getHours()) + ":" + two(now.getMinutes());
+        }
+        setInterval(renderClock, 1000);
+        renderClock();
+
+        function render() {
+          if (!state) return;
+          var keys = Object.keys(texts).length;
+          var lines = [
+            "<b>ESP-1 state</b> (" + new Date().toLocaleTimeString() + ")",
+            "remainingMs : " + state.remainingMs,
+            "resting     : " + state.resting,
+            "locked      : " + state.locked,
+            "hasPassword : " + state.hasPassword,
+            "texts keys  : " + keys,
+            "colors.mask_bg : " + (colors.mask_bg || "-"),
+          ];
+          dumpEl.innerHTML = lines.join("\n");
+          document.body.classList.toggle("locked", state.locked);
+        }
+
+        eyenurse.onState(function (s) {
+          state = s;
+          render();
+        });
+        eyenurse.onTexts(function (t) {
+          texts = t;
+          render();
+        });
+        eyenurse.onColors(function (c) {
+          colors = c;
+          render();
+        });
+
+        // 未锁 = 点击结束休息；已锁 = 只能走宿主密码框（endRest 会被宿主忽略）
+        document.body.addEventListener("click", function () {
+          eyenurse.endRest();
+        });
+      })();
+    </script>
+  </body>
+</html>

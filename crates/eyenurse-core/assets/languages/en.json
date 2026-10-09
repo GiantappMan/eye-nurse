@@ -65,6 +65,8 @@
   "skinTargetLock": "Lock screen",
   "skinRestartHint": "This skin replaces the countdown bar; restart the app to apply it",
   "skinByAuthor": "by {author}",
+  "openSkinsFolder": "Open skins folder",
+  "skinsFolderHint": "Drop skin package folders here to install",
   "colorMain": "Main colors",
   "colorPaused": "Paused ramps",
   "colorCheck": "Check",

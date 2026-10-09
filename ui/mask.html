@@ -6,32 +6,14 @@
     <title>LockScreenWindow</title>
   </head>
   <body>
-    <!-- 休息/锁屏遮罩页面（无框架，纯 TS：§5.1 + v3.2 仿锁屏）。
-         三态由 rest-tick 载荷驱动（resting/locked/has_password）：
-         - 纯休息：旋转圈 + 倒计时 + 右下解锁；
-         - 纯锁屏：时钟 + （有密码时）密码框 + 解锁；
-         - 锁屏+休息叠加：倒计时与锁屏面板同屏。
-         文案由 JS 经 get_texts 写入（i18n），不在 HTML 里硬编码。
-         ESP-1 皮肤宿主（shared/skinHost.ts）：当前皮肤声明 lock 表面时，
-         #skin-frame 以 sandbox iframe 加载皮肤页（opaque origin，皮肤拿不到
-         IPC/宿主 DOM）；#skin-pwd-row / #skin-lock-err 是皮肤模式下的宿主
-         独占 chrome（百分比摆放由皮肤 manifest 声明）——密码永远不过 iframe。 -->
+    <!-- 休息/锁屏遮罩壳页（ESP-1 headless）：本页**没有任何内置界面**——锁屏
+         与休息画面全部由皮肤提供（core 保证 lock URL 恒有：激活皮肤无 lock
+         表面时回退内置 classic 包）。壳页只保留两类宿主独占元素：
+         - #skin-frame：sandbox iframe 承载皮肤页（skinHost 桥 + 握手看门狗）；
+         - chrome（#skin-pwd-row/#skin-lock-err/#unlock）：密码框、错误提示与
+           解锁逃生按钮——皮肤 iframe 不可达，密码永不过 iframe，防爆破限速在
+           CoreLoop。解锁按钮恒在 = 任何皮肤损坏时用户都有逃生口。 -->
     <div id="mask">
-      <div class="center-stack">
-        <div class="spinner-stack">
-          <div class="spinner"></div>
-          <div id="countdown">00:00</div>
-        </div>
-        <div id="lock-panel" hidden>
-          <p id="locked-title"></p>
-          <div id="clock">--:--</div>
-          <div id="lock-date"></div>
-          <div id="pwd-row" hidden>
-            <input id="pwd" type="password" autocomplete="off" spellcheck="false" />
-          </div>
-          <p id="lock-err" hidden></p>
-        </div>
-      </div>
       <iframe id="skin-frame" sandbox="allow-scripts" title="skin"></iframe>
       <div id="skin-pwd-row" hidden>
         <input id="skin-pwd" type="password" autocomplete="off" spellcheck="false"

@@ -1,0 +1,12 @@
+{
+  "format": "eyenurse-skin",
+  "formatVersion": 1,
+  "id": "classic",
+  "name": { "zh": "经典", "en": "Classic" },
+  "author": "巨应君",
+  "version": "3.2.0",
+  "targets": {
+    "lock": { "entry": "lock/index.html" }
+  },
+  "colors": {}
+}

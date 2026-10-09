@@ -20,52 +20,54 @@ use std::path::{Path, PathBuf};
 /// 自定义协议 scheme（页面源 = `http://eyenurse-skin.localhost/...`）
 pub const SKIN_SCHEME_HOST: &str = "http://eyenurse-skin.localhost";
 
-/// lock 宿主 chrome 的缺省摆放（百分比；皮肤 manifest 未声明时兜底：
-/// 密码框居中偏下，解锁按钮右下角——与内置界面视觉一致）
+/// lock 宿主 chrome 的缺省摆放：密码框无声明时居中偏下；**解锁按钮无声明时
+/// 不改位**（壳页 CSS 默认右下 12px 定角——与 v3.2 之前的 classic 外观像素级
+/// 一致，皮肤 manifest 显式声明百分比才移动）
 const DEFAULT_PASSWORD_POS: ChromePos = ChromePos { x: 50.0, y: 62.0 };
-const DEFAULT_UNLOCK_POS: ChromePos = ChromePos { x: 95.0, y: 93.0 };
 
 /// 页面消费的表面运行时快照（get_skin_surface 回包 / skin-surface-changed 载荷）。
-/// bar/lock URL 为 None = 该 target 用内置界面（皮肤未声明或 id 失效回退）。
+/// bar URL 为 None = GDI 原生条；lock URL 由 core 保证恒有（headless：无声明
+/// 回退内置 classic 包锁屏）。
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SkinSurfaceDto {
     /// 当前皮肤 id（"classic" / 内置 / 磁盘 id / "custom"）
     pub id: String,
-    /// 逐键回退后的完整配色（内置界面仍消费；皮肤页也可用作辅助色）
+    /// 逐键回退后的完整配色（classic 包锁屏等皮肤消费；壳页 chrome 也用）
     pub colors: SkinColors,
-    /// bar 皮肤页 URL（`http://eyenurse-skin.localhost/<id>/<entry>`）
+    /// bar 皮肤页 URL（`http://eyenurse-skin.localhost/<id>/<entry>`；None = GDI）
     pub bar_url: Option<String>,
-    /// lock 皮肤页 URL
+    /// lock 皮肤页 URL（core 侧永不 None——headless 锁屏回退 classic 包）
     pub lock_url: Option<String>,
     /// bar 窗口逻辑尺寸（DIP；manifest 未声明 → 80×20，对齐 GDI 条）
     pub bar_w: f64,
     pub bar_h: f64,
-    /// lock 宿主独占控件摆放（百分比，含缺省兜底）
+    /// lock 宿主独占控件摆放（密码框百分比含缺省兜底；解锁按钮 None = 壳页
+    /// CSS 默认右下角像素定位）
     pub lock_chrome: LockChromeDto,
     /// bar 当前实际运行模式（true = WebView 壳 + 皮肤 iframe）。启动时定死；
     /// 设置页据此对「表面形态变化」的皮肤显示重启提示（换色无需重启）
     pub bar_is_web: bool,
 }
 
-/// 宿主独占控件百分比坐标（序列化形态，缺省已兜底）
+/// 宿主独占控件摆放（序列化形态；unlock 为 None = 保持壳页默认右下角）
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct LockChromeDto {
     pub password_x: f64,
     pub password_y: f64,
-    pub unlock_x: f64,
-    pub unlock_y: f64,
+    pub unlock_x: Option<f64>,
+    pub unlock_y: Option<f64>,
 }
 
 impl LockChromeDto {
     fn of(def: Option<LockChromeDef>) -> Self {
         let def = def.unwrap_or_default();
         let password = def.password.unwrap_or(DEFAULT_PASSWORD_POS);
-        let unlock = def.unlock.unwrap_or(DEFAULT_UNLOCK_POS);
+        let unlock = def.unlock.map(|p| (p.x.clamp(0.0, 100.0), p.y.clamp(0.0, 100.0)));
         Self {
             password_x: password.x.clamp(0.0, 100.0),
             password_y: password.y.clamp(0.0, 100.0),
-            unlock_x: unlock.x.clamp(0.0, 100.0),
-            unlock_y: unlock.y.clamp(0.0, 100.0),
+            unlock_x: unlock.map(|(x, _)| x),
+            unlock_y: unlock.map(|(_, y)| y),
         }
     }
 }
@@ -178,7 +180,51 @@ const SKIN_CSP: &str = "default-src 'none'; \
      media-src http://eyenurse-skin.localhost data: blob:; \
      connect-src 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'";
 
-/// `eyenurse-skin://` 请求处理：`/<id>/<entry...>` → `Assets/Skins/<id>/<entry...>`。
+// ============================================================================
+// 内嵌皮肤资产（ESP-1 headless）：classic 锁屏 + devtest 全表面 + 桥脚本，
+// 编译进二进制，经与磁盘皮肤完全相同的 eyenurse-skin:// 协议服务——宿主没有
+// 皮肤系统之外的界面。与 core 的 builtin_package(id) 声明一一对应。
+// ============================================================================
+
+mod embedded {
+    pub const BRIDGE_JS: &str = include_str!("skins/eyenurse-api.js");
+    pub const CLASSIC_MANIFEST: &str = include_str!("skins/classic/skin.json");
+    pub const CLASSIC_LOCK: &str = include_str!("skins/classic/lock/index.html");
+    pub const DEVTEST_MANIFEST: &str = include_str!("skins/devtest/skin.json");
+    pub const DEVTEST_BAR: &str = include_str!("skins/devtest/bar/index.html");
+    pub const DEVTEST_LOCK: &str = include_str!("skins/devtest/lock/index.html");
+}
+
+/// 内嵌资产查找（rel 路径以 `/` 分隔；精确匹配，无遍历空间）
+fn embedded_lookup(id: &str, rel: &str) -> Option<&'static str> {
+    match (id, rel) {
+        ("classic", "skin.json") => Some(embedded::CLASSIC_MANIFEST),
+        ("classic", "lock/index.html") => Some(embedded::CLASSIC_LOCK),
+        ("devtest", "skin.json") => Some(embedded::DEVTEST_MANIFEST),
+        ("devtest", "bar/index.html") => Some(embedded::DEVTEST_BAR),
+        ("devtest", "lock/index.html") => Some(embedded::DEVTEST_LOCK),
+        // 桥脚本对内嵌皮肤恒可用
+        ("classic" | "devtest", "eyenurse-api.js") => Some(embedded::BRIDGE_JS),
+        _ => None,
+    }
+}
+
+fn respond_ok(mime: &'static str, bytes: Vec<u8>) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(tauri::http::StatusCode::OK)
+        .header(tauri::http::header::CONTENT_TYPE, mime)
+        .header(tauri::http::header::CONTENT_SECURITY_POLICY, SKIN_CSP)
+        .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(tauri::http::header::CACHE_CONTROL, "no-cache")
+        .body(bytes)
+        .unwrap()
+}
+
+/// `eyenurse-skin://` 请求处理：`/<id>/<entry...>`。
+/// - 内置 id（classic/devtest）→ 内嵌资产（磁盘同名目录被扫描层跳过，不可遮蔽）；
+/// - 其余 → `Assets/Skins/<id>/<entry...>`；磁盘包未自带 `eyenurse-api.js` 时
+///   回退内嵌桥（第三方皮肤零依赖模板）。
+///
 /// 任何不合法（id 字符集、路径穿越、越出包目录、文件缺失）→ 404，绝不回退到
 /// 更宽的目录（皮肤资源只有包目录一个根）。
 pub fn handle_skin_request(request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
@@ -207,29 +253,40 @@ pub fn handle_skin_request(request: tauri::http::Request<Vec<u8>>) -> tauri::htt
     if rel.as_os_str().is_empty() {
         return not_found();
     }
+    let rel_unix = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
 
-    // 规范化双重校验：最终路径必须仍在「 skins_dir/<id> 」内（纵深防御，
-    // manifest 加载期已查过 entry，这里覆盖其余全部资源请求）
+    // 内置 id → 内嵌资产（精确匹配，无 FS 访问）
+    if eyenurse_core::skin::is_builtin_id(id) {
+        return match embedded_lookup(id, &rel_unix) {
+            Some(content) => respond_ok(mime_of(Path::new(&rel_unix)), content.as_bytes().to_vec()),
+            None => not_found(),
+        };
+    }
+
+    // 磁盘包：规范化双重校验——最终路径必须仍在「 skins_dir/<id> 」内（纵深
+    // 防御，manifest 加载期已查过 entry，这里覆盖其余全部资源请求）
     let base = skins_dir().join(id);
     let Ok(base_canon) = base.canonicalize() else {
         return not_found();
     };
     let full = base.join(&rel);
     let Ok(full_canon) = full.canonicalize() else {
-        return not_found();
+        // 磁盘包未自带桥脚本 → 内嵌回退（第三方皮肤零依赖）
+        return if rel_unix == "eyenurse-api.js" {
+            respond_ok("text/javascript; charset=utf-8", embedded::BRIDGE_JS.as_bytes().to_vec())
+        } else {
+            not_found()
+        };
     };
     if !full_canon.starts_with(&base_canon) || !full_canon.is_file() {
         return not_found();
     }
     match std::fs::read(&full_canon) {
-        Ok(bytes) => tauri::http::Response::builder()
-            .status(tauri::http::StatusCode::OK)
-            .header(tauri::http::header::CONTENT_TYPE, mime_of(&full_canon))
-            .header(tauri::http::header::CONTENT_SECURITY_POLICY, SKIN_CSP)
-            .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-            .header(tauri::http::header::CACHE_CONTROL, "no-cache")
-            .body(bytes)
-            .unwrap(),
+        Ok(bytes) => respond_ok(mime_of(&full_canon), bytes),
         Err(_) => not_found(),
     }
 }
@@ -324,16 +381,55 @@ mod tests {
 
     #[test]
     fn chrome_defaults_and_clamp() {
-        // 无声明 → 缺省位置
+        // 无声明 → 密码框缺省居中偏下；解锁按钮 None = 壳页 CSS 默认右下角
         let d = LockChromeDto::of(None);
         assert_eq!(d.password_x, 50.0);
-        assert_eq!(d.unlock_y, 93.0);
+        assert_eq!(d.password_y, 62.0);
+        assert_eq!(d.unlock_x, None);
+        assert_eq!(d.unlock_y, None);
         // 声明越界 → clamp
         let d = LockChromeDto::of(Some(LockChromeDef {
             password: Some(ChromePos { x: 120.0, y: -5.0 }),
-            unlock: None,
+            unlock: Some(ChromePos { x: 50.0, y: 88.0 }),
         }));
         assert_eq!((d.password_x, d.password_y), (100.0, 0.0));
+        assert_eq!(d.unlock_x, Some(50.0));
+        assert_eq!(d.unlock_y, Some(88.0));
+    }
+
+    /// 内嵌皮肤资产可经协议服务（classic 锁屏 + devtest 全表面 + 桥）——
+    /// headless 的「内置皮肤走同一协议管线」契约
+    #[test]
+    fn embedded_skins_served_via_protocol() {
+        let req = |path: &str| {
+            tauri::http::Request::builder()
+                .uri(path)
+                .body(Vec::new())
+                .unwrap()
+        };
+        for path in [
+            "http://eyenurse-skin.localhost/classic/lock/index.html",
+            "http://eyenurse-skin.localhost/classic/skin.json",
+            "http://eyenurse-skin.localhost/classic/eyenurse-api.js",
+            "http://eyenurse-skin.localhost/devtest/bar/index.html",
+            "http://eyenurse-skin.localhost/devtest/lock/index.html",
+            "http://eyenurse-skin.localhost/devtest/skin.json",
+        ] {
+            let r = handle_skin_request(req(path));
+            assert_eq!(r.status(), 200, "{path} 应 200");
+            assert!(r.headers().get("Content-Security-Policy").is_some());
+            assert!(!r.body().is_empty());
+        }
+        // 内嵌皮肤未发布的内容 → 404（精确匹配，无遍历）
+        assert_eq!(
+            handle_skin_request(req("http://eyenurse-skin.localhost/classic/bar/index.html"))
+                .status(),
+            404
+        );
+        assert_eq!(
+            handle_skin_request(req("http://eyenurse-skin.localhost/classic/..%2fetc")).status(),
+            404
+        );
     }
 
     /// 协议 handler 对真实文件系统的行为（测试进程 exe 旁造包——与生产同定位

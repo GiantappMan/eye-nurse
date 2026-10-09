@@ -73,6 +73,9 @@ const skinHost = createSkinHost(skinFrame, {
       case "drag":
         invoke("bar_drag").catch(() => {});
         break;
+      case "openMenu":
+        invoke("bar_open_menu").catch(() => {});
+        break;
       case "openSettings":
         invoke("open_settings").catch(() => {});
         break;
@@ -82,6 +85,12 @@ const skinHost = createSkinHost(skinFrame, {
       // lock 专属动作（endRest/tryUnlock）在 bar 表面静默忽略
     }
   },
+});
+
+// 壳页自身右键（皮肤未接管时的回退迷你条）也弹托盘同源菜单
+window.addEventListener("contextmenu", (ev) => {
+  ev.preventDefault();
+  invoke("bar_open_menu").catch(() => {});
 });
 
 void listen<BarStatePayload>("eyenurse://bar-state", (ev) => {

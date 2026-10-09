@@ -58,6 +58,9 @@ pub enum CoreMsg {
     /// 托盘双击 → bar 按 UI.json 持久化 TopMost/位置恢复显示（B11，经 WM_APP_SHOW；
     /// 对齐 v2 ShowCountdownWindow，非无条件置顶）
     ShowBar,
+    /// ESP-1：HTML 悬浮条（barweb 皮肤）请求右键菜单（eyenurse.openMenu() 桥）→
+    /// CoreLoop 在临时线程弹原生菜单（win::menu），选中动作经 Tray 回流
+    ShowBarMenu,
     // —— 只读查询（各携带 Reply，取数路径 = CoreLoop 内存态，§4.1 评审修订）——
     /// 当前 SettingJson（内存态，不直读磁盘——写盘非原子，并发读可能撕裂）
     GetSettings(Reply<SettingJson>),

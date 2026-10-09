@@ -320,3 +320,35 @@ pub async fn set_topmost(state: State<'_, CoreHandle>, on: bool) -> Result<(), S
         .send(CoreMsg::ToggleTopmost(on))
         .map_err(|e| e.to_string())
 }
+
+/// HTML 悬浮条右键菜单（皮肤 eyenurse.openMenu() / barweb 壳页 contextmenu 桥）：
+/// CoreLoop 在临时线程弹原生 TrackPopupMenuEx（托盘同源动作组）
+#[tauri::command]
+pub async fn bar_open_menu(state: State<'_, CoreHandle>) -> Result<(), String> {
+    state
+        .tx
+        .send(CoreMsg::ShowBarMenu)
+        .map_err(|e| e.to_string())
+}
+
+/// 打开磁盘皮肤目录（设置页「打开皮肤文件夹」入口：目录不存在则先创建）。
+/// 安装方式 = 把皮肤包文件夹/裸 json 丢进该目录，重开设置页即见。
+#[tauri::command]
+pub async fn open_skins_folder() -> Result<(), String> {
+    let dir = crate::skin_proto::skins_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    {
+        use windows::core::{w, HSTRING, PCWSTR};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let path = HSTRING::from(dir.as_os_str());
+        // SAFETY：仅打开一个本地目录；句柄返回值被忽略（与 open_about 同语义）
+        unsafe {
+            ShellExecuteW(None, w!("open"), PCWSTR(path.as_ptr()), None, None, SW_SHOWNORMAL);
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = dir;
+    Ok(())
+}

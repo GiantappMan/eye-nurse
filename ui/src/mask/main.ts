@@ -1,20 +1,18 @@
-// 休息/锁屏遮罩页（无框架，纯 TS；tauri 架构文档 §5.1 + v3.2 仿锁屏；实现者 D 所有）。
-// - 背景 #141418、文字 #EEEEF2（C2，v2 LockScreenWindow.xaml 值，真源 theme.json）；
-// - `listen("eyenurse://rest-tick")` 驱动三态：resting（倒计时）/ locked（时钟+密码）/
-//   叠加；mm:ss 渲染公式复刻 B2/Q13：mm = Math.floor(totalSeconds / 60) % 60
-//   （分钟分量，>59min 回绕），ss = totalSeconds % 60；
-// - 右下角解锁按钮（v2 LockUnLocked 图标 25×25，Margin 0,0,12,12）：
-//   未锁 → invoke("rest_done")（v2 CloseCommand，C5/C11）；
-//   已锁 → invoke("lock_try_unlock", { password })，false = 密码错误（v3.2）；
-// - 文案走 i18n：`get_texts` 整包获取 + `listen("eyenurse://i18n-changed")` 重取；
-//   缺键回退 key 原文（与 I18n::get 第三级回退一致）；
-// - ESP-1 皮肤宿主（shared/skinHost.ts）：皮肤声明 lock 表面时以 sandbox iframe
-//   接管画面（握手通过才显示，看门狗失败回退内置界面）；密码框/错误提示是宿主
-//   独占 chrome（百分比摆放由皮肤 manifest 声明），皮肤只经 postMessage 白名单
-//   动作参与交互——密码永远不过 iframe，防爆破限速在 CoreLoop 侧。
+// 休息/锁屏遮罩壳页（ESP-1 headless；实现者 D 所有）。
+//
+// 本页没有内置界面：画面全部来自皮肤 iframe（core 保证 lock URL 恒有——激活
+// 皮肤无 lock 表面时回退内置 classic 包）。壳页职责只有三件：
+// 1. 皮肤宿主（shared/skinHost.ts）：sandbox iframe + postMessage 白名单桥 +
+//    3s 握手看门狗；看门狗失败 → 换源内置 classic 包锁屏（一次性，防回退环）；
+// 2. 宿主独占 chrome：密码框（#skin-pwd）、错误提示、解锁逃生按钮——皮肤不可
+//    达，密码永不过 iframe；三态由 rest-tick 驱动（locked/has_password）；
+// 3. 解锁路径：未锁 → invoke("rest_done")（v2 CloseCommand，C5/C11）；已锁 →
+//    invoke("lock_try_unlock")，false = 密码错误（CoreLoop 限速：1 次/秒 +
+//    连错 5 次冷却 60s）。
+// 文案走 i18n：get_texts 整包 + i18n-changed 重取，缺键回退 key 原文。
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { applySkinVars, applyThemeVars } from "../shared/theme";
+import { applySkinVars } from "../shared/theme";
 import { createSkinHost, type SkinSurfaceDto } from "../shared/skinHost";
 import "./mask.css";
 
@@ -27,74 +25,47 @@ interface RestTickPayload {
 
 type TextMap = Record<string, string>;
 
-const spinnerStack = document.querySelector(".spinner-stack") as HTMLDivElement;
-const countdownEl = document.getElementById("countdown") as HTMLDivElement;
+/** 内置 classic 包锁屏（看门狗回退目标；core 内嵌资产，恒可加载） */
+const CLASSIC_LOCK_FALLBACK_URL =
+  "http://eyenurse-skin.localhost/classic/lock/index.html";
+
 const unlockEl = document.getElementById("unlock") as HTMLButtonElement;
-const lockPanel = document.getElementById("lock-panel") as HTMLDivElement;
-const lockedTitle = document.getElementById("locked-title") as HTMLParagraphElement;
-const clockEl = document.getElementById("clock") as HTMLDivElement;
-const lockDateEl = document.getElementById("lock-date") as HTMLDivElement;
-const pwdRow = document.getElementById("pwd-row") as HTMLDivElement;
-const pwdEl = document.getElementById("pwd") as HTMLInputElement;
-const lockErr = document.getElementById("lock-err") as HTMLParagraphElement;
-// —— ESP-1 皮肤宿主元素 ——
-const skinFrame = document.getElementById("skin-frame") as HTMLIFrameElement;
 const skinPwdRow = document.getElementById("skin-pwd-row") as HTMLDivElement;
 const skinPwdEl = document.getElementById("skin-pwd") as HTMLInputElement;
 const skinLockErr = document.getElementById("skin-lock-err") as HTMLParagraphElement;
 
-/** 后端显示态（rest-tick 每拍同步；未收到首拍前三态全关，面板隐藏） */
-let resting = false;
+/** 后端显示态（rest-tick 每拍同步；未收到首拍前三态全关） */
 let locked = false;
 let hasPassword = false;
-/** 皮肤页已握手并接管画面（body.skin-alive；失败/未启用 = false → 内置界面） */
+/** 皮肤页已握手并接管画面（body.skin-alive） */
 let skinAlive = false;
+/** 看门狗已触发过 classic 回退（一次性——classic 自身损坏时不循环换源） */
+let fellBack = false;
 
 /** 文案应用：解锁按钮/密码框/错误提示（v2 图标按钮无可见文字，i18n 走 aria/title） */
 function applyTexts(map: TextMap): void {
   const label = map["unlock"] ?? "unlock";
   unlockEl.title = label;
   unlockEl.setAttribute("aria-label", label);
-  lockedTitle.textContent = map["lockedTitle"] ?? "lockedTitle";
-  pwdEl.placeholder = map["lockUnlockPlaceholder"] ?? "lockUnlockPlaceholder";
-  skinPwdEl.placeholder = pwdEl.placeholder;
+  skinPwdEl.placeholder = map["lockUnlockPlaceholder"] ?? "lockUnlockPlaceholder";
   setLockError(false, map["lockWrongPassword"] ?? "lockWrongPassword");
-  skinHost?.postTexts(map); // 整包转发给皮肤页（皮肤自取所需键）
+  skinHost.postTexts(map); // 整包转发给皮肤页（皮肤自取所需键）
 }
 
-function formatMmss(totalSeconds: number): string {
-  // B2/Q13：mm 是分钟分量（00-59）而非总分钟，>59min 回绕
-  const mm = Math.floor(totalSeconds / 60) % 60;
-  const ss = totalSeconds % 60;
-  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-}
-
-/** 锁屏错误提示双写（内置 + 皮肤 chrome 两套元素同态） */
+/** 锁屏错误提示（chrome 单元素） */
 function setLockError(visible: boolean, text?: string): void {
-  if (text !== undefined) {
-    lockErr.textContent = text;
-    skinLockErr.textContent = text;
-  }
-  lockErr.hidden = !visible;
+  if (text !== undefined) skinLockErr.textContent = text;
   skinLockErr.hidden = !visible;
 }
 
 function renderTick(payload: RestTickPayload): void {
-  resting = payload.resting;
   locked = payload.locked;
   hasPassword = payload.has_password;
-  countdownEl.textContent = formatMmss(Math.floor(payload.remaining_ms / 1000));
-  spinnerStack.style.display = resting ? "" : "none";
-  lockPanel.hidden = !locked;
-  pwdRow.hidden = !hasPassword;
-  if (!locked) setLockError(false);
-  if (locked && hasPassword) {
-    // 焦点落进可见的密码框（皮肤接管时是宿主 chrome 的那只）
-    (skinAlive ? skinPwdEl : pwdEl).focus();
-  }
-  // 皮肤模式 chrome 三态镜像 + 状态转发（1Hz；皮肤未就绪时 skinHost 丢弃）
   skinPwdRow.hidden = !locked || !hasPassword;
-  skinHost?.postState({
+  if (!locked) setLockError(false);
+  if (locked && hasPassword) skinPwdEl.focus(); // 锁屏必须可键入（焦点逐拍兜底）
+  // 状态转发（1Hz；皮肤未就绪时 skinHost 丢弃，下一拍自会补上）
+  skinHost.postState({
     remainingMs: payload.remaining_ms,
     resting: payload.resting,
     locked: payload.locked,
@@ -102,18 +73,8 @@ function renderTick(payload: RestTickPayload): void {
   });
 }
 
-/** 锁屏时钟：本地时间 HH:MM + 日期（1s 刷新；仅 locked 可见，空转成本忽略） */
-function renderClock(): void {
-  const now = new Date();
-  clockEl.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}`;
-  lockDateEl.textContent = now.toLocaleDateString();
-}
-setInterval(renderClock, 1000);
-
 /** 解锁入口：未锁 = 结束休息；已锁 = 交密码（CoreLoop 验证，false = 密码错误）。
- * 内置与皮肤 chrome 两只密码框共用同一条提交路径 */
+ * 皮肤页经桥动作（endRest/tryUnlock）与本按钮/密码框共用同一条提交路径 */
 function submitUnlock(password: string): void {
   if (!locked) {
     invoke("rest_done").catch(() => {});
@@ -123,11 +84,10 @@ function submitUnlock(password: string): void {
     .then((ok) => {
       if (ok) {
         setLockError(false);
-        pwdEl.value = "";
         skinPwdEl.value = "";
       } else {
-        setLockError(true); // 密码错误（CoreLoop 限速期同样回 false）
-        (skinAlive ? skinPwdEl : pwdEl).select();
+        setLockError(true); // 密码错误（限速期同样回 false）
+        skinPwdEl.select();
       }
     })
     .catch(() => {
@@ -135,14 +95,7 @@ function submitUnlock(password: string): void {
     });
 }
 
-function requestUnlock(): void {
-  submitUnlock(pwdEl.value);
-}
-
-unlockEl.addEventListener("click", requestUnlock);
-pwdEl.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter") requestUnlock();
-});
+unlockEl.addEventListener("click", () => submitUnlock(""));
 skinPwdEl.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") submitUnlock(skinPwdEl.value);
 });
@@ -153,14 +106,20 @@ function applyChrome(dto: SkinSurfaceDto): void {
   skinPwdRow.style.top = `${dto.lock_chrome.password_y}%`;
   skinLockErr.style.left = `${dto.lock_chrome.password_x}%`;
   skinLockErr.style.top = `${Math.min(dto.lock_chrome.password_y + 6, 100)}%`;
-  unlockEl.style.left = `${dto.lock_chrome.unlock_x}%`;
-  unlockEl.style.top = `${dto.lock_chrome.unlock_y}%`;
-  unlockEl.style.right = "auto";
-  unlockEl.style.bottom = "auto";
+  const ux = dto.lock_chrome.unlock_x;
+  const uy = dto.lock_chrome.unlock_y;
+  if (ux !== null && uy !== null) {
+    unlockEl.style.left = `${ux}%`;
+    unlockEl.style.top = `${uy}%`;
+    unlockEl.style.right = "auto";
+    unlockEl.style.bottom = "auto";
+  } else {
+    resetUnlockPos();
+  }
 }
 
-/** 退出皮肤模式：还原解锁按钮的默认 right/bottom 定位 */
-function resetChrome(): void {
+/** 退出皮肤模式/未声明位置：还原解锁按钮默认右下 12px 定角（classic 外观） */
+function resetUnlockPos(): void {
   unlockEl.style.left = "";
   unlockEl.style.top = "";
   unlockEl.style.right = "";
@@ -168,19 +127,27 @@ function resetChrome(): void {
 }
 
 // ESP-1 皮肤宿主（握手看门狗 / 表面热切换 / 动作白名单都在 skinHost 内）
-const skinHost = createSkinHost(skinFrame, {
+const skinHost = createSkinHost(skinFrame(), {
   pickUrl: (dto) => dto.lock_url,
-  onSurface: (dto) => applyChrome(dto),
+  onSurface: (dto) => {
+    applyChrome(dto);
+    // 配色注入 CSS 变量（chrome 与皮肤同色；classic 包锁屏经 colors 桥另取）
+    applySkinVars(dto.colors);
+  },
   onSkinAlive: (alive) => {
     skinAlive = alive;
     document.body.classList.toggle("skin-alive", alive);
     if (alive) {
-      applyChrome(skinHost.surface as SkinSurfaceDto);
       if (locked && hasPassword) skinPwdEl.focus();
-    } else {
-      resetChrome();
-      // 焦点交还内置密码框（锁屏态下保持可键入）
-      if (locked && hasPassword) pwdEl.focus();
+      return;
+    }
+    resetUnlockPos();
+    // 看门狗失败：激活皮肤未握手 → 换源内置 classic 包（一次性）。core 只对
+    // 「无 lock 声明」给 classic URL；损坏的是激活皮肤本身时这里二次换源
+    const surface = skinHost.surface;
+    if (!fellBack && surface?.lock_url && surface.lock_url !== CLASSIC_LOCK_FALLBACK_URL) {
+      fellBack = true;
+      skinHost.reload(CLASSIC_LOCK_FALLBACK_URL);
     }
   },
   onAction: (action, payload) => {
@@ -194,30 +161,28 @@ const skinHost = createSkinHost(skinFrame, {
       case "openSettings":
         invoke("open_settings").catch(() => {});
         break;
-      // lock 表面用不到的动作（drag/setTopmost）静默忽略
+      // bar 专属动作（drag/setTopmost/openMenu）在 lock 表面静默忽略
     }
   },
 });
 
-applyThemeVars();
-renderClock();
+function skinFrame(): HTMLIFrameElement {
+  return document.getElementById("skin-frame") as HTMLIFrameElement;
+}
 
-// v3.1 换肤：静态 theme.json 只是首帧兜底，启动即取当前皮肤覆盖；
-// 运行中切换皮肤 → skin-changed 广播载荷即完整配色（Rust 侧已逐键回退）
-async function applySkin(): Promise<void> {
+applySkinVarsOnBoot();
+
+/** 首帧兜底配色（theme.json 静态值；get_skin_surface 到达后即被皮肤覆盖） */
+async function applySkinVarsOnBoot(): Promise<void> {
   try {
     applySkinVars(await invoke<Record<string, string>>("get_skin"));
   } catch {
-    /* 无后端（纯前端 dev）时保持 theme.json 静态值 */
+    /* 无后端（纯前端 dev）时保持 CSS 静态值 */
   }
 }
-void applySkin();
 
 void (async () => {
   await listen<RestTickPayload>("eyenurse://rest-tick", (ev) => renderTick(ev.payload));
-  await listen<Record<string, string>>("eyenurse://skin-changed", (ev) =>
-    applySkinVars(ev.payload),
-  );
   await listen("eyenurse://i18n-changed", async () => {
     try {
       applyTexts(await invoke<TextMap>("get_texts"));
@@ -229,6 +194,6 @@ void (async () => {
   try {
     applyTexts(await invoke<TextMap>("get_texts"));
   } catch {
-    /* 无后端（如纯前端 dev）时按钮无提示标签，不影响倒计时 */
+    /* 无后端（如纯前端 dev）时按钮无提示标签 */
   }
 })();

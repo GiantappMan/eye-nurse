@@ -1,6 +1,7 @@
-/* 休息遮罩样式（tauri 架构文档 §5.1；值 = v2 LockScreenWindow.xaml，真源
-   theme.json 的 mask_bg/mask_fg——mask/main.ts 经 shared/theme.ts 注入 :root 变量，
-   此处字面量仅为注入前的兜底） */
+/* 休息/锁屏遮罩壳页样式（ESP-1 headless）：本页无内置界面——画面来自皮肤
+   iframe。只保留：壳页底色（皮肤加载前的首帧）、皮肤 iframe 层级、宿主独占
+   chrome（密码框/错误提示/解锁按钮——配色走 --eyenurse-* 变量，由 skinHost
+   的 colors 推送注入，与皮肤同色）。 */
 :root {
   --eyenurse-mask-bg: #141418;
   --eyenurse-mask-fg: #eeeef2;
@@ -19,129 +20,14 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-/* 70×70 CSS 旋转加载圈 + 叠放其上的 mm:ss（C3/C4） */
-.spinner-stack {
-  position: relative;
-  width: 70px;
-  height: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.spinner {
-  position: absolute;
-  inset: 0;
-  border: 4px solid transparent;
-  border-top-color: var(--eyenurse-mask-fg);
-  border-right-color: var(--eyenurse-mask-fg);
-  border-radius: 50%;
-  animation: spin 1.2s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-#countdown {
-  /* v2 TextBlock 默认 12pt ≈ 16px（egui 版 mask.rs 同取 16px），等宽保证 mm:ss 不跳动 */
-  font-family: Consolas, monospace;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-/* 右下角 25×25 解锁图标按钮（C5；v2 Margin="0,0,12,12"） */
-#unlock {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 25px;
-  height: 25px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0.8;
-}
-#unlock:hover {
-  opacity: 1;
-}
-
-/* —— v3.2 仿锁屏：中央竖排（倒计时/旋转圈 + 锁屏面板） —— */
-.center-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 28px;
-}
-/* hidden 属性在 flex 容器内仍可能被布局规则覆盖，兜底强隐 */
+/* 宿主 chrome 元素的 [hidden] 强隐（flex 容器内 hidden 可能被布局规则覆盖） */
 #mask [hidden] {
   display: none !important;
 }
-#lock-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-#locked-title {
-  margin: 0;
-  font-size: 14px;
-  letter-spacing: 2px;
-  opacity: 0.65;
-}
-#clock {
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 64px;
-  line-height: 1.1;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-#lock-date {
-  font-size: 14px;
-  opacity: 0.65;
-}
-#pwd-row {
-  margin-top: 12px;
-}
-#pwd,
-#skin-pwd {
-  width: 220px;
-  padding: 10px 14px;
-  font-family: inherit;
-  font-size: 16px;
-  text-align: center;
-  letter-spacing: 2px;
-  color: var(--eyenurse-mask-fg);
-  background: rgb(255 255 255 / 0.08);
-  border: 1px solid rgb(255 255 255 / 0.28);
-  border-radius: 10px;
-  outline: none;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-#pwd:focus,
-#skin-pwd:focus {
-  border-color: rgb(255 255 255 / 0.7);
-  background: rgb(255 255 255 / 0.12);
-}
-#pwd::placeholder,
-#skin-pwd::placeholder {
-  letter-spacing: 0;
-  font-size: 13px;
-  color: rgb(238 238 242 / 0.45);
-}
-#lock-err {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: #ff8b8b;
-}
 
-/* —— ESP-1 皮肤宿主（shared/skinHost.ts）：iframe 只有握手通过才显示
-   （不能用 hidden 属性——下方 #mask [hidden] 的 !important 会压住显示规则），
-   看门狗失败/未启用 → 内置界面接管（永不白窗）。z 序：iframe 盖住内置内容，
-   宿主 chrome 与解锁按钮在最上 —— */
+/* —— 皮肤 iframe（skinHost）：握手通过（body.skin-alive）才显示——防损坏
+   皮肤白屏遮脸；看门狗失败 → 壳页换源内置 classic 包（永不白窗） —— */
 #skin-frame {
   position: absolute;
   inset: 0;
@@ -155,10 +41,9 @@ body {
 body.skin-alive #skin-frame {
   display: block;
 }
-body.skin-alive .center-stack {
-  display: none;
-}
-/* 皮肤模式下宿主独占 chrome：百分比摆放由 JS 按 manifest 声明写内联样式 */
+
+/* —— 宿主独占 chrome：皮肤模式下由 JS 按 manifest chrome 声明写百分比内联
+   样式；z 序在 iframe 之上 —— */
 #skin-pwd-row {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -174,7 +59,49 @@ body.skin-alive .center-stack {
   color: #ff8b8b;
   white-space: nowrap;
 }
-/* 解锁按钮在皮肤模式下改按百分比摆放（默认 right/bottom 由内联样式覆盖） */
+#skin-pwd {
+  width: 220px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  text-align: center;
+  letter-spacing: 2px;
+  color: var(--eyenurse-mask-fg);
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+#skin-pwd:focus {
+  border-color: rgb(255 255 255 / 0.7);
+  background: rgb(255 255 255 / 0.12);
+}
+#skin-pwd::placeholder {
+  letter-spacing: 0;
+  font-size: 13px;
+  color: rgb(238 238 242 / 0.45);
+}
+
+/* —— 解锁逃生按钮（宿主恒有；默认右下 12px 定角 = classic 外观；皮肤
+   manifest 声明 chrome.unlock 时由 JS 改百分比定位） —— */
+#unlock {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--eyenurse-mask-fg);
+  cursor: pointer;
+  opacity: 0.8;
+  z-index: 20;
+}
+#unlock:hover {
+  opacity: 1;
+}
 body.skin-alive #unlock {
   z-index: 20;
 }

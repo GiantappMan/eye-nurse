@@ -1,0 +1,162 @@
+<!doctype html>
+<!-- devtest 测试皮肤 · 悬浮条表面：协议验证专用。故意与 classic 形态完全不同
+     （160×44 大块霓虹），一眼可辨当前激活的是皮肤路径。验证点：
+     - manifest bar.size → 窗口尺寸；1Hz bar-state → 倒计时/暂停/置顶态；
+     - mousedown → eyenurse.drag() 系统拖动；contextmenu → eyenurse.openMenu()
+       （托盘同源菜单：暂停/恢复/重置/立即休息/设置/关于/退出）；
+     - ⚙ → openSettings；⬆ → setTopmost（回显按钮态）。 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #101014;
+        overflow: hidden;
+        user-select: none;
+        font-family: Consolas, "Cascadia Mono", monospace;
+      }
+      #wrap {
+        position: relative;
+        height: 100%;
+        box-sizing: border-box;
+        border: 2px dashed #00e676;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+      }
+      #wrap:active {
+        cursor: grabbing;
+      }
+      #tag {
+        position: absolute;
+        top: 2px;
+        left: 6px;
+        font-size: 9px;
+        letter-spacing: 1px;
+        color: #101014;
+        background: #00e676;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+      #time {
+        font-size: 17px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #00e676;
+      }
+      #time.warn {
+        color: #ff1744;
+      }
+      #sub {
+        font-size: 9px;
+        color: #5a6b60;
+        letter-spacing: 1px;
+      }
+      .btns {
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        display: flex;
+        gap: 3px;
+      }
+      .btn {
+        border: 1px solid #00e676;
+        background: transparent;
+        color: #00e676;
+        font: 10px Consolas, monospace;
+        border-radius: 4px;
+        padding: 1px 4px;
+        cursor: pointer;
+      }
+      .btn.on {
+        background: #00e676;
+        color: #101014;
+      }
+      #progress {
+        position: absolute;
+        left: 6px;
+        right: 6px;
+        bottom: 3px;
+        height: 3px;
+        background: #1b2e24;
+        border-radius: 2px;
+      }
+      #fill {
+        height: 100%;
+        width: 100%;
+        border-radius: 2px;
+        background: linear-gradient(90deg, #00e676, #ffd600, #ff1744);
+        transition: width 1s linear;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <span id="tag">DEV-BAR</span>
+      <div id="time">00:00</div>
+      <div id="sub">--</div>
+      <div class="btns">
+        <button id="top" class="btn" title="置顶">TOP</button>
+        <button id="cfg" class="btn" title="设置">SET</button>
+      </div>
+      <div id="progress"><div id="fill"></div></div>
+    </div>
+    <script src="/eyenurse-api.js"></script>
+    <script>
+      (function () {
+        "use strict";
+        var timeEl = document.getElementById("time");
+        var subEl = document.getElementById("sub");
+        var fillEl = document.getElementById("fill");
+        var topBtn = document.getElementById("top");
+        var topmost = false;
+
+        function two(n) { return String(n).padStart(2, "0"); }
+        function fmt(totalMs) {
+          var s = Math.max(0, Math.floor(totalMs / 1000));
+          var m = Math.floor(s / 60) % 60;
+          return two(m) + ":" + two(s % 60);
+        }
+
+        eyenurse.onState(function (s) {
+          if (s.resting) {
+            timeEl.textContent = "REST";
+            fillEl.style.width = "100%";
+            subEl.textContent = "resting";
+            return;
+          }
+          timeEl.textContent = fmt(s.countdownMs);
+          timeEl.classList.toggle("warn", s.countdownMs < 5 * 60 * 1000);
+          subEl.textContent = (s.pausedMs !== null ? "PAUSED " : "TICK ") + "top=" + (s.topmost ? 1 : 0);
+          var ratio = Math.min(Math.max(s.countdownMs / Math.max(s.intervalMs, 1), 0), 1);
+          fillEl.style.width = (ratio * 100).toFixed(1) + "%";
+          topmost = !!s.topmost;
+          topBtn.classList.toggle("on", topmost);
+        });
+
+        var wrap = document.getElementById("wrap");
+        wrap.addEventListener("mousedown", function (ev) {
+          if (ev.target.classList.contains("btn")) return;
+          eyenurse.drag();
+        });
+        // 右键 = 托盘同源菜单（暂停/恢复/重置/立即休息/设置/关于/退出）
+        wrap.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          eyenurse.openMenu();
+        });
+        document.getElementById("cfg").addEventListener("click", function () {
+          eyenurse.openSettings();
+        });
+        topBtn.addEventListener("click", function () {
+          eyenurse.setTopmost(!topmost);
+        });
+      })();
+    </script>
+  </body>
+</html>

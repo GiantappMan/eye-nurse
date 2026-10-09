@@ -1,13 +1,21 @@
 # v3.2+ 开放皮肤协议（EyeNurse Skin Protocol, ESP-1）
 
-> 状态：**v1 已实现**（2026-10-09）。本文定义一套**开放的 UGC 皮肤协议**：
-> 用户/第三方可以整体替换**桌面计数器（悬浮条）**与**锁屏/休息遮罩**的界面
-> 形态并打包分发，而不只是 v3.1 的颜色键换肤。
+> 状态：**v1 已实现 + headless 化完成**（2026-10-09）。本文定义一套**开放的
+> UGC 皮肤协议**：用户/第三方可以整体替换**桌面计数器（悬浮条）**与**锁屏/
+> 休息遮罩**的界面形态并打包分发，而不只是 v3.1 的颜色键换肤。
+>
+> **headless 原则**：宿主壳页没有任何内置界面——画面全部来自皮肤。原默认
+> 界面已降格为**内置皮肤包**（classic：锁屏 HTML 编译进二进制；bar 保留 GDI
+> 原生渲染 = headless 宿主唯一的原生表面，理由见 §1.2），与磁盘皮肤走完全
+> 相同的 `eyenurse-skin://` 协议管线（自吃狗粮）；另有 **devtest 测试皮肤**
+> （全 HTML 表面 + 状态转储 + 异常位 chrome）专用于真机验证协议链路。
 >
 > 实现落点：core 解析 `crates/eyenurse-core/src/skin.rs`（manifest/扫描/逐
-> target 回退）；协议服务与 barweb 壳窗 `crates/eyenurse-app/src/skin_proto.rs`；
-> 壳页桥 `ui/src/shared/skinHost.ts`（mask / barweb 共用）；示例皮肤
-> `assets/skins-example/sunset-clock/`（build.rs 拷到 exe 旁 Assets/Skins）。
+> target 回退 + builtin_package）；协议服务与 barweb 壳窗
+> `crates/eyenurse-app/src/skin_proto.rs`（内嵌资产 `src/skins/`）；壳页桥
+> `ui/src/shared/skinHost.ts`（mask / barweb 共用）；示例皮肤
+> `assets/skins-example/sunset-clock/`（build.rs 拷到 exe 旁 Assets/Skins）；
+> HTML 条菜单 `win/menu.rs`（openMenu 桥）。
 
 ## 0. 问题定义
 
@@ -33,7 +41,7 @@ Tier 0 是 Tier 1 的子集：目录包可以只带颜色（等价 Tier 0），�
 独立回退**——皮肤只做了锁屏，悬浮条自动落回 classic；反之亦然。这是 v3.1
 "逐键回退"哲学在表面粒度上的延续。
 
-### 1.2 关键架构决策：bar 按需升级为 WebView 承载
+### 1.2 关键架构决策：bar 按需升级为 WebView 承载（GDI 保留为原生渲染器）
 
 锁屏窗已是 WebView，Tier 1 的 `lock` 零架构成本。**bar 是唯一需要动引擎的
 地方**，方案：
@@ -44,9 +52,11 @@ Tier 0 是 Tier 1 的子集：目录包可以只带颜色（等价 Tier 0），�
   （与 mask 同栈：tao 窗口 + wry，Tauri 2 多 webview 已有先例），加载
   `eyenurse-skin://<id>/bar/index.html`。
 
-代价：选了 HTML bar 皮肤后常驻一个 WebView2 进程（数十 MB 级）。收益：
-UGC 表达力与 lock 完全对齐，一套协议两个表面。Wallpaper Engine / Rainmeter
-生态证明该成本用户可接受，且**成本是 opt-in 的**（classic 用户永远不付）。
+**headless 之后 GDI 仍然保留**（它是宿主唯一的原生表面渲染器）：默认皮肤
+classic 的 bar 不走 HTML——本机实测 WebView2 冷启动可达秒级（管控软件扫描
+加剧），倒计时条必须零延迟出现；GDI bar 同时是一切 HTML bar 损坏时的原生
+兜底。代价：选了 HTML bar 皮肤后常驻一个 WebView2 进程（数十 MB 级），且
+**成本是 opt-in 的**（配色皮肤用户永远不付）。
 
 拖动（HTCAPTION）、右键菜单、置顶复选等 Win32 交互的归属见 §4。
 
@@ -107,6 +117,9 @@ MySkin/
    `http://eyenurse-skin.localhost/...`）提供，handler 只服务已注册皮肤目录内
    的文件——id 白名单字符集 + 逐段字符校验（**不做百分号解码**，编码名不匹配
    即 404）+ 规范化越界断言，无任意 FS 读（`skin_proto::handle_skin_request`）。
+   **内置皮肤（classic/devtest）同样经该协议服务**：内容 `include_str!` 编译进
+   二进制（`skin_proto::embedded`），磁盘同名目录/文件被扫描层跳过（`is_builtin_id`
+   防遮蔽）；磁盘包未自带 `eyenurse-api.js` 时协议回退内嵌桥（第三方零依赖）。
 2. **沙箱 iframe**：宿主壳页（`mask.html` / `barweb.html`）以
    `<iframe sandbox="allow-scripts">` 加载皮肤页（**无 `allow-same-origin`**），
    皮肤 JS 处于 opaque origin：拿不到 Tauri IPC、拿不到宿主 DOM、拿不到
@@ -150,9 +163,15 @@ interface SkinState {
   remainingMs: number;  locked: boolean;     hasPassword: boolean;
 }
 eyenurse.onState(cb) / onTexts(cb) / onColors(cb);
-eyenurse.drag() / openSettings() / setTopmost(v);
+eyenurse.drag() / openMenu() / openSettings() / setTopmost(v);
 eyenurse.endRest() / tryUnlock(password);   // 白名单动作，宿主侧过滤+限速
 ```
+
+`openMenu` 弹出**托盘同源原生菜单**（暂停/恢复互换/重置/立即休息/设置/关于/
+退出）：临时线程自建屏幕外 0×0 宿主窗 + `TrackPopupMenuEx(TPM_RETURNCMD)`
+（`win/menu.rs`）——模态循环不阻塞 CoreLoop（休息倒计时照走），选中动作经
+`CoreMsg::Tray` 与托盘共用同一入口。桥脚本由协议内嵌回退提供（`/eyenurse-api.js`，
+皮肤包可自带覆盖）。
 
 设计原则：**数据契约只收敛现有快照字段**（`BarSnapshot` / `RestTickPayload`），
 不为皮肤发明新数据源；v2/v3 行为语义（mm:ss 分钟分量回绕、暂停互换菜单等）
@@ -176,23 +195,25 @@ GDI 版的三条实测教训（系统拖动/非客户区命中/菜单前台坑�
 - **命中透明**：v1 未做（barweb 整窗接收事件）；非矩形皮肤的点击穿透留 P2
   （采样透明度换算分层窗口）。
 
-## 5. 解析与回退（延续逐键哲学）
+## 5. 解析与回退（headless：壳页无内置界面）
 
 激活皮肤 `Current` 指向 id，每个 target 独立解析：
 
 ```
-target(bar)  = manifest.targets.bar  存在且文件有效 ? HTML表面
-             : manifest.colors.bar  存在 ? Tier0配色 + GDI经典形态
-             : classic
-target(lock) = 同规则（经典形态 = 现有 mask 页）
+target(bar)  = manifest.targets.bar  存在且文件有效 ? HTML表面（WebView 壳）
+             : GDI 原生条（渲染器级回退，也是 classic 默认——零冷启动）
+target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
+             : 内置 classic 包锁屏（core 保证 lock URL 恒有——壳页无内置界面，
+               classic 锁屏经 colors 桥吃当前配色，Tier 0 换色照常生效）
 ```
 
-- 加载失败（入口 404、JS 崩溃、握手超时）→ 该 target 落回内置界面：
-  mask = 壳页 iframe 看门狗（3s 无 `eyenurse-hello` 即撤）；barweb = 回退壳页
-  内置迷你条；bar 模式差异（GDI↔HTML）**启动期定死**，换肤后形态变化由设置页
-  显示重启提示（配色即时生效）。
+- 加载失败（入口 404、JS 崩溃、握手超时）→ mask：壳页 iframe 看门狗（3s 无
+  `eyenurse-hello` 即换源内置 classic 包，一次性防回退环）；barweb：回退壳页
+  迷你条（崩溃兜底错误面）。bar 模式差异（GDI↔HTML）**启动期定死**，换肤后
+  形态变化由设置页显示重启提示（配色即时生效）。
 - 来源优先级不变：custom（编辑器，Tier 0）> 磁盘（Tier 0 + Tier 1 混扫，
-  按 id 排序）> 内置。
+  **内置 id 跳过**，按 id 排序）> 内置（classic/devtest 为目录包，
+  night/sakura/ocean 为纯配色）。
 
 ## 6. 设置页与工具链
 
@@ -215,17 +236,22 @@ target(lock) = 同规则（经典形态 = 现有 mask 页）
 
 ## 8. 落地状态
 
-1. **P0 协议地基 — ✅**：manifest 解析/校验（id/版本/entry 穿越与存在性，
-   core 9 测试）、`eyenurse-skin://` 协议 handler（字符白名单 + 越界断言 +
-   CSP，handler 单测）、扫描混扫 Tier 0/1（零回归）。
+1. **P0 协议地基 — ✅**：manifest 解析/校验（id/版本/entry 穿越与存在性）、
+   `eyenurse-skin://` 协议 handler（字符白名单 + 越界断言 + CSP + 内嵌资产
+   服务 + 桥回退，handler 单测）、扫描混扫 Tier 0/1（内置 id 防遮蔽，零回归）。
 2. **P0 lock 表面 — ✅**：mask 宿主壳 + sandbox iframe + postMessage 白名单桥
-   （skinHost）+ 宿主独占密码 chrome（manifest 百分比摆放）+ tryUnlock 限速。
-3. **P1 bar 表面 — ✅**：启动期双模式分流（GDI 原样 / barweb WebView 壳窗，
-   `skin_proto::build_barweb_window`）；barweb 壳 + 回退迷你条；拖动落位攒批
-   落盘；置顶/双击设置同源。
-4. **P1 分发 — 部分**：SkinPicker 徽标/预览/重启提示已上；`.eyeskin` 导入与
-   文件关联留 P2。
-5. **P2**：右键菜单桥、点击穿透、热重载、`.eyeskin` 关联、官方皮肤扩充。
+   （skinHost）+ 宿主独占密码 chrome（manifest 百分比摆放；解锁按钮默认保持
+   classic 右下像素位）+ tryUnlock 限速。
+3. **P1 bar 表面 — ✅**：启动期双模式分流（GDI 原样 / barweb WebView 壳窗）；
+   barweb 壳 + 回退迷你条；拖动落位攒批落盘；置顶/双击设置同源。
+4. **headless 化 — ✅（2026-10-09）**：mask 壳页删内置界面（classic 降格为
+   内嵌皮肤包，night/sakura/custom 经 colors 桥复用其形态）；devtest 测试皮肤
+   （全表面 + 状态转储 + 异常位 chrome + 右键菜单）；`openMenu` 桥
+   （win/menu.rs 临时线程原生菜单）；设置页「打开皮肤文件夹」安装入口；
+   classic/devtest 双模式冒烟通过。
+5. **P1 分发 — 部分**：SkinPicker 徽标/预览/重启提示/文件夹入口已上；
+   `.eyeskin` 导入与文件关联留 P2。
+6. **P2**：点击穿透、热重载、`.eyeskin` 关联、官方皮肤扩充。
 
 ## 9. 决策记录（原"待拍板"项）
 
@@ -236,3 +262,10 @@ target(lock) = 同规则（经典形态 = 现有 mask 页）
 3. `.eyeskin` 后缀 → 未定（P2 引入导入时再拍）。
 4. 模板仓库 → 暂以仓库内 `assets/skins-example/` 为模板真源，独立仓库待社区
    起量再拆。
+5. **headless 化** → 默认界面降格为内置皮肤包（自吃狗粮）；GDI bar 保留为
+   唯一原生渲染器（WebView2 冷启动秒级延迟，倒计时条必须零延迟；兼作 HTML
+   bar 的原生兜底）——classic 无 bar entry 即 GDI，devtest 走全 HTML 验证。
+6. 内置皮肤防遮蔽 → 磁盘扫描跳过内置 id（classic/night/sakura/ocean/devtest
+   的文件与目录），协议层内置 id 只读内嵌资产。
+7. 解锁按钮（逃生口）宿主恒有 → 任何皮肤损坏/无按钮时用户仍有退出路径；
+   manifest `chrome.unlock` 声明才移位，默认保持 classic 右下像素位。

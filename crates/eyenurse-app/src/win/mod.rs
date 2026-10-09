@@ -5,6 +5,7 @@
 //! 「窗口标志回写抹掉补丁」的触发器；创建时打一次即可）。
 
 pub mod hotkey;
+pub mod menu;
 pub mod monitors;
 pub mod session;
 pub mod single_instance;

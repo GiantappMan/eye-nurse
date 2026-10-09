@@ -179,6 +179,8 @@ pub struct BarWiring {
 pub struct CoreLoop {
     app: AppHandle<Wry>,
     rx: Receiver<CoreMsg>,
+    /// 总线发送端克隆（win::menu 菜单线程回投 CoreMsg::Tray 用；ESP-1）
+    tx: crossbeam_channel::Sender<CoreMsg>,
     core: CoreBundle,
     startup: DesktopStartup,
     tray: Tray,
@@ -221,6 +223,7 @@ impl CoreLoop {
     pub fn new(
         app: AppHandle<Wry>,
         rx: Receiver<CoreMsg>,
+        tx: crossbeam_channel::Sender<CoreMsg>,
         core: CoreBundle,
         startup: DesktopStartup,
         tray: Tray,
@@ -229,6 +232,7 @@ impl CoreLoop {
         Self {
             app,
             rx,
+            tx,
             core,
             startup,
             tray,
@@ -302,6 +306,15 @@ impl CoreLoop {
             CoreMsg::SaveBarPosition { left, top } => self.set_bar_position(left, top),
             CoreMsg::ToggleTopmost(on) => self.toggle_topmost(on),
             CoreMsg::ShowBar => self.show_bar(),
+            CoreMsg::ShowBarMenu => {
+                // ESP-1：HTML 悬浮条右键菜单——临时线程弹原生菜单（模态不阻塞
+                // CoreLoop，休息倒计时照走），选中动作经 Tray 回流共用入口
+                let (texts, paused_menu_shown) = {
+                    let b = self.bar_lock();
+                    (b.texts.clone(), b.paused_menu_shown)
+                };
+                crate::win::menu::spawn_popup(texts, paused_menu_shown, self.tx.clone());
+            }
             CoreMsg::GetSettings(reply) => self.reply(reply, self.core.setting.clone()),
             CoreMsg::GetTexts(reply) => self.reply(reply, self.core.i18n.texts()),
             CoreMsg::GetLanguages(reply) => self.reply(reply, self.core.i18n.available()),

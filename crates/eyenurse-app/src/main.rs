@@ -147,6 +147,8 @@ fn main() {
             commands::open_settings,
             commands::bar_drag,
             commands::set_topmost,
+            commands::bar_open_menu,
+            commands::open_skins_folder,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -244,7 +246,15 @@ fn main() {
             if smoke {
                 smoke::run(handle.clone(), bar_hwnd);
             }
-            let core_loop = CoreLoop::new(handle, core_rx, bundle, startup, tray, bar_wiring);
+            let core_loop = CoreLoop::new(
+                handle,
+                core_rx,
+                core_tx.clone(),
+                bundle,
+                startup,
+                tray,
+                bar_wiring,
+            );
             std::thread::Builder::new()
                 .name("eyenurse-core".into())
                 .spawn(move || core_loop.run())?;

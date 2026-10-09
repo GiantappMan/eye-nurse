@@ -32,8 +32,9 @@ export interface SkinSurfaceDto {
   lock_chrome: {
     password_x: number;
     password_y: number;
-    unlock_x: number;
-    unlock_y: number;
+    /** null = 解锁按钮保持壳页 CSS 默认右下角（classic 外观） */
+    unlock_x: number | null;
+    unlock_y: number | null;
   };
   bar_is_web: boolean;
 }
@@ -60,6 +61,8 @@ export interface SkinHost {
   postTexts: (texts: Record<string, string>) => void;
   /** 当前表面快照（壳页取 chrome 摆放等） */
   surface: SkinSurfaceDto | null;
+  /** 看门狗回退：壳页主动给 iframe 换源（如内置 classic 包），重走握手 */
+  reload: (url: string) => void;
   dispose: () => void;
 }
 
@@ -166,6 +169,11 @@ export function createSkinHost(
     postTexts: (texts) => post({ type: "eyenurse-texts", texts }),
     get surface() {
       return surface;
+    },
+    reload: (url) => {
+      clearHelloTimer();
+      setAlive(false);
+      frame.src = url;
     },
     dispose: () => {
       clearHelloTimer();
