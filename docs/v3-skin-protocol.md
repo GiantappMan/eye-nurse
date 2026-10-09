@@ -13,9 +13,9 @@
 > 实现落点：core 解析 `crates/eyenurse-core/src/skin.rs`（manifest/扫描/逐
 > target 回退 + builtin_package）；协议服务与 barweb 壳窗
 > `crates/eyenurse-app/src/skin_proto.rs`（内嵌资产 `src/skins/`）；壳页桥
-> `ui/src/shared/skinHost.ts`（mask / barweb 共用）；示例皮肤
-> `assets/skins-example/sunset-clock/`（build.rs 拷到 exe 旁 Assets/Skins）；
-> HTML 条菜单 `win/menu.rs`（openMenu 桥）。
+> `ui/src/shared/skinHost.ts`（mask / barweb 共用）；HTML 条菜单
+> `win/menu.rs`（openMenu 桥）。内置皮肤只有 classic/devtest 两个——
+> `src/skins/` 下的它们的源码即第三方皮肤的开发模板。
 
 ## 0. 问题定义
 
@@ -212,8 +212,9 @@ target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
   迷你条（崩溃兜底错误面）。bar 模式差异（GDI↔HTML）**启动期定死**，换肤后
   形态变化由设置页显示重启提示（配色即时生效）。
 - 来源优先级不变：custom（编辑器，Tier 0）> 磁盘（Tier 0 + Tier 1 混扫，
-  **内置 id 跳过**，按 id 排序）> 内置（classic/devtest 为目录包，
-  night/sakura/ocean 为纯配色）。
+  **内置 id 跳过**，按 id 排序）> 内置（仅 classic/devtest 两个目录包；
+  历史配色预设 night/sakura/ocean 已移除，旧配置指向它们按 id 失效回退
+  classic）。
 
 ## 6. 皮肤中心与工具链
 
@@ -225,8 +226,9 @@ target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
 - **导入**：v1 手动放置——皮肤中心工具栏「打开皮肤文件夹」按钮
   （`open_skins_folder` 命令，目录不存在则先建）；`.eyeskin` 后缀与文件
   关联留 P2。
-- **开发体验**：仓库 `assets/skins-example/sunset-clock/` 即模板（build.rs
-  拷到 exe 旁 Assets/Skins，dev 直接可试）；桥脚本由协议内置回退提供
+- **开发体验**：内置皮肤的源码即模板——`crates/eyenurse-app/src/skins/`
+  （classic = 最小包：manifest + 单个 lock 页；devtest = 全表面 + chrome
+  声明 + 状态转储），复制改 id 即可起步；桥脚本由协议内置回退提供
   （`/eyenurse-api.js`，包内可覆盖）。改包内文件后重进休息/重启应用生效
   （无热重载，P2）。
 
@@ -249,13 +251,15 @@ target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
 3. **P1 bar 表面 — ✅**：启动期双模式分流（GDI 原样 / barweb WebView 壳窗）；
    barweb 壳 + 回退迷你条；拖动落位攒批落盘；置顶/双击设置同源。
 4. **headless 化 — ✅（2026-10-09）**：mask 壳页删内置界面（classic 降格为
-   内嵌皮肤包，night/sakura/custom 经 colors 桥复用其形态）；devtest 测试皮肤
+   内嵌皮肤包，配色皮肤/custom 经 colors 桥复用其形态）；devtest 测试皮肤
    （全表面 + 状态转储 + 异常位 chrome + 右键菜单）；`openMenu` 桥
    （win/menu.rs 临时线程原生菜单）；设置页「打开皮肤文件夹」安装入口；
    classic/devtest 双模式冒烟通过。
-5. **P1 分发 — 部分**：SkinPicker 徽标/预览/重启提示/文件夹入口已上；
-   `.eyeskin` 导入与文件关联留 P2。
-6. **P2**：点击穿透、热重载、`.eyeskin` 关联、官方皮肤扩充。
+5. **皮肤中心 — ✅**：独立窗口（大卡片墙 + 预览弹窗真 iframe + 编辑器 +
+   文件夹入口）；内置皮肤收敛为 classic/devtest 两个（历史配色预设
+   night/sakura/ocean 与 sunset-clock 示例包移除）。
+6. **P1 分发 — 部分**：`.eyeskin` 导入与文件关联留 P2。
+7. **P2**：点击穿透、热重载、`.eyeskin` 关联、皮肤市场。
 
 ## 9. 决策记录（原"待拍板"项）
 
@@ -264,12 +268,14 @@ target(lock) = manifest.targets.lock 存在且文件有效 ? HTML表面
 2. `tryUnlock` 限速 → **1 次/秒 + 连错 5 次冷却 60s**（CoreLoop 实现对所有
    入口一致）。
 3. `.eyeskin` 后缀 → 未定（P2 引入导入时再拍）。
-4. 模板仓库 → 暂以仓库内 `assets/skins-example/` 为模板真源，独立仓库待社区
-   起量再拆。
+4. 模板 → 内置皮肤源码（`src/skins/`）即模板真源，独立模板仓库待社区起量再拆。
 5. **headless 化** → 默认界面降格为内置皮肤包（自吃狗粮）；GDI bar 保留为
    唯一原生渲染器（WebView2 冷启动秒级延迟，倒计时条必须零延迟；兼作 HTML
    bar 的原生兜底）——classic 无 bar entry 即 GDI，devtest 走全 HTML 验证。
-6. 内置皮肤防遮蔽 → 磁盘扫描跳过内置 id（classic/night/sakura/ocean/devtest
-   的文件与目录），协议层内置 id 只读内嵌资产。
+6. 内置皮肤防遮蔽 → 磁盘扫描跳过内置 id（classic/devtest 的文件与目录），
+   协议层内置 id 只读内嵌资产。
+7. **内置皮肤只留两个**（2026-10-09 用户拍板）→ classic（默认）+ devtest
+   （测试）；历史配色预设（night/sakura/ocean）与 sunset-clock 示例包移除，
+   旧配置按 id 失效自然回退 classic。
 7. 解锁按钮（逃生口）宿主恒有 → 任何皮肤损坏/无按钮时用户仍有退出路径；
    manifest `chrome.unlock` 声明才移位，默认保持 classic 右下像素位。

@@ -395,87 +395,44 @@ pub fn classic() -> SkinColors {
     }
 }
 
-/// 内置皮肤 id（顺序 = 设置页展示顺序）。ESP-1 headless 化后：
-/// - `classic`/`devtest` 是**内置目录包**（[`builtin_package`]，HTML 表面编译进
-///   二进制，经 eyenurse-skin:// 协议与磁盘皮肤同管线服务）；
-/// - `night`/`sakura`/`ocean` 仍是纯配色（bar 走 GDI 原生、lock 经 colors 桥
-///   套 classic 包的锁屏形态）。
-pub const BUILTIN_IDS: [&str; 5] = ["classic", "night", "sakura", "ocean", "devtest"];
+/// 内置皮肤 id（顺序 = 皮肤中心展示顺序）。ESP-1 headless 化后二者皆为
+/// **内置目录包**（[`builtin_package`]，HTML 表面编译进二进制，经
+/// eyenurse-skin:// 协议与磁盘皮肤同管线服务）：
+/// - `classic` = 默认皮肤（bar 走 GDI 原生，lock 为内嵌 HTML）；
+/// - `devtest` = 测试皮肤（bar+lock 全 HTML 表面，协议验证专用）。
+///
+/// 历史内置配色预设（night/sakura/ocean）已移除——旧配置指向它们时按
+/// 「id 失效」自然回退 classic。
+pub const BUILTIN_IDS: [&str; 2] = ["classic", "devtest"];
 
 /// 是否内置 id（磁盘扫描跳过这些目录/文件名——内嵌皮肤不可被磁盘包遮蔽）
 pub fn is_builtin_id(id: &str) -> bool {
     BUILTIN_IDS.contains(&id)
 }
 
-/// 内置预设（编译进二进制；色值与深底/浅底的自洽由人工评审保证：
-/// 深色 progress_bg 必须配浅色 text_idle 与浅色 check_hover_bg 上的深色 glyph）
+/// 内置预设配色（编译进二进制；devtest 高对比霓虹——协议验证皮肤，每个表面
+/// 一眼可辨）
 pub fn builtin(id: &str) -> Option<SkinColors> {
     let (name, name_en) = match id {
         "classic" => ("经典", "Classic"),
-        "night" => ("暗夜", "Night"),
-        "sakura" => ("樱粉", "Sakura"),
-        "ocean" => ("海蓝", "Ocean"),
         "devtest" => ("测试皮肤", "Dev Test"),
         _ => return None,
     };
     let mut c = classic();
     c.name = name.into();
     c.name_en = name_en.into();
-    match id {
-        "night" => {
-            c.bar_progress_bg = "#1E1E24".into();
-            c.bar_progress_fill = "#34C48D".into();
-            c.bar_progress_from = "#C79A3A".into();
-            c.bar_progress_to = "#8B1A1A".into();
-            c.bar_text_idle = "#EDEDED".into();
-            c.bar_text_from = "#EDEDED".into();
-            c.bar_text_to = "#FF6B6B".into();
-            c.bar_check_glyph = "#DDDDDD".into();
-            c.bar_check_hover_bg = "#33333B".into();
-            c.mask_bg = "#101216".into();
-            c.mask_fg = "#E8EAEE".into();
-        }
-        "sakura" => {
-            c.bar_progress_bg = "#FFF0F4".into();
-            c.bar_progress_fill = "#FF7BAC".into();
-            c.bar_progress_from = "#F2A0C0".into();
-            c.bar_progress_to = "#B03060".into();
-            c.bar_text_idle = "#4A2A35".into();
-            c.bar_text_from = "#5A2A3A".into();
-            c.bar_text_to = "#E05A8A".into();
-            c.bar_check_glyph = "#A05A75".into();
-            c.bar_check_hover_bg = "#FFE3EC".into();
-            c.mask_bg = "#2A1520".into();
-            c.mask_fg = "#FFE8F1".into();
-        }
-        "ocean" => {
-            c.bar_progress_bg = "#EAF4FB".into();
-            c.bar_progress_fill = "#2D9CDB".into();
-            c.bar_progress_from = "#F2C94C".into();
-            c.bar_progress_to = "#C0392B".into();
-            c.bar_text_idle = "#10394A".into();
-            c.bar_text_from = "#10394A".into();
-            c.bar_text_to = "#E74C3C".into();
-            c.bar_check_glyph = "#2A6E8F".into();
-            c.bar_check_hover_bg = "#FFFFFF".into();
-            c.mask_bg = "#0E1F2A".into();
-            c.mask_fg = "#E3F2FD".into();
-        }
-        // devtest：高对比霓虹（协议验证皮肤——每个表面一眼可辨）
-        "devtest" => {
-            c.bar_progress_bg = "#101014".into();
-            c.bar_progress_fill = "#00E676".into();
-            c.bar_progress_from = "#FFD600".into();
-            c.bar_progress_to = "#FF1744".into();
-            c.bar_text_idle = "#00E676".into();
-            c.bar_text_from = "#FFD600".into();
-            c.bar_text_to = "#FF1744".into();
-            c.bar_check_glyph = "#00E676".into();
-            c.bar_check_hover_bg = "#1B2E24".into();
-            c.mask_bg = "#0D001A".into();
-            c.mask_fg = "#76FF03".into();
-        }
-        _ => {}
+    if id == "devtest" {
+        c.bar_progress_bg = "#101014".into();
+        c.bar_progress_fill = "#00E676".into();
+        c.bar_progress_from = "#FFD600".into();
+        c.bar_progress_to = "#FF1744".into();
+        c.bar_text_idle = "#00E676".into();
+        c.bar_text_from = "#FFD600".into();
+        c.bar_text_to = "#FF1744".into();
+        c.bar_check_glyph = "#00E676".into();
+        c.bar_check_hover_bg = "#1B2E24".into();
+        c.mask_bg = "#0D001A".into();
+        c.mask_fg = "#76FF03".into();
     }
     Some(c)
 }
@@ -786,8 +743,12 @@ mod tests {
             assert!(c.bar_progress_bg.starts_with('#') && c.bar_progress_bg.len() == 7);
         }
         assert!(builtin("nope").is_none());
-        let night = builtin("night").unwrap();
-        assert_ne!(night.bar_progress_bg, classic().bar_progress_bg);
+        // 历史配色预设已移除：指向它们 = classic 兜底
+        assert!(builtin("night").is_none());
+        assert!(builtin("sakura").is_none());
+        assert!(builtin("ocean").is_none());
+        let devtest = builtin("devtest").unwrap();
+        assert_ne!(devtest.bar_progress_bg, classic().bar_progress_bg);
     }
 
     #[test]
@@ -812,8 +773,8 @@ mod tests {
         assert_eq!(resolve_effective(&config, &[]).name, "经典");
 
         // 内置
-        config.Current = "night".into();
-        assert_eq!(resolve_effective(&config, &disk).name_en, "Night");
+        config.Current = "devtest".into();
+        assert_eq!(resolve_effective(&config, &disk).name_en, "Dev Test");
 
         // 自定义最高
         config.Current = "custom".into();
@@ -1063,13 +1024,13 @@ mod tests {
         assert!(bar.is_none());
         assert_eq!(lock.unwrap().entry, "lock/index.html");
 
-        // 纯色预设 night：lock 回退 classic 包（colors 桥吃 night 配色），bar = GDI
+        // 已移除的历史预设 id（night）：配色/lock 均回退 classic（旧配置迁移零操作）
         let config = SkinConfig {
             Current: "night".into(),
             Custom: None,
         };
         let (colors, bar, lock) = resolve_surfaces(&config, &[]);
-        assert_eq!(colors.mask_bg, "#101216");
+        assert_eq!(colors.name, "经典");
         assert!(bar.is_none());
         assert_eq!(lock.unwrap().entry, "lock/index.html");
 
