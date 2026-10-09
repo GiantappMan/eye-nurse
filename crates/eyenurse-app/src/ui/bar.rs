@@ -55,6 +55,8 @@ pub const WM_APP_LANGUAGE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP
 /// 托盘双击 → 按持久化 TopMost/位置恢复显示（B11，对齐 v2 ShowCountdownWindow；
 /// 值由 CoreLoop 先写入共享快照再投递）
 pub const WM_APP_SHOW: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 3;
+/// 换肤（v3.1）：配色已写入共享快照，本消息只触发即时重绘（1s 心跳本也会覆盖）
+pub const WM_APP_SKIN: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 4;
 
 // —— WM_TIMER id ——
 /// 1s 重绘心跳（读共享快照重绘，§2：与 CoreLoop 的 1Hz 时钟相互独立）
@@ -112,6 +114,46 @@ struct ToolInfoW {
     lp_reserved: *mut core::ffi::c_void,
 }
 
+/// 悬浮条运行时配色（v3.1 换肤；COLORREF 0x00BBGGRR，CoreLoop 从生效 SkinDef
+/// 解析写入快照；on_paint 全部读这里——编译期 theme:: 常量退居「经典皮肤真源」）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BarSkinColors {
+    pub progress_bg: u32,
+    pub progress_fill: u32,
+    pub progress_from: u32,
+    pub progress_to: u32,
+    pub text_idle: u32,
+    pub text_from: u32,
+    pub text_to: u32,
+    pub check_glyph: u32,
+    pub check_hover_bg: u32,
+}
+
+impl BarSkinColors {
+    /// SkinColors（#RRGGBB）→ COLORREF。非法值不会到达（解析侧已逐键回退），
+    /// 这里仍兜底为黑。
+    pub fn of(s: &eyenurse_core::skin::SkinColors) -> Self {
+        fn c(hex: &str) -> u32 {
+            let v = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0);
+            let r = (v >> 16) & 0xFF;
+            let g = (v >> 8) & 0xFF;
+            let b = v & 0xFF;
+            (b << 16) | (g << 8) | r
+        }
+        Self {
+            progress_bg: c(&s.bar_progress_bg),
+            progress_fill: c(&s.bar_progress_fill),
+            progress_from: c(&s.bar_progress_from),
+            progress_to: c(&s.bar_progress_to),
+            text_idle: c(&s.bar_text_idle),
+            text_from: c(&s.bar_text_from),
+            text_to: c(&s.bar_text_to),
+            check_glyph: c(&s.bar_check_glyph),
+            check_hover_bg: c(&s.bar_check_hover_bg),
+        }
+    }
+}
+
 /// 悬浮条展示状态（§6.4：CoreLoop 每拍与状态变化时更新；bar 线程只读）
 #[derive(Debug, Clone)]
 pub struct BarSnapshot {
@@ -133,6 +175,8 @@ pub struct BarSnapshot {
     pub saved_top: f64,
     /// 界面文案（切语言时 CoreLoop 整包替换，WM_APP_LANGUAGE 触发重绘）
     pub texts: I18nTexts,
+    /// 运行时配色（v3.1 换肤；切皮肤时 CoreLoop 替换 + WM_APP_SKIN 触发重绘）
+    pub skin: BarSkinColors,
 }
 
 /// bar 线程建窗后回填的句柄（复用 win/session.rs 的 OnceLock 模式，§6.4）
@@ -613,10 +657,18 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
         let dpi = state.dpi;
         let paused = bar.paused_time;
         let paused_secs = paused.map(|p| p.as_secs_f64());
+        let skin = bar.skin; // v3.1 换肤：色值全部来自共享快照（classic 真源仍是 theme.json）
+        let rgb = |v: u32| {
+            theme::Rgb::new(
+                (v & 0xFF) as u8,
+                ((v >> 8) & 0xFF) as u8,
+                ((v >> 16) & 0xFF) as u8,
+            )
+        };
         let colorref = |c: theme::Rgb| COLORREF(c.as_colorref());
 
-        // 1) 底色（BAR_PROGRESS_BG = v2 "Beige"）
-        let bg = CreateSolidBrush(colorref(theme::BAR_PROGRESS_BG));
+        // 1) 底色（经典皮肤 = v2 "Beige"）
+        let bg = CreateSolidBrush(COLORREF(skin.progress_bg));
         FillRect(mem, &rc, bg);
         let _ = DeleteObject(bg.into());
 
@@ -627,9 +679,9 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             (bar.countdown.as_secs_f64() / bar.interval.as_secs_f64()).clamp(0.0, 1.0)
         };
         let fill = match paused_secs {
-            // 暂停：进度前景 #ECC071→#3E0D0D 按 PausedTime 渐变（480s 走满，Q8）
-            Some(s) => theme::ramp(theme::BAR_PROGRESS_FROM, theme::BAR_PROGRESS_TO, s),
-            None => theme::BAR_PROGRESS_FILL,
+            // 暂停：进度前景 from→to 按 PausedTime 渐变（480s 走满，Q8）
+            Some(s) => theme::ramp(rgb(skin.progress_from), rgb(skin.progress_to), s),
+            None => rgb(skin.progress_fill),
         };
         let fill_brush = CreateSolidBrush(colorref(fill));
         let fill_rect = RECT {
@@ -641,10 +693,10 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
         FillRect(mem, &fill_rect, fill_brush);
         let _ = DeleteObject(fill_brush.into());
 
-        // 文字色：暂停时 #080808→#F40000 渐变（Q8）；一致性差异 #6：休息文案不吃渐变
+        // 文字色：暂停时 from→to 渐变（Q8）；一致性差异 #6：休息文案不吃渐变
         let text_color = match paused_secs {
-            Some(s) if !bar.resting => theme::ramp(theme::BAR_TIME_FROM, theme::BAR_TIME_TO, s),
-            _ => theme::BAR_TEXT_IDLE,
+            Some(s) if !bar.resting => theme::ramp(rgb(skin.text_from), rgb(skin.text_to), s),
+            _ => rgb(skin.text_idle),
         };
 
         // 3) 暂停态时钟图标（左侧 15×15 逻辑：表圈 + 两针，等价 egui paint_clock_icon；
@@ -691,8 +743,8 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             let zx = cw - scale_px(CHECK_LOGICAL, dpi);
             let cy = ch / 2;
             if state.check_hovered {
-                // 悬停底色 #FFFFFF（v2 CheckBox.xaml 模板 MouseOver：仅复选上悬停）
-                let check_bg = CreateSolidBrush(colorref(theme::BAR_CHECK_HOVER_BG));
+                // 悬停底色（经典皮肤 = #FFFFFF，v2 CheckBox.xaml 模板 MouseOver：仅复选上悬停）
+                let check_bg = CreateSolidBrush(COLORREF(skin.check_hover_bg));
                 let hover_rect = RECT {
                     left: zx + 1,
                     top: cy - side / 2,
@@ -706,7 +758,7 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             let box_side = scale_px(12.0, dpi);
             let bl = zx + scale_px(3.5, dpi);
             let bt = cy - box_side / 2;
-            let pen = CreatePen(PS_SOLID, 1, colorref(theme::BAR_CHECK_GLYPH));
+            let pen = CreatePen(PS_SOLID, 1, COLORREF(skin.check_glyph));
             let old_pen = SelectObject(mem, pen.into());
             let old_brush = SelectObject(mem, GetStockObject(NULL_BRUSH));
             let _ = Rectangle(mem, bl, bt, bl + box_side, bt + box_side);
@@ -930,6 +982,12 @@ unsafe extern "system" fn bar_wndproc(
         m if m == WM_APP_TOPMOST => {
             // 置顶切换由 CoreLoop 经消息驱动（§6.3-1）；样式与 SetWindowPos 同步改
             apply_topmost(hwnd, w.0 == 1);
+            let _ = InvalidateRect(Some(hwnd), None, false);
+            LRESULT(0)
+        }
+        m if m == WM_APP_SKIN => {
+            // 换肤（v3.1）：配色已在共享快照（CoreLoop 先更新再投递），只需即时重绘
+            //（1s 心跳本也会覆盖，本消息保证切换零延迟）
             let _ = InvalidateRect(Some(hwnd), None, false);
             LRESULT(0)
         }

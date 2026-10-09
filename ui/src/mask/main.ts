@@ -10,7 +10,7 @@
 //   缺键回退 key 原文（与 I18n::get 第三级回退一致）。
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { applyThemeVars } from "../shared/theme";
+import { applySkinVars, applyThemeVars } from "../shared/theme";
 import "./mask.css";
 
 interface RestTickPayload {
@@ -106,8 +106,22 @@ pwdEl.addEventListener("keydown", (ev) => {
 applyThemeVars();
 renderClock();
 
+// v3.1 换肤：静态 theme.json 只是首帧兜底，启动即取当前皮肤覆盖；
+// 运行中切换皮肤 → skin-changed 广播载荷即完整配色（Rust 侧已逐键回退）
+async function applySkin(): Promise<void> {
+  try {
+    applySkinVars(await invoke<Record<string, string>>("get_skin"));
+  } catch {
+    /* 无后端（纯前端 dev）时保持 theme.json 静态值 */
+  }
+}
+void applySkin();
+
 void (async () => {
   await listen<RestTickPayload>("eyenurse://rest-tick", (ev) => renderTick(ev.payload));
+  await listen<Record<string, string>>("eyenurse://skin-changed", (ev) =>
+    applySkinVars(ev.payload),
+  );
   await listen("eyenurse://i18n-changed", async () => {
     try {
       applyTexts(await invoke<TextMap>("get_texts"));

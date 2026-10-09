@@ -18,14 +18,16 @@
 
 use crate::events::{CoreMsg, Reply, WinEvent};
 use crate::tray::{I18nTexts, Tray, TrayAction};
-use crate::ui::bar::{self, BarSnapshot};
+use crate::ui::bar::{self, BarSkinColors, BarSnapshot};
 use crate::win::monitors::MonitorRects;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use eyenurse_core::autostart::DesktopStartup;
 use eyenurse_core::config::{ConfigStore, LanguagesJson, LockScreenJson, SettingJson, UiJson};
 use eyenurse_core::i18n::I18n;
+use eyenurse_core::skin::{self, SkinColors, SkinConfig, SkinMeta, SkinsDto};
 use eyenurse_core::stats::{local_today, StatsStore};
 use eyenurse_core::timer::{GlobalTimer, TimerEvent};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Wry};
@@ -65,6 +67,8 @@ pub struct CoreBundle {
     pub lock: LockScreenJson,
     /// 护眼时间统计（Stats.json；CoreLoop 独占写者）
     pub stats: StatsStore,
+    /// 皮肤配置（Skin.json；v3.1 换肤）
+    pub skin: SkinConfig,
 }
 
 /// §5.2 单个遮罩窗的**生产创建路径本体**（CoreLoop::create_mask_window 与 smoke
@@ -133,7 +137,14 @@ pub(crate) fn build_mask_window(
 pub(crate) fn apply_lock_policy(lock: &LockScreenJson) {
     let on = lock.Enabled && lock.InterceptWinL;
     crate::win::hotkey::set_enabled(on);
-    let _ = crate::win::hotkey::set_disable_lock_workstation(on);
+    if !crate::win::hotkey::set_disable_lock_workstation(on) {
+        // 实测：该键可能被域策略/安全软件锁 ACL（拒绝访问，手动 reg add 同样失败）。
+        // 降级为仅钩子拦截：非提权前台照常生效；钩子漏键（提权前台）会退化成系统锁屏。
+        eprintln!(
+            "[eyenurse] DisableLockWorkstation registry write failed (policies key locked?); \
+             Win+L interception runs hook-only"
+        );
+    }
 }
 
 /// CoreLoop 线程（`run` 消费 Self；由 main 的 setup 钩子 spawn）
@@ -201,6 +212,10 @@ impl CoreLoop {
     /// 主循环（§2）：消息到达即刻处理；1s 空闲到点跑一拍 tick。
     /// 全部发送方 drop（应用退出、命令 State 全部释放）→ Disconnected → 收尾退出。
     pub fn run(mut self) {
+        // 启动即应用当前皮肤：磁盘/自定义非 classic 时覆盖 bar 快照的 classic 初值，
+        // 并广播给已存在的 WebView（页面侧启动另有 get_skin 兜底，双保险）
+        let boot_skin = self.effective_skin();
+        self.apply_skin(&boot_skin);
         let mut next_tick = Instant::now() + Duration::from_secs(1);
         loop {
             let timeout = next_tick.saturating_duration_since(Instant::now());
@@ -250,6 +265,23 @@ impl CoreLoop {
             CoreMsg::GetCurrentLanguage(reply) => {
                 self.reply(reply, self.core.i18n.current().to_string())
             }
+            // —— v3.1 换肤 ——
+            CoreMsg::SetSkin(id) => {
+                self.core.skin.Current = id;
+                let _ = self.core.cfg.save(&self.core.skin);
+                let effective = self.effective_skin();
+                self.apply_skin(&effective);
+            }
+            CoreMsg::SetCustomSkin(def, reply) => {
+                self.core.skin.Custom = Some(*def);
+                self.core.skin.Current = "custom".into();
+                let _ = self.core.cfg.save(&self.core.skin);
+                let effective = self.effective_skin();
+                self.apply_skin(&effective);
+                self.reply(reply, effective);
+            }
+            CoreMsg::GetSkins(reply) => self.reply(reply, self.skins_dto()),
+            CoreMsg::GetSkin(reply) => self.reply(reply, self.effective_skin()),
             // —— v3.2 仿锁屏 / 护眼统计 ——
             CoreMsg::LockActivate => self.lock_now(),
             CoreMsg::LockTryUnlock(password, reply) => {
@@ -271,6 +303,61 @@ impl CoreLoop {
     /// §2 应答契约的落点——凡 Reply 变体在所有路径（含错误路径）恰好回包一次。
     fn reply<T>(&self, tx: Reply<T>, value: T) {
         let _ = tx.send(value);
+    }
+
+    // —— v3.1 换肤 ——
+
+    /// 磁盘皮肤目录（exe 旁 Assets/Skins；延续 v2「替换 json 即换文案」惯例）
+    fn skins_dir() -> PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            .unwrap_or_else(std::env::temp_dir)
+            .join("Assets")
+            .join("Skins")
+    }
+
+    /// 当前生效配色（Skin.json 选择 + 磁盘扫描 + 逐键回退 classic）
+    fn effective_skin(&self) -> SkinColors {
+        let disk = skin::scan_disk(&Self::skins_dir());
+        skin::resolve_effective(&self.core.skin, &disk)
+    }
+
+    /// 可用皮肤清单：内置 + 磁盘 + 自定义槽（custom 槽仅在已有自定义时出现，
+    /// 展示名由前端按语言本地化；colors 供页面直接渲染迷你预览）
+    fn skins_dto(&self) -> SkinsDto {
+        let classic = skin::classic();
+        let mut skins = skin::builtin_metas();
+        for entry in skin::scan_disk(&Self::skins_dir()) {
+            let colors = skin::resolve(&entry.def, &classic);
+            skins.push(SkinMeta {
+                id: entry.id,
+                name: colors.name.clone(),
+                name_en: colors.name_en.clone(),
+                colors,
+            });
+        }
+        if let Some(def) = &self.core.skin.Custom {
+            let colors = skin::resolve(def, &classic);
+            skins.push(SkinMeta {
+                id: "custom".into(),
+                name: "自定义".into(),
+                name_en: "Custom".into(),
+                colors,
+            });
+        }
+        SkinsDto {
+            current: self.core.skin.Current.clone(),
+            skins,
+        }
+    }
+
+    /// 应用生效配色：bar 快照 + WM_APP_SKIN 即时重绘 + WebView 广播
+    ///（设置页/遮罩页监听 skin-changed 后重取/重注入 CSS 变量）
+    fn apply_skin(&mut self, effective: &SkinColors) {
+        self.bar_lock().skin = BarSkinColors::of(effective);
+        self.bar_post(bar::WM_APP_SKIN, 0, 0);
+        let _ = self.app.emit("eyenurse://skin-changed", effective);
     }
 
     // —— 托盘/bar 菜单动作（AppModel::apply_tray_action 逐项搬移）——
@@ -394,6 +481,14 @@ impl CoreLoop {
     /// （对齐真会话锁语义），无遮罩时按显示器补建（纯锁屏 UI）。
     /// 已锁或功能未开时幂等无事。
     fn lock_now(&mut self) {
+        eprintln!(
+            "[eyenurse] lock_now: enabled={} intercept={} autorest={} is_locked={} is_resting={}",
+            self.core.lock.Enabled,
+            self.core.lock.InterceptWinL,
+            self.core.lock.AutoRest,
+            self.is_locked,
+            self.is_resting
+        );
         if self.is_locked || !self.core.lock.Enabled {
             return;
         }
@@ -401,6 +496,15 @@ impl CoreLoop {
         self.stats_dirty = true;
         if self.core.lock.AutoRest {
             self.rest_now();
+            // rest_now 在锁定态走「复用已有窗口」分支；首次激活时还没有任何
+            // 遮罩窗（实测教训：漏掉这条路径 = Win+L 隐形激活，屏幕无任何变化）
+            if self.mask_labels.is_empty() {
+                let monitors = crate::win::monitors::get_monitor_infos();
+                for mon in &monitors {
+                    self.create_mask_window(mon);
+                }
+            }
+            self.push_mask_state();
         } else {
             self.pause(); // 离席：计时冻结（resting 中 pause 被门控，无副作用）
             if self.mask_labels.is_empty() {
@@ -416,6 +520,12 @@ impl CoreLoop {
         if self.core.lock.CaptureThrough {
             for label in &self.mask_labels {
                 self.apply_capture_to(label);
+            }
+        }
+        // 锁屏必须可键入：主屏遮罩取焦点，页面首拍再把焦点落进密码框
+        if let Some(label) = self.mask_labels.first() {
+            if let Some(w) = self.app.get_webview_window(label) {
+                let _ = w.set_focus();
             }
         }
     }

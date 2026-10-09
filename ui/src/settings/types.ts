@@ -50,3 +50,58 @@ export interface StatsDay {
   rest_count: number;
   lock_secs: number;
 }
+
+// —— v3.1 换肤 ——
+
+/** 皮肤清单条目（get_skins；id = 内置 id / 磁盘文件名 / "custom"，名称由前端按语言二选一，
+ * colors = 该皮肤逐键回退后的完整配色，供迷你预览直接渲染） */
+export interface SkinMeta {
+  id: string;
+  name: string;
+  name_en: string;
+  colors: SkinColors;
+}
+
+/** get_skins 回包 */
+export interface SkinsDto {
+  current: string;
+  skins: SkinMeta[];
+}
+
+/** 生效配色（get_skin / skin-changed；字段名 = theme.json 键名 = CSS 变量去前缀） */
+export interface SkinColors {
+  name: string;
+  name_en: string;
+  bar_progress_bg: string;
+  bar_progress_fill: string;
+  bar_progress_from: string;
+  bar_progress_to: string;
+  bar_text_idle: string;
+  bar_text_from: string;
+  bar_text_to: string;
+  bar_check_glyph: string;
+  bar_check_hover_bg: string;
+  mask_bg: string;
+  mask_fg: string;
+}
+
+/** 自定义配色载荷（set_custom_skin；嵌套结构与 Rust SkinDef 一致，缺省键回退经典） */
+export interface SkinDefPayload {
+  name?: string | null;
+  name_en?: string | null;
+  bar: {
+    progress_bg?: string | null;
+    progress_fill?: string | null;
+    progress_from?: string | null;
+    progress_to?: string | null;
+    text_idle?: string | null;
+    text_from?: string | null;
+    text_to?: string | null;
+    check_glyph?: string | null;
+    check_hover_bg?: string | null;
+  };
+  mask: {
+    bg?: string | null;
+    fg?: string | null;
+  };
+}

@@ -192,3 +192,15 @@
 7. `[单测/冒烟]`（v3.1 新增，教训 3）`bun run smoke` 输出 `SMOKE settings=ok mask=ok bar=ok`
    且退出码 0——三类窗口（设置窗 show、遮罩创建/关闭、悬浮条 Win32 窗口）的创建路径全部
    程序化验证（架构文档 §11）。
+
+## v3.1 换肤（2026-10）
+
+| # | 条目 | 验收标准 | 验证方式 |
+|---|---|---|---|
+| S1 | 内置预设 | 经典/暗夜/樱粉/海蓝 4 套；classic 与 theme.json 同值（真源锚点测试双侧锁定） | 单测（skin.rs/theme.rs） |
+| S2 | 切换即时生效 | 设置页选择皮肤 → 悬浮条（WM_APP_SKIN）与锁屏页（skin-changed → CSS 变量）即时变色，无需重启 | [手测] |
+| S3 | 逐键回退 | 磁盘/自定义皮肤缺键或非法色值 → classic 对应键；Current 指向失效 id → classic | 单测 |
+| S4 | 磁盘皮肤 | exe 旁 Assets/Skins/*.json 投放即出现在设置页列表（文件名=id，坏 JSON 跳过） | 单测（scan_disk）+ [手测] |
+| S5 | 自定义配色 | 设置页编辑器 11 色，保存即启用（Skin.json Custom + Current="custom"），重启保持 | 单测（roundtrip）+ [手测] |
+| S6 | 持久化 | Skin.json 坏档 → 整体回默认（ConfigStore 既有容错语义） | 单测 |
+| S7 | 锁屏图标 | 解锁按钮 SVG stroke=currentColor，随 mask_fg 变色（不再硬编码 #EEEEF2） | [手测] |

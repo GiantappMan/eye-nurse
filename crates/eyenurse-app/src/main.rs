@@ -57,6 +57,7 @@ fn main() {
     let ui_cfg: UiJson = cfg.load();
     let lang: LanguagesJson = cfg.load();
     let lock_cfg: LockScreenJson = cfg.load();
+    let skin_cfg: eyenurse_core::skin::SkinConfig = cfg.load();
     let stats = StatsStore::new(cfg.dir());
     let i18n = load_i18n(&cfg, &lang);
 
@@ -123,6 +124,10 @@ fn main() {
             commands::set_lock_settings,
             commands::lock_try_unlock,
             commands::get_stats,
+            commands::get_skins,
+            commands::get_skin,
+            commands::set_skin,
+            commands::set_custom_skin,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -150,6 +155,9 @@ fn main() {
                 saved_left: ui_cfg.CoutdownWindowLeft.0,
                 saved_top: ui_cfg.CoutdownWindowTop.0,
                 texts: texts.clone(),
+                // 皮肤初值 = 经典（theme.json 同值）；CoreLoop::run 启动即按
+                // Skin.json 的实际选择覆盖并广播（v3.1 换肤）
+                skin: ui::bar::BarSkinColors::of(&eyenurse_core::skin::classic()),
             }));
             let bar_handle = ui::bar::spawn(
                 core_tx.clone(),
@@ -181,6 +189,7 @@ fn main() {
                 timer,
                 lock: lock_cfg,
                 stats,
+                skin: skin_cfg,
             };
             // 4.5) --smoke：冒烟线程（三类窗口创建路径验证 → stdout + 退出码，§11）。
             //      smoke::run 只 spawn 线程立即返回，必须放在 CoreLoop::new 之前——

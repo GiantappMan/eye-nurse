@@ -14,6 +14,7 @@ use crate::events::CoreMsg;
 use crossbeam_channel::Sender;
 use eyenurse_core::autostart::DesktopStartup;
 use eyenurse_core::config::{LockScreenJson, SettingJson};
+use eyenurse_core::skin::{SkinColors, SkinDef, SkinsDto};
 use eyenurse_core::HmsSpan;
 use std::time::Duration;
 use tauri::State;
@@ -250,4 +251,33 @@ pub async fn get_stats(
     state: State<'_, CoreHandle>,
 ) -> Result<Vec<eyenurse_core::stats::StatsDay>, String> {
     ask_core(&state, |tx| CoreMsg::GetStats(30, tx))
+}
+
+// —— v3.1 换肤 ——
+
+/// 可用皮肤清单（内置 + 磁盘 + 自定义槽）+ 当前选中 id
+#[tauri::command]
+pub async fn get_skins(state: State<'_, CoreHandle>) -> Result<SkinsDto, String> {
+    ask_core(&state, CoreMsg::GetSkins)
+}
+
+/// 当前生效配色（逐键回退后的完整值；页面据此渲染预览/预填编辑器）
+#[tauri::command]
+pub async fn get_skin(state: State<'_, CoreHandle>) -> Result<SkinColors, String> {
+    ask_core(&state, CoreMsg::GetSkin)
+}
+
+/// 选择皮肤（内置 id / 磁盘文件名 / "custom"）：切换即生效并广播
+#[tauri::command]
+pub async fn set_skin(state: State<'_, CoreHandle>, id: String) -> Result<(), String> {
+    state.tx.send(CoreMsg::SetSkin(id)).map_err(|e| e.to_string())
+}
+
+/// 保存用户自定义配色并启用（Current="custom"）→ 回应生效后的完整配色
+#[tauri::command]
+pub async fn set_custom_skin(
+    state: State<'_, CoreHandle>,
+    def: SkinDef,
+) -> Result<SkinColors, String> {
+    ask_core(&state, |tx| CoreMsg::SetCustomSkin(Box::new(def), tx))
 }

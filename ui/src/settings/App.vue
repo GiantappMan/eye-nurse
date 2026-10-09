@@ -12,7 +12,16 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { onMounted, onUnmounted, reactive, ref, toRaw } from "vue";
 import { currentLanguage, languages, loadLanguageList, loadTexts, t } from "./i18n";
-import { emptyLockSettings, emptySettings, type LockSettingsDto, type SettingsDto } from "./types";
+import {
+  emptyLockSettings,
+  emptySettings,
+  type LockSettingsDto,
+  type SettingsDto,
+  type SkinColors,
+  type SkinDefPayload,
+  type SkinMeta,
+  type SkinsDto,
+} from "./types";
 import SettingsView from "./components/SettingsView.vue";
 
 /** 防抖窗口（v2 Settings.vue：lodash/debounce 300ms，清单 I3） */
@@ -38,6 +47,49 @@ interface TickPayload {
   resting: boolean;
 }
 const tick = ref<TickPayload | null>(null);
+
+// —— 皮肤（v3.1 换肤）——
+const skins = ref<SkinMeta[]>([]);
+const currentSkinId = ref("");
+const effectiveSkin = ref<SkinColors | null>(null);
+
+/** 清单 + 生效配色一次取全（启动与 skin-changed 共用） */
+async function refreshSkins(): Promise<void> {
+  try {
+    const dto = await invoke<SkinsDto>("get_skins");
+    skins.value = dto.skins;
+    currentSkinId.value = dto.current;
+  } catch (e) {
+    console.error("get_skins 失败", e);
+  }
+  try {
+    effectiveSkin.value = await invoke<SkinColors>("get_skin");
+  } catch (e) {
+    console.error("get_skin 失败", e);
+  }
+}
+
+/** 选择皮肤：切换即生效（bar/遮罩由 CoreLoop 驱动，页面配色随 skin-changed 刷新） */
+async function selectSkin(id: string): Promise<void> {
+  if (id === currentSkinId.value) return;
+  try {
+    await invoke("set_skin", { id });
+    currentSkinId.value = id;
+  } catch (e) {
+    console.error("set_skin 失败", e);
+  }
+}
+
+/** 保存自定义配色并启用（后端逐键回退后回包生效值） */
+async function saveCustomSkin(def: SkinDefPayload): Promise<void> {
+  try {
+    effectiveSkin.value = await invoke<SkinColors>("set_custom_skin", { def });
+    currentSkinId.value = "custom";
+    await refreshSkins(); // 自定义槽首次出现
+  } catch (e) {
+    console.error("set_custom_skin 失败", e);
+  }
+}
 
 // —— 保存管线 ——
 
@@ -180,12 +232,13 @@ async function syncAutostart(): Promise<void> {
 const unlisteners: Array<() => void> = [];
 
 onMounted(async () => {
-  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）+ 锁屏设置
+  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）+ 锁屏设置 + 皮肤
   await Promise.all([
     loadTexts().catch((e) => console.error("get_texts 失败", e)),
     loadLanguageList().catch((e) => console.error("语言清单加载失败", e)),
     refreshFromBackend(),
     refreshLockSettings(),
+    refreshSkins(),
   ]);
   unlisteners.push(
     await listen("eyenurse://i18n-changed", () => {
@@ -205,6 +258,11 @@ onMounted(async () => {
     }),
     await listen<TickPayload>("eyenurse://tick", (e) => {
       tick.value = e.payload;
+    }),
+    await listen<SkinColors>("eyenurse://skin-changed", (e) => {
+      // 生效配色直达；清单同步重取（custom 槽首现/磁盘皮肤增删）
+      effectiveSkin.value = e.payload;
+      void refreshSkins();
     }),
   );
 });
@@ -249,10 +307,15 @@ onUnmounted(() => {
         :saving="saving"
         :tick="tick"
         :lock-settings="lockSettings"
+        :skins="skins"
+        :current-skin-id="currentSkinId"
+        :effective-skin="effectiveSkin"
         @commit="scheduleSave"
         @reset="resetDefaults"
         @rest-now="restNow"
         @lock-commit="scheduleLockSave"
+        @select-skin="selectSkin"
+        @save-custom-skin="saveCustomSkin"
       />
     </main>
   </div>

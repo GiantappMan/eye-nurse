@@ -15,6 +15,7 @@
 use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
 use eyenurse_core::config::{LockScreenJson, SettingJson};
+use eyenurse_core::skin::{SkinColors, SkinDef, SkinsDto};
 use eyenurse_core::stats::StatsDay;
 use std::collections::BTreeMap;
 
@@ -65,6 +66,17 @@ pub enum CoreMsg {
     GetLanguages(Reply<Vec<String>>),
     /// 当前语言名
     GetCurrentLanguage(Reply<String>),
+    // —— v3.1 换肤 ——
+    /// 选择皮肤（内置 id / 磁盘 id / "custom"）：写 Skin.json + bar 快照/WM_APP_SKIN
+    /// + 广播 skin-changed
+    SetSkin(String),
+    /// 保存用户自定义配色并启用（Current="custom"）→ 回应生效后的完整配色
+    ///（Box：SkinDef 11 个 Option 字段体积远超其他变体，装箱抑制 large_enum_variant）
+    SetCustomSkin(Box<SkinDef>, Reply<SkinColors>),
+    /// 可用皮肤清单（内置 + 磁盘 + 自定义槽）+ 当前选中 id
+    GetSkins(Reply<SkinsDto>),
+    /// 当前生效配色（含逐键回退结果）
+    GetSkin(Reply<SkinColors>),
     // —— v3.2 仿锁屏 / 护眼统计 ——
     /// 键盘钩子：Win+L 被拦截 → 激活仿锁屏（锁屏设置开启才生效）
     LockActivate,
