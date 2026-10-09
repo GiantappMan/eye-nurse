@@ -785,7 +785,8 @@ unsafe extern "system" fn bar_wndproc(
         SendMessageW, SetForegroundWindow, SetTimer, SetWindowPos, ShowWindow,
         GWLP_USERDATA, HTCAPTION, HTCLIENT, SWP_NOACTIVATE, SWP_NOSIZE,
         SWP_NOZORDER, SW_SHOW, WM_CONTEXTMENU,
-        WM_DPICHANGED, WM_EXITSIZEMOVE, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCMOUSELEAVE,
+        WM_DPICHANGED, WM_EXITSIZEMOVE, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCLBUTTONDBLCLK,
+        WM_NCMOUSELEAVE,
         WM_NCMOUSEMOVE, WM_NCDESTROY, WM_NCHITTEST, WM_NCRBUTTONUP, WM_PAINT, WM_TIMER,
     };
 
@@ -899,6 +900,14 @@ unsafe extern "system" fn bar_wndproc(
                 let topmost = snapshot_clone(state).topmost;
                 let _ = state.cmd_tx.send(CoreMsg::ToggleTopmost(!topmost));
             }
+            LRESULT(0)
+        }
+        WM_NCLBUTTONDBLCLK => {
+            // 双击浮窗打开主界面（用户需求 2026-10）：条身 HTCAPTION，双击与真实
+            // 标题栏同机制以非客户区双击消息到达。必须拦下 DefWindowProc 的默认
+            // 标题栏双击行为（最大化/最小化），转托盘同款动作打开设置窗；
+            // 复选命中区是 HTCLIENT，双击不受此影响（仍走两次 WM_LBUTTONUP 翻转）
+            let _ = state.cmd_tx.send(CoreMsg::Tray(TrayAction::Settings));
             LRESULT(0)
         }
         WM_EXITSIZEMOVE => {
