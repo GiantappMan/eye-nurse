@@ -38,8 +38,15 @@ fn main() {
     let smoke = std::env::args().any(|arg| arg == "--smoke");
 
     // 1) 单实例（清单 J3）：CreateMutexW("Local\\EyeNurse3")，
-    //    ERROR_ALREADY_EXISTS → 直接退出（tauri-plugin-single-instance 不引入：§0 非目标）
+    //    ERROR_ALREADY_EXISTS → 直接退出（tauri-plugin-single-instance 不引入：§0 非目标）。
+    //    release 无控制台，静默让位是预期行为；debug 下必须打印原因——实测教训：
+    //    残留实例会让 tauri dev 秒退且外层报 255，不打印会被当成应用崩溃去排查
     if !smoke && !win::single_instance::acquire() {
+        // 英文提示：Windows 控制台默认 GBK 代码页，中文 eprintln 会乱码（实测）
+        eprintln!(
+            "An Eye Nurse instance is already running (single-instance mutex Local\\EyeNurse3). \
+             This launch yields and exits. To debug, end it first: taskkill /IM eyenurse.exe /F"
+        );
         return;
     }
 
