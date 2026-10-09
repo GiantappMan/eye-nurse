@@ -93,6 +93,37 @@ pub fn resolve(config: &SkinConfig) -> (SkinColors, Option<ResolvedSurface>, Opt
     skin::resolve_surfaces(config, &disk)
 }
 
+/// 皮肤中心预览卡片 DTO（get_skin_preview 回包）：**任意 id**（不必是当前激活）
+/// 的表面 URL 与 bar 逻辑尺寸——解析规则与生效皮肤完全一致（lock 永不空：
+/// 无声明回退 classic 包；bar None = GDI 原生，前端以 CSS 仿样预览）。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SkinPreviewDto {
+    pub bar_url: Option<String>,
+    pub lock_url: Option<String>,
+    pub bar_w: f64,
+    pub bar_h: f64,
+}
+
+/// 任意皮肤 id 的预览解析（纯函数，无 CoreLoop 状态参与——皮肤中心点开卡片
+/// 时按需调用）
+pub fn preview_dto(id: &str) -> SkinPreviewDto {
+    let config = SkinConfig {
+        Current: id.to_string(),
+        Custom: None,
+    };
+    let (_, bar, lock) = resolve(&config);
+    let (bar_url, bar_size) = match &bar {
+        Some(s) => (Some(surface_url(id, s)), s.size),
+        None => (None, None),
+    };
+    SkinPreviewDto {
+        bar_url,
+        lock_url: lock.as_ref().map(|s| surface_url(id, s)),
+        bar_w: bar_size.map_or(DEFAULT_BAR_W, |s| s.w),
+        bar_h: bar_size.map_or(DEFAULT_BAR_H, |s| s.h),
+    }
+}
+
 /// `ResolvedSurface` → 页面 URL（scheme host + id + entry；entry 已在 manifest
 /// 加载期做过穿越校验，此处只拼装）
 fn surface_url(id: &str, surf: &ResolvedSurface) -> String {

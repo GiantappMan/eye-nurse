@@ -144,6 +144,7 @@ fn main() {
             commands::set_skin,
             commands::set_custom_skin,
             commands::get_skin_surface,
+            commands::get_skin_preview,
             commands::open_settings,
             commands::open_skin_center,
             commands::bar_drag,

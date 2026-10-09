@@ -11,7 +11,7 @@
 //! 无共享状态，命令线程直调不经 CoreLoop）。
 
 use crate::events::CoreMsg;
-use crate::skin_proto::SkinSurfaceDto;
+use crate::skin_proto::{SkinPreviewDto, SkinSurfaceDto};
 use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
 use eyenurse_core::autostart::DesktopStartup;
@@ -292,6 +292,13 @@ pub async fn set_custom_skin(
 #[tauri::command]
 pub async fn get_skin_surface(state: State<'_, CoreHandle>) -> Result<SkinSurfaceDto, String> {
     ask_core(&state, CoreMsg::GetSkinSurface)
+}
+
+/// 任意皮肤 id 的预览表面（皮肤中心预览弹窗；纯解析无 CoreLoop 状态——
+/// 同 get_autostart 的无状态例外）
+#[tauri::command]
+pub async fn get_skin_preview(id: String) -> Result<SkinPreviewDto, String> {
+    Ok(crate::skin_proto::preview_dto(&id))
 }
 
 /// 打开设置窗（托盘「设置」同源动作 CoreMsg::Tray(Settings)；

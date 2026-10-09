@@ -1,15 +1,32 @@
 <script setup lang="ts">
-// 皮肤中心（ESP-1 独立窗口）：大卡片墙 = 浏览/应用皮肤的一站式界面。
-// 布局自上而下：工具栏（标题 + 打开皮肤文件夹 + 刷新）→ bar 重启提示横幅 →
-// 卡片网格（预览图/配色渐变兜底 + 名称 + 作者 + 表面徽标 + 使用中标记，点卡片
-// 即应用）→ 自定义颜色编辑器（从设置页 SkinPicker 迁入）。
-// 数据自取（get_skins/get_skin/get_skin_surface）；skin-changed /
-// skin-surface-changed / i18n-changed 广播驱动刷新。
-import { computed, onMounted, reactive, ref, watch } from "vue";
+// 皮肤中心（ESP-1 独立窗口）：大卡片墙 = 浏览/预览/应用皮肤的一站式界面。
+// 布局自上而下：工具栏（标题 + 打开皮肤文件夹 + 设置）→ bar 重启提示横幅 →
+// 卡片网格（点卡片 = 打开预览弹窗）→ 自定义颜色编辑器（折叠）。
+//
+// **预览弹窗**：加载真实皮肤页 iframe（eyenurse-skin 协议 + sandbox，与生产
+// 同管线），握手后灌入**模拟桥状态**（ESP-1 皮肤页是 (state, texts, colors) 的
+// 纯函数渲染——预览即真实效果，第三方皮肤零适配）：
+// - 锁屏效果：1280×800 视口按比例缩放嵌入（纯锁屏脸：时钟 + 标题）；
+// - 悬浮条效果：manifest 逻辑尺寸 ×2 放大居中；GDI 配色皮肤无 HTML 表面 →
+//   CSS 1:1 仿样（与 GDI 条同构：底色 + 渐变填充 + mm:ss）。
+// 预览是**惰性**的：皮肤页的动作消息（drag/setTopmost/endRest…）一律忽略。
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { currentLanguage, loadTexts, loadLanguageList, t } from "../settings/i18n";
-import { skinPreviewUrl, type SkinColors, type SkinDefPayload, type SkinMeta } from "../settings/types";
+import {
+  currentLanguage,
+  loadTexts,
+  loadLanguageList,
+  t,
+  texts as i18nTexts,
+} from "../settings/i18n";
+import {
+  skinPreviewUrl,
+  type SkinColors,
+  type SkinDefPayload,
+  type SkinMeta,
+  type SkinPreviewDto,
+} from "../settings/types";
 
 const skins = ref<SkinMeta[]>([]);
 const currentId = ref("");
@@ -81,6 +98,84 @@ function fallbackStyle(meta: SkinMeta): Record<string, string> {
   };
 }
 
+// —— 预览弹窗（真实皮肤页 iframe + 模拟桥状态；动作消息一律忽略）——
+const previewMeta = ref<SkinMeta | null>(null);
+const previewDto = ref<SkinPreviewDto | null>(null);
+const lockFrame = ref<HTMLIFrameElement | null>(null);
+const barFrame = ref<HTMLIFrameElement | null>(null);
+/** 锁屏预览视口（真实比例，缩放嵌入）与缩放系数 */
+const LOCK_VW = 1280;
+const LOCK_VH = 800;
+const LOCK_SCALE = 0.469; // 600 / 1280（弹窗内容宽固定 600px）
+
+/** 预览用模拟显示态：锁屏 = 纯锁屏脸（时钟+标题，带密码提示位）；bar = 45min 间隔剩余 17min */
+const LOCK_DEMO = { remainingMs: 95_000, resting: false, locked: true, hasPassword: true };
+const BAR_DEMO = {
+  countdownMs: 17 * 60 * 1000,
+  intervalMs: 45 * 60 * 1000,
+  pausedMs: null,
+  resting: false,
+  topmost: false,
+};
+
+async function openPreview(meta: SkinMeta): Promise<void> {
+  previewMeta.value = meta;
+  previewDto.value = null;
+  try {
+    previewDto.value = await invoke<SkinPreviewDto>("get_skin_preview", { id: meta.id });
+  } catch {
+    previewMeta.value = null; // 解析失败不弹空壳
+  }
+}
+function closePreview(): void {
+  previewMeta.value = null; // v-if 卸载 iframe，消息源随之消失
+  previewDto.value = null;
+}
+async function applyPreview(): Promise<void> {
+  if (!previewMeta.value) return;
+  await select(previewMeta.value.id);
+  closePreview();
+}
+
+/** 灌模拟桥状态（顺序与生产 skinHost 一致：colors → texts → state） */
+function pushPreviewState(win: Window | null, kind: "lock" | "bar"): void {
+  if (!win || !previewMeta.value) return;
+  win.postMessage({ type: "eyenurse-colors", colors: previewMeta.value.colors }, "*");
+  win.postMessage({ type: "eyenurse-texts", texts: i18nTexts.value }, "*");
+  win.postMessage({ type: "eyenurse-state", ...(kind === "lock" ? LOCK_DEMO : BAR_DEMO) }, "*");
+}
+
+/** 预览桥宿主：只认握手，按消息源分流到对应 iframe；动作白名单在这里不存在 */
+function onPreviewMessage(ev: MessageEvent): void {
+  const d = ev.data as Record<string, unknown> | null;
+  if (!d || d.type !== "eyenurse-hello" || !previewMeta.value) return;
+  if (lockFrame.value && ev.source === lockFrame.value.contentWindow) {
+    pushPreviewState(ev.source as Window, "lock");
+  } else if (barFrame.value && ev.source === barFrame.value.contentWindow) {
+    pushPreviewState(ev.source as Window, "bar");
+  }
+}
+function onKeydown(ev: KeyboardEvent): void {
+  if (ev.key === "Escape" && previewMeta.value) closePreview();
+}
+
+/** GDI 配色皮肤的 bar 仿样（与原生条同构：底色 + 三段渐变填充 62% + mm:ss） */
+const barMockStyle = computed(() => {
+  const c = previewMeta.value?.colors;
+  if (!c) return {};
+  return {
+    background: c.bar_progress_bg,
+    color: c.bar_text_idle,
+  };
+});
+const barMockFillStyle = computed(() => {
+  const c = previewMeta.value?.colors;
+  if (!c) return {};
+  return {
+    background: `linear-gradient(90deg, ${c.bar_progress_fill}, ${c.bar_progress_from}, ${c.bar_progress_to})`,
+  };
+});
+
 // —— 自定义颜色编辑器（自设置页迁入；展开时从生效配色预填）——
 const editorOpen = ref(false);
 const draft = reactive({
@@ -145,12 +240,18 @@ async function saveCustom(): Promise<void> {
 }
 
 onMounted(async () => {
+  window.addEventListener("message", onPreviewMessage);
+  window.addEventListener("keydown", onKeydown);
   await loadTexts();
   void loadLanguageList();
   await refresh();
   await listen("eyenurse://skin-changed", () => void refresh());
   await listen("eyenurse://skin-surface-changed", () => void refresh());
   await listen("eyenurse://i18n-changed", () => void loadTexts());
+});
+onUnmounted(() => {
+  window.removeEventListener("message", onPreviewMessage);
+  window.removeEventListener("keydown", onKeydown);
 });
 </script>
 
@@ -175,7 +276,7 @@ onMounted(async () => {
     <!-- bar 形态变化需要重启（换色即时生效） -->
     <p v-if="restartHint" class="banner">{{ t("skinRestartHint") }}</p>
 
-    <!-- 卡片墙：点击即应用 -->
+    <!-- 卡片墙：点卡片 = 预览（应用在预览弹窗里） -->
     <main class="grid">
       <button
         v-for="meta in skins"
@@ -183,7 +284,8 @@ onMounted(async () => {
         type="button"
         class="card"
         :class="{ active: meta.id === currentId }"
-        @click="select(meta.id)"
+        :title="t('skinPreview')"
+        @click="openPreview(meta)"
       >
         <img
           v-if="meta.has_preview"
@@ -250,6 +352,65 @@ onMounted(async () => {
         </button>
       </div>
     </section>
+
+    <!-- 预览弹窗：真实皮肤页 iframe + 模拟桥状态（ESC / 点遮罩关闭） -->
+    <div v-if="previewMeta" class="modal-mask" @click.self="closePreview">
+      <div class="modal">
+        <header class="modal-head">
+          <div class="modal-title-wrap">
+            <h3 class="modal-title">{{ displayName(previewMeta) }}</h3>
+            <p v-if="authorLine(previewMeta)" class="modal-author">{{ authorLine(previewMeta) }}</p>
+          </div>
+          <button type="button" class="modal-close" :title="t('skinApply')" @click="closePreview">✕</button>
+        </header>
+
+        <div class="modal-body">
+          <p class="section-label">{{ t("skinPreviewLock") }}</p>
+          <div v-if="previewDto?.lock_url" class="lock-wrap">
+            <iframe
+              ref="lockFrame"
+              class="lock-frame"
+              :src="previewDto.lock_url"
+              sandbox="allow-scripts"
+              :style="{ transform: `scale(${LOCK_SCALE})`, width: LOCK_VW + 'px', height: LOCK_VH + 'px' }"
+            />
+          </div>
+
+          <p class="section-label">{{ t("skinPreviewBar") }}</p>
+          <div class="bar-stage">
+            <template v-if="previewDto?.bar_url">
+              <iframe
+                ref="barFrame"
+                class="bar-frame"
+                :src="previewDto.bar_url"
+                sandbox="allow-scripts"
+                :style="{
+                  width: previewDto.bar_w + 'px',
+                  height: previewDto.bar_h + 'px',
+                  transform: 'scale(2)',
+                }"
+              />
+            </template>
+            <template v-else>
+              <div class="bar-mock" :style="barMockStyle">
+                <span class="bar-mock-fill" :style="barMockFillStyle" />
+                <span class="bar-mock-text">32:15</span>
+              </div>
+              <span class="mock-note">{{ t("skinNativeBar") }}</span>
+            </template>
+          </div>
+        </div>
+
+        <footer class="modal-foot">
+          <span class="foot-badges">
+            <span v-for="b in badges(previewMeta)" :key="b" class="badge">{{ b }}</span>
+          </span>
+          <button type="button" class="apply-btn" @click="applyPreview">
+            {{ t("skinApply") }}
+          </button>
+        </footer>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -479,6 +640,145 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 .apply:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+/* —— 预览弹窗 —— */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.45);
+}
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 660px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 20px 10px;
+}
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+}
+.modal-author {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.modal-close {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.modal-close:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.modal-body {
+  padding: 0 20px;
+}
+.section-label {
+  margin: 10px 0 6px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-2);
+}
+.lock-wrap {
+  width: 600px;
+  max-width: 100%;
+  aspect-ratio: 1280 / 800;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #000;
+}
+.lock-frame {
+  display: block;
+  border: 0;
+  transform-origin: top left;
+  pointer-events: none; /* 预览惰性：不吃交互 */
+}
+.bar-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface) 0% 50%) 50% / 18px 18px;
+}
+.bar-frame {
+  border: 0;
+  flex-shrink: 0;
+  pointer-events: none; /* 预览惰性：不吃交互 */
+}
+.bar-mock {
+  position: relative;
+  width: 160px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+.bar-mock-fill {
+  position: absolute;
+  inset: 0 38% 0 0;
+}
+.bar-mock-text {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  font-family: Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mock-note {
+  font-size: 10px;
+  color: var(--text-2);
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 16px;
+}
+.foot-badges {
+  display: flex;
+  gap: 4px;
+}
+.apply-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 22px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.apply-btn:hover {
   background: var(--accent-strong);
 }
 </style>

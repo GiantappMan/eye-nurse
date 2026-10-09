@@ -72,6 +72,15 @@ export function skinPreviewUrl(id: string): string {
   return `http://eyenurse-skin.localhost/${id}/preview.png`;
 }
 
+/** 任意皮肤 id 的预览表面（get_skin_preview；解析规则与生效皮肤一致——
+ * lock 恒有（回退 classic 包），bar null = GDI 原生（前端以 CSS 仿样预览）） */
+export interface SkinPreviewDto {
+  bar_url: string | null;
+  lock_url: string | null;
+  bar_w: number;
+  bar_h: number;
+}
+
 /** get_skins 回包 */
 export interface SkinsDto {
   current: string;

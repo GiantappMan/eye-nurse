@@ -36,7 +36,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://eyenurse-skin.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://eyenurse-skin.localhost; frame-src http://eyenurse-skin.localhost"
     }
   },
   "bundle": { "active": false }
