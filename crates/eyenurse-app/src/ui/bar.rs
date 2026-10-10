@@ -62,7 +62,8 @@ const ICON_MARGIN: f64 = 4.0;
 /// 暂停时图标与文字的最小分离（DS3 §5.6-5：文字矩形从图标右缘再让 6 逻辑px，
 /// 取代 v2 全宽居中压到图标边上的构图）
 const TEXT_ICON_GAP: f64 = 6.0;
-/// 复选框本体边长（v2 12×12 方框自绘）
+/// 图钉符号包围盒边长（v2 12×12 方框自绘的尺寸契约；2026-10 起该盒内画图钉，
+/// 命中/拖动分界等交互契约不变）
 const CHECK_BOX: f64 = 12.0;
 /// 复选框在命中区内的左内缩（v2 3.5 → 4.0 入 4pt 网）
 const CHECK_INSET: f64 = 4.0;
@@ -682,7 +683,7 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
     use windows::Win32::Graphics::Gdi::{
         BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
         CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect,
-        FrameRect, GetStockObject, LineTo, MoveToEx, Rectangle, SelectObject, SetBkMode,
+        FrameRect, GetStockObject, LineTo, MoveToEx, SelectObject, SetBkMode,
         SetTextColor, DT_CALCRECT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBITMAP, HGDIOBJ,
         NULL_BRUSH, PAINTSTRUCT, PS_SOLID, SRCCOPY, TRANSPARENT,
     };
@@ -823,14 +824,14 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             DT_CENTER | DT_VCENTER | DT_SINGLELINE,
         );
 
-        // 5) 置顶复选（命中区 CHECK_LOGICAL=19 不变；悬停浮现 + 0.7s 宽限后隐藏，B4。
+        // 5) 置顶图钉（命中区 CHECK_LOGICAL=19 不变；悬停浮现 + 0.7s 宽限后隐藏，B4。
         //    0.3s 淡入淡出为观感增强项，先交付硬显隐，§6.2/§13）
         if state.check_shown {
             let side = scale_px(CHECK_SIDE, dpi); // 16：20px 条身上下各留 2px 米边
             let zx = cw - scale_px(CHECK_LOGICAL, dpi);
             let cy = ch / 2;
             if state.check_hovered {
-                // 悬停底色（经典皮肤 = #FFFFFF，v2 CheckBox.xaml 模板 MouseOver：仅复选上悬停；
+                // 悬停底色（经典皮肤 = #FFFFFF，v2 CheckBox.xaml 模板 MouseOver：仅图钉上悬停；
                 // 块高 16 不再贴满 20px 条身——上下米边让白块成为「状态」而非「补丁」）
                 let check_bg = CreateSolidBrush(COLORREF(skin.check_hover_bg));
                 let hover_rect = RECT {
@@ -842,28 +843,12 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
                 FillRect(mem, &hover_rect, check_bg);
                 let _ = DeleteObject(check_bg.into());
             }
-            // 复选框本体：12×12 方框 + 勾（v2 用 40×40 PNG 缩放为 18 显示，自绘近似）
-            let box_side = scale_px(CHECK_BOX, dpi);
-            let bl = zx + scale_px(CHECK_INSET, dpi);
-            let bt = cy - box_side / 2;
-            // DPI 描边统一（DS3 §5.6-1）：与时钟同式，v2 恒 1px 在高分屏退化发丝线
-            let pen = CreatePen(PS_SOLID, 1i32.max((dpi / 96) as i32), COLORREF(skin.check_glyph));
-            let old_pen = SelectObject(mem, pen.into());
-            let old_brush = SelectObject(mem, GetStockObject(NULL_BRUSH));
-            let _ = Rectangle(mem, bl, bt, bl + box_side, bt + box_side);
-            if bar.topmost {
-                let l = bl + box_side * 2 / 8;
-                let r = bl + box_side * 6 / 8;
-                let bot = bt + box_side * 3 / 4;
-                let mid = bt + box_side / 2;
-                let top = bt + box_side / 4;
-                let _ = MoveToEx(mem, l, mid, None);
-                let _ = LineTo(mem, bl + box_side / 2, bot);
-                let _ = LineTo(mem, r, top);
-            }
-            SelectObject(mem, old_brush);
-            SelectObject(mem, old_pen);
-            let _ = DeleteObject(pen.into());
+            // 图钉符号（2026-10 用户需求，取代 v2 12×12 方框+勾自绘）：未置顶直立
+            // 描边 / 置顶 45° 斜插实心；几何以 CHECK_BOX=12 逻辑盒为基准，命中区/
+            // 悬停底色/tooltip 交互契约不变（§5.6-6）。色 = check_glyph，DPI 描边
+            // 统一（DS3 §5.6-1）与时钟同式
+            let cx = zx + scale_px(CHECK_INSET, dpi) + scale_px(CHECK_BOX, dpi) / 2;
+            draw_pin(mem, cx, cy, dpi, bar.topmost, COLORREF(skin.check_glyph));
         }
 
         // 6) 1px 收边描边（DS3 §5.6-4）：底色逐通道 ×0.9（整除截断；classic 米色
@@ -885,6 +870,85 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
         let _ = DeleteObject(bmp.into());
         let _ = DeleteDC(mem);
         let _ = EndPaint(hwnd, &ps);
+    }
+}
+
+/// 置顶图钉符号（2026-10，取代 v2「12×12 方框+勾」自绘）：圆头 + 收尖针体的图钉。
+/// `pinned`=false 直立描边（未钉），true 45° 斜插实心（钉上的通用表意，针尖左下、
+/// 头部右上）。几何以 CHECK_BOX=12 逻辑盒为基准（原点 = 盒中心，y 向下），经 DPI
+/// 整数化；颜色由调用方传入（skin.check_glyph），描边宽同 §5.6-1 统一式。
+#[cfg(target_os = "windows")]
+fn draw_pin(
+    hdc: windows::Win32::Graphics::Gdi::HDC,
+    cx: i32,
+    cy: i32,
+    dpi: u32,
+    pinned: bool,
+    color: windows::Win32::Foundation::COLORREF,
+) {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{
+        CreatePen, CreateSolidBrush, DeleteObject, Ellipse, GetStockObject, LineTo, MoveToEx,
+        Polygon, SelectObject, NULL_BRUSH, PS_SOLID,
+    };
+
+    // 局部几何（逻辑 px）：头部圆 ⌀6（= 半个盒高，与暂停时钟同「装饰不过主数据」
+    // 的层级克制）、针体基线 y=-0.9 半宽 1.2（基线取头部圆内——半径 3 圆在 x=±1.2
+    // 处边缘 y≈-0.25，接缝由后画的头部覆盖）、针尖 y=6。总高 12 = CHECK_BOX。
+    const HEAD_R: f64 = 3.0;
+    const HEAD_CY: f64 = -3.0;
+    const BASE_Y: f64 = -0.9;
+    const BASE_HW: f64 = 1.2;
+    const TIP_Y: f64 = 6.0;
+
+    // 屏幕坐标 y 向下，正角旋转矩阵视觉为顺时针：45° 时针尖 (0,6) → 左下、
+    // 头部 (0,-3) → 右上（未置顶不旋转，直立表示「可钉」）
+    let (sn, cs) = if pinned {
+        (
+            core::f64::consts::FRAC_1_SQRT_2,
+            core::f64::consts::FRAC_1_SQRT_2,
+        )
+    } else {
+        (0.0, 1.0)
+    };
+    let k = dpi as f64 / 96.0;
+    let px = |x: f64, y: f64| POINT {
+        x: cx + ((x * cs - y * sn) * k).round() as i32,
+        y: cy + ((x * sn + y * cs) * k).round() as i32,
+    };
+    let head = px(0.0, HEAD_CY);
+    let tip = px(0.0, TIP_Y);
+    let b1 = px(-BASE_HW, BASE_Y);
+    let b2 = px(BASE_HW, BASE_Y);
+
+    // SAFETY：GDI 对象在本函数内配对释放；坐标均为调用方离屏 DC 的客户区像素
+    unsafe {
+        let stroke = 1i32.max((dpi / 96) as i32);
+        let pen = CreatePen(PS_SOLID, stroke, color);
+        let old_pen = SelectObject(hdc, pen.into());
+        let brush = CreateSolidBrush(color); // 仅实心分支真正选入
+        let old_brush = if pinned {
+            SelectObject(hdc, brush.into())
+        } else {
+            SelectObject(hdc, GetStockObject(NULL_BRUSH))
+        };
+        // 针体先画：实心三角 / 两根描边线（描边不画基线，接缝让头部吸收）
+        if pinned {
+            let tri = [b1, b2, tip];
+            let _ = Polygon(hdc, &tri);
+        } else {
+            let _ = MoveToEx(hdc, b1.x, b1.y, None);
+            let _ = LineTo(hdc, tip.x, tip.y);
+            let _ = MoveToEx(hdc, b2.x, b2.y, None);
+            let _ = LineTo(hdc, tip.x, tip.y);
+        }
+        // 头部后画：盖住针根接缝（实心圆 / 描边圆环）
+        let r = (HEAD_R * k).round() as i32;
+        let _ = Ellipse(hdc, head.x - r, head.y - r, head.x + r, head.y + r);
+        SelectObject(hdc, old_pen);
+        SelectObject(hdc, old_brush);
+        let _ = DeleteObject(pen.into());
+        let _ = DeleteObject(brush.into());
     }
 }
 
@@ -1216,6 +1280,116 @@ unsafe extern "system" fn bar_wndproc(
 pub fn format_mmss(d: Duration) -> String {
     let total = d.as_secs();
     format!("{:02}:{:02}", (total / 60) % 60, total % 60)
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod pin_tests {
+    use super::*;
+    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::Graphics::Gdi::{
+        BitBlt, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, SelectObject,
+        HBITMAP, DIB_RGB_COLORS, SRCCOPY,
+    };
+
+    /// 离屏 32bpp DIB 上渲染图钉并返回像素（确定性地验证两种状态的几何，
+    /// 不依赖活窗口/真实光标——活体探测会被 TrackMouseEvent 的立即离开 +
+    /// 0.7s 宽限隐藏搅乱，见 2026-10 图钉验证记录）
+    fn render_pin(pinned: bool) -> Vec<u32> {
+        const W: i32 = 48;
+        const H: i32 = 48;
+        unsafe {
+            let mem = CreateCompatibleDC(None);
+            let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
+            let bmi = windows::Win32::Graphics::Gdi::BITMAPINFO {
+                bmiHeader: windows::Win32::Graphics::Gdi::BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<windows::Win32::Graphics::Gdi::BITMAPINFOHEADER>()
+                        as u32,
+                    biWidth: W,
+                    biHeight: -H, // top-down
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: DIB_RGB_COLORS.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let bmp: HBITMAP = CreateDIBSection(
+                None,
+                &bmi,
+                DIB_RGB_COLORS,
+                &mut bits,
+                None,
+                0,
+            )
+            .unwrap();
+            let old = SelectObject(mem, bmp.into());
+            // 底刷白（默认黑，难以区分描边/填充的失败形态）
+            let whitewash = windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x00FF_FF_FF));
+            let rc = windows::Win32::Foundation::RECT {
+                left: 0,
+                top: 0,
+                right: W,
+                bottom: H,
+            };
+            let _ = windows::Win32::Graphics::Gdi::FillRect(mem, &rc, whitewash);
+            let _ = windows::Win32::Graphics::Gdi::DeleteObject(whitewash.into());
+
+            draw_pin(mem, W / 2, H / 2, 192, pinned, COLORREF(0x00444444));
+
+            let _ = BitBlt(mem, 0, 0, W, H, Some(mem), 0, 0, SRCCOPY); // no-op，保持对称
+            let mut px = vec![0u32; (W * H) as usize];
+            std::ptr::copy_nonoverlapping(bits as *const u32, px.as_mut_ptr(), px.len());
+            SelectObject(mem, old);
+            let _ = DeleteObject(bmp.into());
+            let _ = DeleteDC(mem);
+            px
+        }
+    }
+
+    fn is_dark(p: u32) -> bool {
+        let (r, g, b) = (p & 0xFF, (p >> 8) & 0xFF, (p >> 16) & 0xFF);
+        r < 120 && g < 120 && b < 120
+    }
+
+    fn grid(px: &[u32]) -> String {
+        const W: usize = 48;
+        let mut s = String::new();
+        for y in 6..42 {
+            for x in 12..36 {
+                s.push(if is_dark(px[y * W + x]) { '#' } else { '.' });
+            }
+            s.push('\n');
+        }
+        s
+    }
+
+    #[test]
+    fn pin_unpinned_is_upright_outline() {
+        let px = render_pin(false);
+        println!("未置顶（直立描边）:\n{}", grid(&px));
+        // 48×48 画布，原点 (24,24)，200% DPI：头部圆心 (24,18) 半径 6、针尖 (24,36)
+        let at = |x: i32, y: i32| px[(y * 48 + x) as usize];
+        // 头部空芯：圆心 = 白底，描边环 = 墨色（GDI Ellipse 右/下排他：环底在 23）
+        assert!(!is_dark(at(24, 18)), "未置顶头部应空芯（描边圆环）");
+        assert!(is_dark(at(24, 12)), "头顶描边缺失");
+        assert!(is_dark(at(24, 23)), "头底描边缺失");
+        // 直立针体：中轴线上应有墨（针身/针尖），两侧让空
+        assert!(is_dark(at(24, 32)), "直立针尖缺失");
+        assert!(!is_dark(at(20, 32)) && !is_dark(at(28, 32)), "针体过宽");
+    }
+
+    #[test]
+    fn pin_pinned_is_tilted_solid() {
+        let px = render_pin(true);
+        println!("置顶（45° 斜插实心）:\n{}", grid(&px));
+        let at = |x: i32, y: i32| px[(y * 48 + x) as usize];
+        // 头部圆心旋至 (28,20) 附近且实心
+        assert!(is_dark(at(28, 20)), "置顶头部应实心（斜 45°）");
+        // 针尖旋至 (16,32) 附近（局部 (0,6)×45°×2dpi = (∓8,±8)）
+        assert!(is_dark(at(16, 32)), "斜插针尖缺失");
+        // 直立路径不再有针：中轴下段 (24,34) 应为底色
+        assert!(!is_dark(at(24, 36)), "置顶时中轴不应残留直立针体");
+    }
 }
 
 #[cfg(test)]
