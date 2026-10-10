@@ -57,10 +57,15 @@ button {
 }
 
 /* —— 皮肤 iframe（skinHost）：握手通过（body.skin-alive）才显示——防损坏
-   皮肤白屏遮脸；看门狗失败 → 壳页换源内置 classic 包（永不白窗） —— */
+   皮肤白屏遮脸；看门狗失败 → 壳页换源内置 classic 包（永不白窗） ——
+   width/height:100% 是硬要求：iframe 是替换元素，UA 默认 300×150 在绝对定位
+   下会赢过 inset 推导的 auto 尺寸（left:0+width:300px 过约束时 width 赢），
+   缺了它皮肤只在左上角 300×150 小盒子里居中渲染——锁屏错位的根因（2026-10-10） */
 #skin-frame {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   display: none;
   border: 0;
   background: transparent;

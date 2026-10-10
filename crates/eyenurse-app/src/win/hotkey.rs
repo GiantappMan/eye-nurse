@@ -1,42 +1,48 @@
-//! Win+L 低级键盘钩子线程 + Ctrl+Alt+L 系统热键 + 系统锁屏策略（v3.2 仿锁屏）。
+//! 锁屏激活热键线程（v3.2 仿锁屏）：可自定义快捷键 = LL 钩子拦截 +
+//! `RegisterHotKey` 双路（v3.2.1 起不再有独立 Win+L 开关——快捷键设为 Win+L
+//! 即等价旧的「拦截 Win+L 替代系统锁屏」，DisableLockWorkstation 由调用方
+//! 按此条件自动开关）。
 //!
-//! 拦截原理与 AutoHotkey 重映射 Win+L 同路径：`WH_KEYBOARD_LL` 钩子收到
-//! vkCode=='L' 的 keydown 且 Win 键按下（`GetAsyncKeyState` 高位）时返回 1 吞掉
-//! 按键，并通知 CoreLoop 激活仿锁屏。LL 钩子的硬要求：钩子线程必须有消息循环。
+//! 拦截原理：`WH_KEYBOARD_LL` 钩子收到 vkCode==配置键 的 keydown 且修饰键
+//! 全部按住（`GetAsyncKeyState` 高位）时返回 1 吞掉按键并通知 CoreLoop 激活
+//! 仿锁屏（AutoHotkey 重映射同路径；LL 钩子硬要求：钩子线程必须有消息循环）。
+//! 正常前台钩子先吞键，WM_HOTKEY 不再产生，两路不会双触发；钩子因 UIPI 在
+//! 提权前台收不到键时，内核侧分发的 RegisterHotKey 仍可达。
 //!
-//! **实测局限（2026-10-09）**：部分安全管控软件在键盘过滤驱动层把 Win+L 整个
-//! 吞掉（真实按键与注入按键都到不了 LL 钩子，本机即如此；同一批机器上
-//! HKCU Policies\System 往往也锁 ACL）。因此仿锁屏另有两条激活路径：
-//! - Ctrl+Alt+L 系统热键（RegisterHotKey 线程热键，管控一般不拦）——开关跟随
-//!   锁屏设置 Enabled，经 `set_hotkey` 热切换（线程消息投递到钩子线程注册）；
-//! - 托盘「立即锁屏」菜单（TrayAction::LockNow，不走本模块）。
+//! 默认 Alt+Win+L 的原因：部分安全管控软件在键盘过滤驱动层把裸 Win+L 整个
+//! 吞掉（真实按键与注入按键都到不了 LL 钩子，2026-10-09 实测本机即如此；
+//! 同批机器上 HKCU Policies\System 往往也锁 ACL）；Ctrl+Win+L 本机亦被其他
+//! 软件 RegisterHotKey 占用（2026-10-10 实测），Win+Alt+L 在两者之外。
+//! 注意 Win+L 被系统保留、RegisterHotKey 注册不上（返回失败只记日志降级），
+//! 接管场景实际靠钩子单路 + 注册表禁用系统锁兜底。
 //!
-//! DisableLockWorkstation（HKCU，无需管理员）：注册表开着时系统对 Win+L 直接
-//! 不响应，杜绝「钩子漏掉 → 退化成系统锁屏」。**退出时必须恢复**，否则应用退出
-//! 后用户 Win+L 全废；写失败（键被锁 ACL）降级为仅钩子拦截并由调用方记日志。
+//! 托盘「立即锁屏」（TrayAction::LockNow，不走本模块）是最后入口。
+//!
+//! DisableLockWorkstation（HKCU，无需管理员）：快捷键为 Win+L 时系统对 Win+L
+//! 直接不响应，杜绝「钩子漏掉 → 退化成系统锁屏」。**退出时必须恢复**，否则
+//! 应用退出后用户 Win+L 全废；写失败（键被锁 ACL）降级为仅钩子拦截并由调用方
+//! 记日志。
 
 use crate::events::CoreMsg;
 use crossbeam_channel::Sender;
-use std::sync::atomic::{AtomicBool, Ordering};
+use eyenurse_core::config::{HK_ALT, HK_CTRL, HK_SHIFT, HK_WIN, HotkeyCombo};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 
-/// 仿锁屏拦截开关（CoreLoop 在锁屏设置保存/启动时热切换；false 时钩子直通）
-static HOOK_ENABLED: AtomicBool = AtomicBool::new(false);
-/// Ctrl+Alt+L 热键开关（跟随锁屏 Enabled；实际注册/注销由钩子线程执行）
+/// 自定义快捷键开关（跟随锁屏 Enabled；实际注册/注销由钩子线程执行）
 static HOTKEY_ON: AtomicBool = AtomicBool::new(false);
+/// 自定义快捷键组合（`HotkeyCombo` 字段快照；钩子回调与注册线程只读）
+static HK_MODS: AtomicU32 = AtomicU32::new(0);
+static HK_VK: AtomicU16 = AtomicU16::new(0);
 static HOOK_TX: std::sync::OnceLock<Sender<CoreMsg>> = std::sync::OnceLock::new();
 static THREAD_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
-/// 钩子线程私有消息偏移：请求注册/注销 Ctrl+Alt+L（wParam 1=注册 0=注销），
+/// 钩子线程私有消息偏移：请求注册/注销快捷键（wParam 1=注册 0=注销），
 /// 实际消息 = WM_APP + 本值
 #[cfg(target_os = "windows")]
 const WM_APP_HOTKEY: u32 = 5;
 /// RegisterHotKey 的热键 id（线程热键，hwnd = None）
 #[cfg(target_os = "windows")]
 const HOTKEY_ID: i32 = 1;
-/// 候选组合（Ctrl+Alt+vk 依次尝试，首个注册成功的生效——Ctrl+Alt+L 在不少
-/// 机器上已被其他软件占用，实测本机即如此）
-#[cfg(target_os = "windows")]
-const HOTKEY_VK_CANDIDATES: [u16; 3] = [0x4C, 0x4B, 0x4F]; // L, K, O
 
 /// 装配 + 启动钩子线程（进程级单次；重复调用静默拒绝）
 pub fn spawn(tx: Sender<CoreMsg>) -> std::io::Result<()> {
@@ -49,19 +55,17 @@ pub fn spawn(tx: Sender<CoreMsg>) -> std::io::Result<()> {
     Ok(())
 }
 
-/// 仿锁屏拦截开关（Enabled && InterceptWinL 才开；关闭时按键直通系统）
-pub fn set_enabled(on: bool) {
-    HOOK_ENABLED.store(on, Ordering::Relaxed);
-}
-
-/// Ctrl+Alt+L 激活热键开关（跟随锁屏 Enabled；注册动作由钩子线程异步完成）
-pub fn set_hotkey(on: bool) {
+/// 自定义快捷键开关 + 组合（跟随锁屏 Enabled；注册动作由钩子线程异步完成）。
+/// `on=false` 时组合值可传 0——注销路径不读组合
+pub fn set_hotkey(on: bool, mods: u8, vk: u16) {
+    HK_MODS.store(u32::from(mods), Ordering::Relaxed);
+    HK_VK.store(vk, Ordering::Relaxed);
     HOTKEY_ON.store(on, Ordering::Relaxed);
     request_hotkey_sync();
 }
 
-/// 请求钩子线程重读 HOTKEY_ON（线程未起/已退出时丢弃：启动序列在 spawn 前
-/// 调用，线程启动时自行按 HOTKEY_ON 初始注册一次）
+/// 请求钩子线程重读 HOTKEY_ON/HK_*（线程未起/已退出时丢弃：启动序列在 spawn 前
+/// 调用，线程启动时自行按静态量初始注册一次）
 fn request_hotkey_sync() {
     #[cfg(target_os = "windows")]
     {
@@ -155,68 +159,105 @@ fn hotkey_thread_main() {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_CONTROL, VK_LWIN, VK_RWIN,
+        GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT,
+        MOD_CONTROL, MOD_SHIFT, MOD_WIN, VK_LWIN, VK_RWIN,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, KBDLLHOOKSTRUCT,
         WH_KEYBOARD_LL, WM_HOTKEY, WM_KEYDOWN, WM_SYSKEYDOWN, MSG,
     };
 
-    const VK_L: u16 = 0x4C; // 'L'
+    // 钩子/热键命中 → CoreLoop 激活仿锁屏（通道关闭 = 退出中，静默）
+    fn fire_lock() {
+        if let Some(tx) = HOOK_TX.get() {
+            let _ = tx.send(CoreMsg::LockActivate);
+        }
+    }
+
+    // 自定义快捷键的修饰键实况：掩码里每个修饰键当前都必须按下
+    //（GetAsyncKeyState 高位 = 按下；VK_CONTROL/VK_MENU/VK_SHIFT 天然含左右键）
+    unsafe fn mods_down(mods: u32) -> bool {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{VK_CONTROL, VK_MENU, VK_SHIFT};
+        let down = |vk: i32| unsafe { GetAsyncKeyState(vk) < 0 };
+        (mods & u32::from(HK_CTRL) == 0 || down(VK_CONTROL.0 as i32))
+            && (mods & u32::from(HK_ALT) == 0 || down(VK_MENU.0 as i32))
+            && (mods & u32::from(HK_SHIFT) == 0 || down(VK_SHIFT.0 as i32))
+            && (mods & u32::from(HK_WIN) == 0 || down(VK_LWIN.0 as i32) || down(VK_RWIN.0 as i32))
+    }
 
     // SAFETY：LL 钩子回调——只读钩子结构、发一次通道消息、无重入状态
     unsafe extern "system" fn hook_proc(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
         if code >= 0 {
             let kb = &*(l.0 as *const KBDLLHOOKSTRUCT);
             let keydown = w.0 == WM_KEYDOWN as usize || w.0 == WM_SYSKEYDOWN as usize;
-            // Win 键高位置位（GetAsyncKeyState 返回 SHORT，高位 = 按下）
-            let win_down = unsafe {
-                (GetAsyncKeyState(VK_LWIN.0 as i32) | GetAsyncKeyState(VK_RWIN.0 as i32)) < 0
-            };
+            // 自定义快捷键（组合读静态量快照；设为 Win+L 即旧的「拦截 Win+L」
+            // 场景）：命中即吞键 + 激活；吞掉的键不再进系统，同组合的 WM_HOTKEY
+            // 不会双触发
+            let hot_vk = u32::from(HK_VK.load(Ordering::Relaxed));
             if keydown
-                && kb.vkCode == u32::from(VK_L)
-                && win_down
-                && HOOK_ENABLED.load(Ordering::Relaxed)
+                && hot_vk != 0
+                && kb.vkCode == hot_vk
+                && HOTKEY_ON.load(Ordering::Relaxed)
+                && unsafe { mods_down(HK_MODS.load(Ordering::Relaxed)) }
             {
-                // debug 构建有控制台；命中才算热点路径，日志量可忽略
-                eprintln!("[eyenurse] Win+L intercepted -> lock");
-                if let Some(tx) = HOOK_TX.get() {
-                    let _ = tx.send(CoreMsg::LockActivate);
-                }
-                return LRESULT(1); // 吞掉 Win+L，系统不再锁屏
+                eprintln!("[eyenurse] lock hotkey intercepted -> lock");
+                fire_lock();
+                return LRESULT(1);
             }
         }
         CallNextHookEx(None, code, w, l)
     }
 
-    // Ctrl+Alt+L/K/O 依次注册（HOTKEY_ON 为准；WM_HOTKEY → LockActivate）。
-    // id 恒为 HOTKEY_ID，Unregister 无需知道具体 vk。
+    // 可配置快捷键的 RegisterHotKey 路径（HOTKEY_ON + HK_MODS/HK_VK 为准；
+    // WM_HOTKEY → LockActivate）。钩子被 UIPI 跳过（提权前台）时由本路兜底。
+    // id 恒为 HOTKEY_ID：先撤旧注册再按当前组合注册——换组合热切换旧注册不
+    // 残留；未注册时 Unregister 静默失败，无副作用
     fn sync_hotkey_registration() {
         // SAFETY：线程热键（hwnd=None），消息投递到本线程
         unsafe {
-            if HOTKEY_ON.load(Ordering::Relaxed) {
-                for vk in HOTKEY_VK_CANDIDATES {
-                    match RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT, vk as u32) {
-                        Ok(()) => {
-                            eprintln!(
-                                "[eyenurse] lock hotkey registered: Ctrl+Alt+{}",
-                                vk as u8 as char
-                            );
-                            return;
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "[eyenurse] RegisterHotKey(Ctrl+Alt+{}) taken: {e}",
-                                vk as u8 as char
-                            );
-                        }
-                    }
+            let _ = UnregisterHotKey(None, HOTKEY_ID);
+            if !HOTKEY_ON.load(Ordering::Relaxed) {
+                return;
+            }
+            let combo = HotkeyCombo {
+                mods: HK_MODS.load(Ordering::Relaxed) as u8,
+                vk: HK_VK.load(Ordering::Relaxed),
+            };
+            if combo.vk == 0 {
+                return; // 组合未配置（理论不可达）：仅钩子路 + 托盘入口
+            }
+            match RegisterHotKey(None, HOTKEY_ID, mods_to_win32(combo.mods), u32::from(combo.vk)) {
+                Ok(()) => {
+                    eprintln!("[eyenurse] lock hotkey registered: {}", combo.to_display());
                 }
-                eprintln!("[eyenurse] all lock hotkey candidates taken; tray menu only");
-            } else {
-                let _ = UnregisterHotKey(None, HOTKEY_ID);
+                Err(e) => {
+                    // 组合被占（如本机 Ctrl+Alt+L）：只记日志降级，钩子路在
+                    // 非提权前台照常吞键
+                    eprintln!(
+                        "[eyenurse] RegisterHotKey({}) taken: {e}; LL-hook intercept still active",
+                        combo.to_display()
+                    );
+                }
             }
         }
+    }
+
+    // 可移植修饰键位（HK_*）→ Win32 HOT_KEY_MODIFIERS
+    fn mods_to_win32(m: u8) -> HOT_KEY_MODIFIERS {
+        let mut f = HOT_KEY_MODIFIERS(0);
+        if m & HK_CTRL != 0 {
+            f |= MOD_CONTROL;
+        }
+        if m & HK_ALT != 0 {
+            f |= MOD_ALT;
+        }
+        if m & HK_SHIFT != 0 {
+            f |= MOD_SHIFT;
+        }
+        if m & HK_WIN != 0 {
+            f |= MOD_WIN;
+        }
+        f
     }
 
     // SAFETY：注册线程级 LL 钩子 + 标准消息循环；WM_QUIT 退出时 Unhook
@@ -236,7 +277,7 @@ fn hotkey_thread_main() {
         eprintln!("[eyenurse] keyboard LL hook installed");
         THREAD_ID.set(GetCurrentThreadId()).ok();
 
-        // 启动即按开关初始注册一次（spawn 前的 set_hotkey 请求无人接收，此处补偿）
+        // 启动即按静态量初始注册一次（spawn 前的 set_hotkey 请求无人接收，此处补偿）
         if HOTKEY_ON.load(Ordering::Relaxed) {
             sync_hotkey_registration();
         }

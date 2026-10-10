@@ -45,7 +45,7 @@ eye-nurse/
 │  └─ v3-parity-checklist.md       # 对齐清单（框架条目已注记）
 ├─ assets/                         # logo.ico / logo.png / logo.{zh,en}.svg 不动
 ├─ ui/                             # 【新增】前端（bun 管理，Vite + Vue 3 + TypeScript）
-│  ├─ package.json                 #   dev: vite（端口 1420 strictPort）；build: vite build
+│  ├─ package.json                 #   dev: vite（端口 2420 strictPort）；build: vite build
 │  ├─ vite.config.ts               #   MPA：index.html（设置窗）+ mask.html（遮罩）
 │  ├─ index.html                   # 设置窗页面（Vue 3）
 │  ├─ mask.html                    # 遮罩页面（无框架，纯 TS：深底倒计时 + 解锁按钮）
@@ -106,7 +106,7 @@ C = `ui/{bar.rs,theme.rs,theme.json}`；D = `commands.rs`、`ui/` 前端页面�
   "identifier": "cn.giantapp.eyenurse3",
   "build": {
     "beforeDevCommand": { "script": "bun run dev", "cwd": "../../ui" },
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:2420",
     "beforeBuildCommand": { "script": "bun run build", "cwd": "../../ui" },
     "frontendDist": "../../ui/dist"
   },
@@ -139,7 +139,7 @@ C = `ui/{bar.rs,theme.rs,theme.json}`；D = `commands.rs`、`ui/` 前端页面�
   **tauri 目录**（`crates/eyenurse-app`）解析——CLI 在派发 hook 前先 `set_current_dir(dirs.tauri)`
   （`dev.rs:148` / `build.rs:166`），`Command::current_dir(相对路径)` 按父进程当下 cwd 展开。
   因此写法**与从哪个目录启动 CLI 无关**，比字符串形式（默认 cwd = frontend 目录，见 §1.4）更确定。
-- **`devUrl` 端口 = vite 端口（1420，strictPort）**：CLI 会先 TCP 轮询该端口（90×2s 超时，
+- **`devUrl` 端口 = vite 端口（2420，strictPort）**：CLI 会先 TCP 轮询该端口（90×2s 超时，
   `dev.rs:269-320`）再启动 cargo，vite 必须先起且端口不能漂移。
 - **`frontendDist` 相对 tauri 目录（= tauri.conf.json 所在目录）**：`../../ui/dist`
   （`crates/eyenurse-app/../../ui/dist` = `<root>/ui/dist`）。解析基准已核实 tauri-codegen
@@ -257,7 +257,7 @@ hook 派发在 `helpers/mod.rs:68-108` 的 `run_hook`）。**§1.2 的写法即�
 ```
 
 - `bun dev` → `tauri dev`：CLI 自身递归找到 tauri 目录 → 以 `{script, cwd}` 在 `ui/` 拉起
-  vite（1420）→ 轮询 devUrl 就绪 → `cargo run --no-default-features` 跑 `eyenurse.exe`，
+  vite（2420）→ 轮询 devUrl 就绪 → `cargo run --no-default-features` 跑 `eyenurse.exe`，
   页面走 devUrl，**vite HMR 生效**；cargo 侧改动由 CLI 的 watcher（观察 tauri 目录）重启。
 - `tauri` 命令来自 devDependencies（bun 会把 `node_modules/.bin` 挂进 PATH）。
 - 保留原 cargo 任务脚本（check/test/clippy），`dev:release`（`cargo watch` 热重载）删除——
@@ -277,7 +277,7 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
-  server: { port: 1420, strictPort: true },   // tauri devUrl 硬依赖该端口
+  server: { port: 2420, strictPort: true },   // tauri devUrl 硬依赖该端口
   build: {
     rollupOptions: {
       input: { settings: "index.html", mask: "mask.html" },  // MPA：两个窗口两个入口

@@ -1,25 +1,46 @@
 <script setup lang="ts">
-// 锁屏模块（功能页，2026-10-10 IA 调整）：立即锁屏大按钮 + 当前锁屏配置摘要。
-// 锁屏的全部配置项（启用/Win+L/截图穿透/自动休息/密码/重置时间）已迁入
-// 「设置」页；本页是动作入口——与托盘「立即锁屏」同源（CoreMsg::Tray(LockNow)）。
-import type { LockSettingsDto } from "../types";
+// 锁屏模块（功能页）：立即锁屏大按钮 + 锁屏配置卡。
+// 2026-10-10 IA 二次调整：锁屏配置从设置子页迁回本页原位直改（含会话解锁
+// 重置——语义归属锁屏，走主设置管线），删掉只读摘要卡。
+import { reactive } from "vue";
+import type { LockSettingsDto, SettingsDto } from "../types";
 import { t } from "../i18n";
+import SwitchToggle from "./SwitchToggle.vue";
 
-defineProps<{
-  /** 锁屏草稿（仅读取用于状态摘要；配置在「设置」页修改） */
+const props = defineProps<{
+  /** 锁屏草稿（LockScreen.json 管线） */
   lockSettings: LockSettingsDto;
+  /** 主设置草稿（本页只编辑会话解锁重置一组） */
+  settings: SettingsDto;
 }>();
 const emit = defineEmits<{
   /** 立即锁屏 */
   (e: "lock-now"): void;
+  /** 锁屏配置任一控件提交 → 父组件排 300ms 防抖保存 */
+  (e: "lock-commit"): void;
+  /** 会话解锁重置提交（主设置管线） */
+  (e: "commit"): void;
 }>();
+
+/** HH:mm:ss 宽松校验：仅控制输入态红框，解析在命令侧（清单 I4） */
+function hmsValid(s: string): boolean {
+  return /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.test(s.trim());
+}
+
+// —— 状态完备（DS3 §4.2）：invalid 红态只在用户触碰（失焦）后出现 ——
+const touched = reactive(new Set<string>());
+
+function onHmsBlur(field: string): void {
+  touched.add(field);
+  emit("commit");
+}
 </script>
 
 <template>
   <div class="page">
     <div class="page-head">
       <h2 class="page-title">{{ t("lockTitle") }}</h2>
-      <p class="page-hint">{{ t("lockEnableHint") }}</p>
+      <p class="page-hint">{{ t("lockSubtitle") }}</p>
     </div>
 
     <section class="card">
@@ -30,30 +51,78 @@ const emit = defineEmits<{
         </svg>
         {{ t("lock_now_menu") }}
       </button>
-      <p class="lock-hint">{{ t("lockPasswordHint") }}</p>
     </section>
 
-    <section class="card">
-      <h3 class="card-title">{{ t("lockTitle") }} · {{ t("setting") }}</h3>
-      <div class="row">
-        <span class="k">{{ t("lockEnable") }}</span>
-        <span class="v" :class="{ on: lockSettings.Enabled }">
-          {{ lockSettings.Enabled ? "✓ " + t("skinActive") : "—" }}
-        </span>
+    <section class="en-card">
+      <h3 class="en-card-title">{{ t("lockTitle") }} · {{ t("setting") }}</h3>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("lockHotkey") }}</p>
+          <p class="en-row-hint">{{ t("lockHotkeyHint") }}</p>
+        </div>
+        <input
+          v-model="lockSettings.Hotkey"
+          type="text"
+          class="en-input en-input-mono hotkey"
+          :placeholder="t('lockHotkeyPlaceholder')"
+          spellcheck="false"
+          @blur="$emit('lock-commit')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
       </div>
-      <div class="row">
-        <span class="k">{{ t("lockWinL") }}</span>
-        <span class="v" :class="{ on: lockSettings.InterceptWinL }">
-          {{ lockSettings.InterceptWinL ? "✓" : "—" }}
-        </span>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("lockCapture") }}</p>
+          <p class="en-row-hint">{{ t("lockCaptureHint") }}</p>
+        </div>
+        <SwitchToggle v-model="lockSettings.CaptureThrough" @update:model-value="$emit('lock-commit')" />
       </div>
-      <div class="row">
-        <span class="k">{{ t("lockPassword") }}</span>
-        <span class="v" :class="{ on: Boolean(lockSettings.Password) }">
-          {{ lockSettings.Password ? "✓" : "—" }}
-        </span>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("lockAutoRest") }}</p>
+          <p class="en-row-hint">{{ t("lockAutoRestHint") }}</p>
+        </div>
+        <SwitchToggle v-model="lockSettings.AutoRest" @update:model-value="$emit('lock-commit')" />
       </div>
-      <p class="more-hint">{{ t("modifyAutosave") }} · {{ t("setting") }} → {{ t("lockTitle") }}</p>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("lockPassword") }}</p>
+          <p class="en-row-hint">{{ t("lockPasswordHint") }}</p>
+        </div>
+        <input
+          v-model="lockSettings.Password"
+          type="password"
+          class="en-input pwd"
+          :placeholder="t('lockPasswordHint')"
+          autocomplete="new-password"
+          spellcheck="false"
+          @blur="$emit('lock-commit')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+      </div>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("resetWhenSessionUnlock") }}</p>
+          <p class="en-row-hint">{{ t("lockResetHint") }}</p>
+        </div>
+        <div class="row-control">
+          <input
+            v-model="settings.ResetTimeout"
+            type="text"
+            class="en-input en-input-mono hms"
+            :class="{ 'is-invalid': touched.has('ResetTimeout') && !hmsValid(settings.ResetTimeout) }"
+            placeholder="HH:mm:ss"
+            spellcheck="false"
+            :disabled="!settings.ResetWhenSessionUnlock"
+            @blur="onHmsBlur('ResetTimeout')"
+            @keydown.enter="($event.target as HTMLInputElement).blur()"
+          />
+          <SwitchToggle
+            v-model="settings.ResetWhenSessionUnlock"
+            @update:model-value="$emit('commit')"
+          />
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -87,35 +156,13 @@ const emit = defineEmits<{
   border-radius: var(--r-lg);
   padding: var(--sp-1) var(--sp-4);
 }
-.card-title {
-  margin: var(--sp-3) 0 var(--sp-1);
-  font-size: var(--fs-hint);
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0.5px;
-  color: var(--text-2);
+.row-main {
+  min-width: 0;
 }
-.row {
+.row-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  padding: var(--sp-3) 0;
-  border-top: 1px solid var(--border);
-}
-.row:first-of-type {
-  border-top: none;
-}
-.k {
-  font-size: var(--fs-body);
-  color: var(--text-2);
-}
-.v {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-medium);
-  color: var(--text-3);
-}
-.v.on {
-  color: var(--accent-strong);
+  gap: var(--sp-2);
 }
 /* 大按钮：功能页唯一的动作，给足视觉分量 */
 .lock-btn {
@@ -150,15 +197,18 @@ const emit = defineEmits<{
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.lock-hint {
-  margin: 0 0 var(--sp-3);
-  text-align: center;
-  font-size: var(--fs-hint);
-  color: var(--text-3);
+.hms {
+  width: 104px; /* HH:mm:ss 定宽（§4.2） */
 }
-.more-hint {
-  margin: var(--sp-2) 0 var(--sp-3);
-  font-size: var(--fs-caption);
-  color: var(--text-3);
+.hms:focus-visible {
+  outline: none; /* ring 已由 .en-input:focus 提供 */
+}
+.pwd {
+  width: 180px;
+  text-align: left;
+}
+.hotkey {
+  width: 140px; /* Ctrl+Shift+F12 最长组合约 14 字符（等宽） */
+  text-align: left;
 }
 </style>

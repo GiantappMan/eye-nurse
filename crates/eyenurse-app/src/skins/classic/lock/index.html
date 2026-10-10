@@ -40,11 +40,16 @@
       }
       #mask {
         position: relative;
+        box-sizing: border-box; /* padding 计入 100% 高——content-box 下 padding 会溢出视口外、内容零位移 */
         width: 100%;
         height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
+        /* 给宿主密码框让位（classic chrome y=64%）：AutoRest 叠加态内容堆比
+           纯锁屏高出一个休息组（70px 圈 + 28px 组距），居中后日期会顶进密码框
+           （2026-10-10 真机实测）——底部腾 90px 让整堆上移，两种状态都留白 */
+        padding-bottom: 90px;
       }
       /* 组间：休息组 / 锁屏组（28px 定距 = 主辅分组的全部表达） */
       .center-stack {

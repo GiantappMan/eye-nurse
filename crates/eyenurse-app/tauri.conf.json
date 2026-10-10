@@ -6,7 +6,7 @@
   "identifier": "cn.giantapp.eyenurse3",
   "build": {
     "beforeDevCommand": { "script": "bun run dev", "cwd": "../../ui" },
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:2420",
     "beforeBuildCommand": { "script": "bun run build", "cwd": "../../ui" },
     "frontendDist": "../../ui/dist"
   },

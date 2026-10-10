@@ -31,7 +31,11 @@ body {
 }
 #skin-frame {
   position: absolute;
-  inset: 0; /* 全覆盖由 left/right(top/bottom) 约束得出——孪生壳页 mask.css 同构，不写第二份 width/height */
+  inset: 0;
+  /* width/height:100% 硬要求（mask.css 同款注释）：iframe 是替换元素，UA 默认
+     300×150 会赢过 inset 推导的 auto 尺寸，不写就是 300×150 小盒子渲染 */
+  width: 100%;
+  height: 100%;
   display: none; /* 握手通过（body.skin-alive）才显示——防损坏皮肤白屏遮脸 */
   border: 0;
   background: transparent;

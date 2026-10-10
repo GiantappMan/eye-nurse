@@ -15,7 +15,7 @@ use crate::skin_proto::{SkinPreviewDto, SkinSurfaceDto};
 use crate::tray::TrayAction;
 use crossbeam_channel::Sender;
 use eyenurse_core::autostart::DesktopStartup;
-use eyenurse_core::config::{LockScreenJson, SettingJson};
+use eyenurse_core::config::{DEFAULT_LOCK_HOTKEY, HotkeyCombo, LockScreenJson, SettingJson};
 use eyenurse_core::skin::{SkinColors, SkinDef, SkinsDto};
 use eyenurse_core::HmsSpan;
 use std::time::Duration;
@@ -79,38 +79,48 @@ impl SettingsDto {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[allow(non_snake_case)]
 pub struct LockSettingsDto {
-    /// 仿锁屏总开关
-    pub Enabled: bool,
-    /// Win+L 拦截激活（配套注册表 DisableLockWorkstation）
-    pub InterceptWinL: bool,
     /// 截图穿透（WDA_EXCLUDEFROMCAPTURE）
     pub CaptureThrough: bool,
     /// 锁屏激活即进入休息
     pub AutoRest: bool,
     /// 解锁密码（空 = 无需密码）
     pub Password: String,
+    /// 自定义激活快捷键（默认 Alt+Win+L；空 = 禁用；保存时规范化；
+    /// 设为 Win+L 即接管系统锁屏，DisableLockWorkstation 随之自动开关）
+    pub Hotkey: String,
 }
 
 impl LockSettingsDto {
     pub fn of(s: &LockScreenJson) -> Self {
         Self {
-            Enabled: s.Enabled,
-            InterceptWinL: s.InterceptWinL,
             CaptureThrough: s.CaptureThrough,
             AutoRest: s.AutoRest,
             Password: s.Password.clone(),
+            Hotkey: s.Hotkey.clone(),
         }
     }
 
     pub fn into_core(self) -> LockScreenJson {
         LockScreenJson {
-            Enabled: self.Enabled,
-            InterceptWinL: self.InterceptWinL,
             CaptureThrough: self.CaptureThrough,
             AutoRest: self.AutoRest,
             Password: self.Password,
+            // 快捷键规范化（对齐 HmsSpan 的命令侧解析约定）：可解析 → 规范写法
+            // （修大小写/顺序，回包即所见即所得）；空串保持禁用；非法回默认
+            Hotkey: normalize_hotkey(&self.Hotkey),
         }
     }
+}
+
+/// 快捷键字符串规范化：空 = 禁用（原样）；可解析 = `HotkeyCombo::to_display`；
+/// 非法 = 默认 Alt+Win+L（运行期 apply_lock_policy 对手编配置还有同款兜底）
+fn normalize_hotkey(s: &str) -> String {
+    if s.trim().is_empty() {
+        return String::new();
+    }
+    HotkeyCombo::parse(s)
+        .map(|c| c.to_display())
+        .unwrap_or_else(|| DEFAULT_LOCK_HOTKEY.to_string())
 }
 
 /// 经 CoreLoop 取数/执行并等应答（bounded(1) + recv_timeout 兜底，§4.1）
@@ -462,7 +472,17 @@ pub async fn open_skins_folder() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_public_http_url;
+    use super::{normalize_hotkey, validate_public_http_url};
+    use eyenurse_core::config::DEFAULT_LOCK_HOTKEY;
+
+    #[test]
+    fn normalizes_lock_hotkey() {
+        // 规范写法回写（修大小写与顺序）；空串 = 禁用；非法回默认
+        assert_eq!(normalize_hotkey("win+ctrl+l"), "Ctrl+Win+L");
+        assert_eq!(normalize_hotkey("Ctrl+Alt+F8"), "Ctrl+Alt+F8");
+        assert_eq!(normalize_hotkey("  "), "");
+        assert_eq!(normalize_hotkey("Ctrl+Hyper+L"), DEFAULT_LOCK_HOTKEY);
+    }
 
     #[test]
     fn accepts_public_http_urls() {

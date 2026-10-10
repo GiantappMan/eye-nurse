@@ -22,23 +22,23 @@ export function emptySettings(): SettingsDto {
   };
 }
 
-/** 锁屏设置 DTO（v3.2 仿锁屏；字段与 commands.rs 的 LockSettingsDto 一一对应） */
+/** 锁屏设置 DTO（v3.2 仿锁屏；字段与 commands.rs 的 LockSettingsDto 一一对应；
+ * Enabled/InterceptWinL 已删——锁屏是自带能力恒可用，快捷键留空即禁用激活） */
 export interface LockSettingsDto {
-  Enabled: boolean;
-  InterceptWinL: boolean;
   CaptureThrough: boolean;
   AutoRest: boolean;
   Password: string;
+  /** 自定义激活快捷键（默认 Alt+Win+L；空 = 禁用；后端保存时规范化回写） */
+  Hotkey: string;
 }
 
-/** 空白锁屏 DTO（全关 + 无密码） */
+/** 空白锁屏 DTO（Hotkey 占位后端加载即覆盖） */
 export function emptyLockSettings(): LockSettingsDto {
   return {
-    Enabled: false,
-    InterceptWinL: false,
     CaptureThrough: false,
     AutoRest: false,
     Password: "",
+    Hotkey: "Alt+Win+L",
   };
 }
 

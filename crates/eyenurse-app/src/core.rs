@@ -23,7 +23,10 @@ use crate::ui::bar::{self, BarSkinColors, BarSnapshot};
 use crate::win::monitors::MonitorRects;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use eyenurse_core::autostart::DesktopStartup;
-use eyenurse_core::config::{ConfigStore, LanguagesJson, LockScreenJson, SettingJson, UiJson};
+use eyenurse_core::config::{
+    ConfigStore, DEFAULT_LOCK_HOTKEY, HK_WIN, HotkeyCombo, LanguagesJson, LockScreenJson,
+    SettingJson, UiJson,
+};
 use eyenurse_core::i18n::I18n;
 use eyenurse_core::skin::{
     self, DiskSkinEntry, SkinColors, SkinConfig, SkinMeta, SkinsDto,
@@ -148,23 +151,43 @@ pub(crate) fn build_mask_window(
     Ok(win)
 }
 
-/// v3.2 锁屏接管策略热应用：钩子开关 + HKCU DisableLockWorkstation。
-/// Enabled && InterceptWinL 才接管；关闭即恢复系统默认（启动路径 main 亦调用）。
+/// v3.2 锁屏激活策略热应用：自定义快捷键（空串=禁用；非法串回退默认+记日志；
+/// 锁屏本身是自带能力，立即锁屏/托盘不依赖任何开关）；快捷键恰为 Win+L 时
+/// 连带 HKCU DisableLockWorkstation——接管系统锁屏，防钩子漏键退化成系统锁屏
+/// （启动路径 main 亦调用）。
 pub(crate) fn apply_lock_policy(lock: &LockScreenJson) {
-    let on = lock.Enabled && lock.InterceptWinL;
-    crate::win::hotkey::set_enabled(on);
-    if !crate::win::hotkey::set_disable_lock_workstation(on) {
-        // 实测：该键可能被域策略/安全软件锁 ACL（拒绝访问，手动 reg add 同样失败）。
-        // 降级为仅钩子拦截：非提权前台照常生效；钩子漏键（提权前台/驱动层拦截）
-        // 还有 Ctrl+Alt+L 热键与托盘入口兜底。
-        eprintln!(
-            "[eyenurse] DisableLockWorkstation registry write failed (policies key locked?); \
-             Win+L interception runs hook-only"
-        );
+    let combo = match HotkeyCombo::parse(&lock.Hotkey) {
+        Some(c) => Some(c),
+        None if lock.Hotkey.trim().is_empty() => None,
+        None => {
+            eprintln!(
+                "[eyenurse] invalid lock hotkey {:?}; fallback to default {DEFAULT_LOCK_HOTKEY}",
+                lock.Hotkey
+            );
+            HotkeyCombo::parse(DEFAULT_LOCK_HOTKEY)
+        }
+    };
+    // Win+L 接管检测（v3.2.1 起 InterceptWinL/Enabled 并入快捷键；0x4C = 'L'）
+    let takeover = matches!(combo, Some(c) if c.mods == HK_WIN && c.vk == u16::from(b'L'));
+    if takeover {
+        if !crate::win::hotkey::set_disable_lock_workstation(true) {
+            // 实测：该键可能被域策略/安全软件锁 ACL（拒绝访问，手动 reg add 同样
+            // 失败）。降级为仅钩子拦截：非提权前台照常生效；钩子漏键（提权前台/
+            // 驱动层拦截）还有托盘入口兜底。
+            eprintln!(
+                "[eyenurse] DisableLockWorkstation registry write failed (policies key locked?); \
+                 Win+L takeover runs hook-only"
+            );
+        }
+    } else {
+        // 恢复默认：尽力删值（值本不存在亦视为已恢复；键被锁死时写不进也意味
+        // 着此前没写成过，静默即可，不刷日志噪音）
+        crate::win::hotkey::set_disable_lock_workstation(false);
     }
-    // Ctrl+Alt+L 激活热键：跟随 Enabled（部分管控软件在驱动层拦 Win+L，实测
-    // 本机如此——热键是键盘兜底，托盘「立即锁屏」是最后入口）
-    crate::win::hotkey::set_hotkey(lock.Enabled);
+    match combo {
+        Some(c) => crate::win::hotkey::set_hotkey(true, c.mods, c.vk),
+        None => crate::win::hotkey::set_hotkey(false, 0, 0),
+    }
 }
 
 /// bar 装配（main setup 产出；ESP-1 双模式——GDI 线程或 barweb 壳窗共用快照，
@@ -477,16 +500,18 @@ impl CoreLoop {
             }
             TrayAction::Reset => self.reset_timer(),
             TrayAction::RestNow => self.rest_now(),
-            // v3.2 立即锁屏：仿锁屏未启用时 lock_now 幂等无事（菜单项常驻）
+            // v3.2 立即锁屏：已锁时幂等无事（菜单项常驻）
             TrayAction::LockNow => self.lock_now(),
             TrayAction::Exit => {
                 // §8.1：退出路径的 UI.json 兜底保存由 CoreLoop 在此完成；
-                // v3.2：统计落盘 + 撤销锁屏接管（注册表 DisableLockWorkstation
-                // 必须恢复，否则应用退出后用户 Win+L 全废）
+                // v3.2：统计落盘 + 撤销锁屏接管
                 self.save_ui_json();
                 self.core.stats.save();
-                crate::win::hotkey::set_enabled(false);
+                // 注册表 DisableLockWorkstation 必须恢复（否则应用退出后用户
+                // Win+L 全废）；快捷键同步注销（线程随进程退出本会自动释放，
+                // 显式调用保持与开关路径同一语义）
                 crate::win::hotkey::set_disable_lock_workstation(false);
+                crate::win::hotkey::set_hotkey(false, 0, 0);
                 self.app.exit(0);
             }
         }
@@ -575,12 +600,12 @@ impl CoreLoop {
         self.last_rest_tick = Some(now);
     }
 
-    /// v3.2 激活仿锁屏（Win+L 钩子入口）：替代系统锁屏。AutoRest → 直接走
-    /// rest_now（休息遮罩 + 锁屏 UI 叠加，计入休息统计）；否则 pause 冻结计时
-    /// （对齐真会话锁语义），无遮罩时按显示器补建（纯锁屏 UI）。
-    /// 已锁或功能未开时幂等无事。
+    /// v3.2 激活仿锁屏（快捷键钩子/托盘/设置页大按钮共用入口）：替代系统锁屏。
+    /// AutoRest → 直接走 rest_now（休息遮罩 + 锁屏 UI 叠加，计入休息统计）；
+    /// 否则 pause 冻结计时（对齐真会话锁语义），无遮罩时按显示器补建（纯锁屏
+    /// UI）。已锁时幂等无事。
     fn lock_now(&mut self) {
-        if self.is_locked || !self.core.lock.Enabled {
+        if self.is_locked {
             return;
         }
         self.is_locked = true;

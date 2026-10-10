@@ -78,8 +78,10 @@ fn main() {
     if !smoke {
         startup.migrate_from("Eye Nurse 2");
         startup.set_enabled(setting.RunWhenStarts);
-        // 2.7) v3.2 锁屏接管策略：钩子开关 + DisableLockWorkstation（按当前设置
-        //      重设，顺带清理上次异常退出可能留下的注册表残留）
+        // 2.7) v3.2 锁屏接管策略：自定义快捷键（快捷键为 Win+L 时连带 HKCU
+        //      DisableLockWorkstation；按当前设置重设，顺带清理上次异常退出
+        //      可能留下的注册表残留；静态量先落、钩子线程 3) 后起，线程启动
+        //      时自行补偿初始注册）
         core::apply_lock_policy(&lock_cfg);
     }
 

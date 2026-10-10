@@ -131,16 +131,15 @@ impl ConfigFile for LanguagesJson {
     const FILE_NAME: &'static str = "Languages.json";
 }
 
-/// LockScreen.json —— v3.2 仿锁屏新增（无 v2 对应文件；默认值全为零值，
-/// 可直接 derive Default）。密码明文存本地：软锁屏定位（防顺便瞄屏），
-/// 不是安全边界——真安全靠 Win+L 之外的系统锁。
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+/// LockScreen.json —— v3.2 仿锁屏新增（无 v2 对应文件；快捷键默认 Alt+Win+L，
+/// 见下方 Default 手工实现）。密码明文存本地：软锁屏定位（防顺便瞄屏），不是
+/// 安全边界——真安全靠 Win+L 之外的系统锁。
+/// （v3.2.1 删除 InterceptWinL / Enabled：接管能力并入 Hotkey——快捷键设为
+/// Win+L 即替代；锁屏是自带能力、立即锁屏恒可用，总开关纯属多余（用户拍板
+/// 「脱裤子放屁」）。旧配置里的这些键 serde 默认忽略未知字段，读入无害、落盘消失）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct LockScreenJson {
-    /// 仿锁屏总开关
-    pub Enabled: bool,
-    /// 拦截 Win+L 激活仿锁屏（替代系统锁屏；配套 HKCU DisableLockWorkstation）
-    pub InterceptWinL: bool,
     /// 截图穿透：锁屏遮罩不进入截图/录屏（WDA_EXCLUDEFROMCAPTURE），
     /// AI 等截屏工具继续看到真实桌面
     pub CaptureThrough: bool,
@@ -148,10 +147,132 @@ pub struct LockScreenJson {
     pub AutoRest: bool,
     /// 解锁密码（空 = 无需密码）
     pub Password: String,
+    /// 自定义激活快捷键（`HotkeyCombo` 字符串格式，默认 "Alt+Win+L"；空 =
+    /// 禁用快捷键，非法值运行时回退默认并记日志）。设为 Win+L = 接管系统
+    /// 锁屏（HKCU DisableLockWorkstation 随之自动开启，防钩子漏键退化成
+    /// 系统锁屏）；默认不用裸 Win+L：管控软件常在键盘过滤驱动层把它整个
+    /// 吞掉（LL 钩子收不到，2026-10-09 实测），Ctrl+Win+L 本机亦被其他软件
+    /// RegisterHotKey 占用（2026-10-10 实测），Win+Alt+L 在两者之外
+    pub Hotkey: String,
+}
+
+impl Default for LockScreenJson {
+    fn default() -> Self {
+        Self {
+            CaptureThrough: false,
+            AutoRest: false,
+            Password: String::new(),
+            Hotkey: DEFAULT_LOCK_HOTKEY.to_string(),
+        }
+    }
 }
 
 impl ConfigFile for LockScreenJson {
     const FILE_NAME: &'static str = "LockScreen.json";
+}
+
+/// 仿锁屏默认激活快捷键（LockScreen.json Hotkey 的缺省值；显示序 Alt 在 Win 前）
+pub const DEFAULT_LOCK_HOTKEY: &str = "Alt+Win+L";
+
+/// 可移植修饰键位掩码（`HotkeyCombo::parse` 产物；到 Win32 `MOD_*` 的映射在
+/// app 层钩子线程做，core 保持无窗口依赖）
+pub const HK_CTRL: u8 = 1;
+/// 见 [`HK_CTRL`]
+pub const HK_ALT: u8 = 2;
+/// 见 [`HK_CTRL`]
+pub const HK_SHIFT: u8 = 4;
+/// 见 [`HK_CTRL`]
+pub const HK_WIN: u8 = 8;
+
+/// 仿锁屏激活快捷键组合（修饰键 + 主键）。字符串格式 `Ctrl+Alt+Shift+Win+键`：
+/// 修饰键大小写不敏感、任意顺序、不可重复（`Control`/`Windows` 别名可解析，
+/// 规范输出用短名）；主键 = `A-Z` / `0-9` / `F1-F12`；至少一个修饰键；
+/// 空串解析返回 `None`（调用方按「禁用快捷键」区分）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HotkeyCombo {
+    /// [`HK_CTRL`] 等位或组合（非零）
+    pub mods: u8,
+    /// Win32 虚拟键码（core 侧只做码表换算，不引用 windows crate）
+    pub vk: u16,
+}
+
+impl HotkeyCombo {
+    pub fn parse(s: &str) -> Option<Self> {
+        let tokens: Vec<&str> = s.split('+').map(str::trim).collect();
+        // 至少「修饰键+主键」两段；单主键（无修饰键）不收——裸键全局吞击太危险
+        let (key_tok, mod_toks) = tokens.split_last()?;
+        if mod_toks.is_empty() {
+            return None;
+        }
+        let mut mods = 0u8;
+        for t in mod_toks {
+            let m = match t.to_ascii_lowercase().as_str() {
+                "ctrl" | "control" => HK_CTRL,
+                "alt" => HK_ALT,
+                "shift" => HK_SHIFT,
+                "win" | "windows" => HK_WIN,
+                _ => return None,
+            };
+            if mods & m != 0 {
+                return None; // 重复修饰键
+            }
+            mods |= m;
+        }
+        Some(Self { mods, vk: parse_key(key_tok)? })
+    }
+
+    /// 规范写法：修饰键固定 Ctrl→Alt→Shift→Win 顺序 + 短名 + 大写主键
+    ///（"win+ctrl+l" → "Ctrl+Win+L"），设置页回包/日志统一用它
+    pub fn to_display(&self) -> String {
+        let mut out = String::new();
+        let mut push = |name: &str| {
+            if !out.is_empty() {
+                out.push('+');
+            }
+            out.push_str(name);
+        };
+        if self.mods & HK_CTRL != 0 {
+            push("Ctrl");
+        }
+        if self.mods & HK_ALT != 0 {
+            push("Alt");
+        }
+        if self.mods & HK_SHIFT != 0 {
+            push("Shift");
+        }
+        if self.mods & HK_WIN != 0 {
+            push("Win");
+        }
+        push(&vk_label(self.vk));
+        out
+    }
+}
+
+/// 主键 token → Win32 虚拟键码：字母/数字取 ASCII（与 VK 0x41+/0x30- 重合），
+/// F1-F12 取 0x70 起。其余（OEM 键、方向键等）不收，保证显示与跨语言输入无歧义
+fn parse_key(tok: &str) -> Option<u16> {
+    let up = tok.to_ascii_uppercase();
+    if up.len() == 1 {
+        let c = up.as_bytes()[0];
+        return match c {
+            b'A'..=b'Z' | b'0'..=b'9' => Some(u16::from(c)),
+            _ => None,
+        };
+    }
+    up.strip_prefix('F')
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|n| (1..=12).contains(n))
+        .map(|n| u16::from(0x6F + n)) // F1=0x70 .. F12=0x7B
+}
+
+/// 虚拟键码 → 显示名（`parse_key` 的反变换；范围外值只可能来自手编配置，
+/// 显示十六进制兜底）
+fn vk_label(vk: u16) -> String {
+    match vk {
+        0x30..=0x39 | 0x41..=0x5A => char::from_u32(u32::from(vk)).unwrap().to_string(),
+        0x70..=0x7B => format!("F{}", vk - 0x6F),
+        _ => format!("VK{vk:02X}"),
+    }
 }
 
 /// f64 的 System.Text.Json 字节兼容包装（整数值输出 "100" 而非 "100.0"）
@@ -348,23 +469,85 @@ mod tests {
         let dir = temp_dir("lock");
         let store = ConfigStore::with_dir(dir.clone());
         assert_eq!(store.load::<LockScreenJson>(), LockScreenJson::default());
+        // 缺文件默认值：快捷键缺省 Alt+Win+L（裸 Win+L 被驱动层吞、Ctrl+Win+L
+        // 本机被占的规避，见 Hotkey 字段注释）；默认值必须自身可解析且为规范写法
+        // （防手改常量引入不可激活的组合）
+        assert_eq!(LockScreenJson::default().Hotkey, DEFAULT_LOCK_HOTKEY);
+        assert_eq!(
+            HotkeyCombo::parse(DEFAULT_LOCK_HOTKEY).map(|c| c.to_display()),
+            Some(DEFAULT_LOCK_HOTKEY.to_string())
+        );
 
         let cfg = LockScreenJson {
-            Enabled: true,
-            InterceptWinL: true,
             CaptureThrough: true,
             AutoRest: true,
             Password: "1234".into(),
+            Hotkey: "Ctrl+Alt+F8".into(),
         };
         store.save(&cfg).unwrap();
         assert_eq!(store.load::<LockScreenJson>(), cfg);
-        // 缺字段 → 该字段默认值（serde(default) 容器语义）
-        std::fs::write(dir.join(LockScreenJson::FILE_NAME), "{\"Enabled\":true}").unwrap();
+        // 缺字段 → 该字段默认值（serde(default) 容器语义）：旧版本配置文件没有
+        // Hotkey 键，读入即得默认快捷键
+        std::fs::write(dir.join(LockScreenJson::FILE_NAME), "{}").unwrap();
         let loaded = store.load::<LockScreenJson>();
-        assert!(loaded.Enabled);
-        assert!(!loaded.InterceptWinL);
         assert_eq!(loaded.Password, "");
+        assert_eq!(loaded.Hotkey, DEFAULT_LOCK_HOTKEY);
+        // v3.2.1 删除 Enabled/InterceptWinL 后，旧配置残留的这些键按未知字段
+        // 忽略（读入无害、落盘消失）
+        std::fs::write(
+            dir.join(LockScreenJson::FILE_NAME),
+            "{\"Enabled\":true,\"InterceptWinL\":true}",
+        )
+        .unwrap();
+        let legacy = store.load::<LockScreenJson>();
+        assert_eq!(legacy, LockScreenJson::default());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn hotkey_combo_parse_and_display() {
+        // 大小写不敏感 + 修饰键任意顺序 → 规范顺序输出
+        assert_eq!(
+            HotkeyCombo::parse("win+ctrl+l").map(|c| c.to_display()),
+            Some("Ctrl+Win+L".into())
+        );
+        assert_eq!(
+            HotkeyCombo::parse("Ctrl+Win+L").map(|c| c.to_display()),
+            Some("Ctrl+Win+L".into())
+        );
+        // 别名
+        assert_eq!(
+            HotkeyCombo::parse("Windows + Control + L").map(|c| c.to_display()),
+            Some("Ctrl+Win+L".into())
+        );
+        // 主键码表：字母 / 数字 / F 键
+        assert_eq!(
+            HotkeyCombo::parse("Ctrl+Alt+F12").map(|c| c.to_display()),
+            Some("Ctrl+Alt+F12".into())
+        );
+        assert_eq!(
+            HotkeyCombo::parse("Shift+F1").map(|c| c.to_display()),
+            Some("Shift+F1".into())
+        );
+        assert_eq!(
+            HotkeyCombo::parse("Alt+9").map(|c| (c.vk, c.mods)),
+            Some((0x39, HK_ALT))
+        );
+    }
+
+    #[test]
+    fn hotkey_combo_parse_rejects_garbage() {
+        // 空串 = 禁用（调用方语义），不是合法组合
+        assert_eq!(HotkeyCombo::parse(""), None);
+        assert_eq!(HotkeyCombo::parse("   "), None);
+        // 无修饰键 / 修饰键作主键 / 未知段 / 重复修饰键 / 超范围 F 键
+        assert_eq!(HotkeyCombo::parse("L"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl+Win"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl+Hyper+L"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl+Ctrl+L"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl+F13"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl+;"), None);
+        assert_eq!(HotkeyCombo::parse("Ctrl++L"), None);
     }
 
     #[test]

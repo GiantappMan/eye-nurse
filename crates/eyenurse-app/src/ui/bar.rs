@@ -857,7 +857,7 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
         let stroke = rgb(skin.progress_bg);
         // ×0.9 必须在宽整型里算再截回 u8：245u8*9 直接乘会溢出（debug 下 panic，
         // wndproc 是 extern "system" → 不可展开 → abort/0xc0000409，冒烟教训）
-        let darken = |c: u8| ((c as u16 * 9 / 10) as u8);
+        let darken = |c: u8| (c as u16 * 9 / 10) as u8;
         let stroke_dark = theme::Rgb::new(darken(stroke.r), darken(stroke.g), darken(stroke.b));
         let edge_brush = CreateSolidBrush(colorref(stroke_dark));
         let _ = FrameRect(mem, &rc, edge_brush);
@@ -1324,7 +1324,7 @@ mod pin_tests {
             .unwrap();
             let old = SelectObject(mem, bmp.into());
             // 底刷白（默认黑，难以区分描边/填充的失败形态）
-            let whitewash = windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x00FF_FF_FF));
+            let whitewash = windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x00FF_FFFF));
             let rc = windows::Win32::Foundation::RECT {
                 left: 0,
                 top: 0,

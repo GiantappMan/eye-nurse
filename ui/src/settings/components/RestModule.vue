@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// 休息模块（功能页）：实时倒计时 Hero + 立刻休息 + 周期进度。
-// 2026-10-10 IA 调整：休息计划（间隔/时长）等配置整体迁入「设置」页，本页
-// 只保留状态与动作——打开即看剩余时间，要休息点一下。
+// 休息模块（功能页）：实时倒计时 Hero + 立刻休息 + 周期进度 + 休息计划卡。
+// 2026-10-10 IA 二次调整：休息计划（间隔/时长）从设置子页迁回本页——作息
+// 就该在休息页直接改，Hero 摘要随草稿即时变化即是保存反馈（修改自动保存）。
 // 实时状态来自 eyenurse://tick（core.rs 每拍下发）。
-import { computed } from "vue";
+import { computed, reactive } from "vue";
 import type { SettingsDto } from "../types";
 import { t } from "../i18n";
 
 const props = defineProps<{
-  /** 主设置草稿（本页只读 RestInterval 用于进度归一化） */
+  /** 主设置草稿（间隔/时长在本页编辑，实时驱动 Hero 进度归一化） */
   settings: SettingsDto;
   /** 实时状态（首拍到达前为 null → 按满进度展示） */
   tick: { remaining_ms: number; paused: boolean; resting: boolean } | null;
@@ -16,6 +16,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** 立刻休息（Hero 按钮） */
   (e: "rest-now"): void;
+  /** 休息计划任一控件提交 → 父组件排 300ms 防抖保存 */
+  (e: "commit"): void;
 }>();
 
 /** HH:mm:ss → 秒（非法返回 NaN，调用方自行兜底） */
@@ -74,6 +76,35 @@ const elapsedMin = computed(() =>
   Math.max(0, Math.round((intervalSecs.value - remainingMs.value / 1000) / 60)),
 );
 const totalMin = computed(() => Math.max(1, Math.round(intervalSecs.value / 60)));
+
+// —— 休息计划卡（自设置页迁回）——
+/** 休息间隔预设（分钟） */
+const PRESETS = [20, 30, 45, 60, 90];
+
+/** HH:mm:ss 宽松校验：仅控制输入态红框，解析在命令侧（清单 I4） */
+function hmsValid(s: string): boolean {
+  return /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.test(s.trim());
+}
+
+/** 预设命中（当前间隔恰好等于某预设） */
+const activePreset = computed(() => {
+  const m = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/.exec(props.settings.RestInterval.trim());
+  if (!m) return undefined;
+  return PRESETS.find((mins) => mins * 60 === Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]));
+});
+
+function setPreset(mins: number): void {
+  props.settings.RestInterval = `00:${String(mins).padStart(2, "0")}:00`;
+  emit("commit");
+}
+
+// —— 状态完备（DS3 §4.2）：invalid 红态只在用户触碰（失焦）后出现 ——
+const touched = reactive(new Set<string>());
+
+function onHmsBlur(field: string): void {
+  touched.add(field);
+  emit("commit");
+}
 </script>
 
 <template>
@@ -97,6 +128,52 @@ const totalMin = computed(() => Math.max(1, Math.round(intervalSecs.value / 60))
           <span>{{ t("workCycle") }}</span>
           <span class="num">{{ elapsedMin }} / {{ totalMin }} {{ t("minutes") }}</span>
         </div>
+      </div>
+    </section>
+
+    <section class="en-card">
+      <h3 class="en-card-title">{{ t("planTitle") }}</h3>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("restInterval") }}</p>
+          <div class="chips">
+            <button
+              v-for="m in PRESETS"
+              :key="m"
+              type="button"
+              class="en-chip"
+              :class="{ 'is-active': activePreset === m }"
+              @click="setPreset(m)"
+            >
+              {{ m }} {{ t("minutes") }}
+            </button>
+          </div>
+        </div>
+        <input
+          v-model="settings.RestInterval"
+          type="text"
+          class="en-input en-input-mono hms"
+          :class="{ 'is-invalid': touched.has('RestInterval') && !hmsValid(settings.RestInterval) }"
+          placeholder="HH:mm:ss"
+          spellcheck="false"
+          @blur="onHmsBlur('RestInterval')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+      </div>
+      <div class="en-row">
+        <div class="row-main">
+          <p class="en-row-title">{{ t("restDuration") }}</p>
+        </div>
+        <input
+          v-model="settings.RestDuration"
+          type="text"
+          class="en-input en-input-mono hms"
+          :class="{ 'is-invalid': touched.has('RestDuration') && !hmsValid(settings.RestDuration) }"
+          placeholder="HH:mm:ss"
+          spellcheck="false"
+          @blur="onHmsBlur('RestDuration')"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
       </div>
     </section>
   </div>
@@ -183,5 +260,22 @@ const totalMin = computed(() => Math.max(1, Math.round(intervalSecs.value / 60))
 .hp-meta .num {
   font-family: var(--font-num);
   color: var(--hero-text);
+}
+
+/* —— 休息计划卡 —— */
+.row-main {
+  min-width: 0;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.hms {
+  width: 104px; /* HH:mm:ss 定宽（§4.2） */
+}
+.hms:focus-visible {
+  outline: none; /* ring 已由 .en-input:focus 提供 */
 }
 </style>

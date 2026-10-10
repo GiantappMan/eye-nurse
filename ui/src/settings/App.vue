@@ -338,10 +338,16 @@ const navItems = computed(() => [
     <!-- 右侧：当前模块页（v-show 保持各页状态与滚动位置，切换零开销） -->
     <main class="pane">
       <div v-show="activeModule === 'rest'" class="module">
-        <RestModule :settings="settings" :tick="tick" @rest-now="restNow" />
+        <RestModule :settings="settings" :tick="tick" @rest-now="restNow" @commit="scheduleSave" />
       </div>
       <div v-show="activeModule === 'lock'" class="module">
-        <LockModule :lock-settings="lockSettings" @lock-now="lockNow" />
+        <LockModule
+          :lock-settings="lockSettings"
+          :settings="settings"
+          @lock-now="lockNow"
+          @lock-commit="scheduleLockSave"
+          @commit="scheduleSave"
+        />
       </div>
       <div v-show="activeModule === 'stats'" class="module">
         <StatsCard />
@@ -352,12 +358,10 @@ const navItems = computed(() => [
       <div v-show="activeModule === 'settings'" class="module">
         <SettingsModule
           :settings="settings"
-          :lock-settings="lockSettings"
           :languages="languages"
           :current-language="currentLanguage"
           :saved="justSaved"
           @commit="scheduleSave"
-          @lock-commit="scheduleLockSave"
           @reset="resetDefaults"
           @change-language="changeLanguage"
         />
