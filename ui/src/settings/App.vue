@@ -160,16 +160,6 @@ async function changeLanguage(lan: string): Promise<void> {
   }
 }
 
-/** 版权行链接：经 Rust 侧 ShellExecute 打开作者站点（WebView 默认拦外导航，
- * 且命令侧有公网 http/https 校验，见 commands.rs open_url） */
-async function openCopyrightLink(): Promise<void> {
-  try {
-    await invoke("open_url", { url: "https://mscoder.cn" });
-  } catch (e) {
-    console.error("open_url 失败", e);
-  }
-}
-
 /** 立即锁屏（锁屏功能页大按钮，与托盘同源 CoreMsg::Tray(LockNow)） */
 async function lockNow(): Promise<void> {
   try {
@@ -322,7 +312,7 @@ const navItems = computed(() => [
       </nav>
 
       <div class="side-foot">
-        <!-- 左下角：设置入口（全部配置归拢于设置页；语言移入通用卡） -->
+        <!-- 左下角：设置入口（子级导航：休息计划/锁屏/通用/关于；版权链接在关于页） -->
         <button
           type="button"
           class="nav-item"
@@ -342,15 +332,6 @@ const navItems = computed(() => [
           </svg>
           {{ t("setting") }}
         </button>
-        <span class="copyright">
-          <a
-            class="copyright-link"
-            href="https://mscoder.cn"
-            title="mscoder.cn"
-            @click.prevent="openCopyrightLink"
-            v-html="t('copyright')"
-          ></a>
-        </span>
       </div>
     </aside>
 
@@ -448,28 +429,6 @@ const navItems = computed(() => [
   gap: var(--sp-2);
   padding: var(--sp-2) 10px 2px;
   border-top: 1px solid var(--border);
-}
-.copyright {
-  font-size: var(--fs-caption);
-  color: var(--text-3);
-  text-align: center;
-}
-/* 版权行 → 作者站点链接：默认同弱化色，悬停浮出强调色提示可点 */
-.copyright-link {
-  color: inherit;
-  text-decoration: none;
-  transition:
-    color var(--dur-fast) var(--ease),
-    text-decoration-color var(--dur-fast) var(--ease);
-}
-.copyright-link:hover {
-  color: var(--accent-strong);
-  text-decoration: underline;
-}
-.copyright-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
 }
 
 /* —— 右侧模块页容器 —— */
