@@ -311,6 +311,97 @@ pub async fn open_settings(state: State<'_, CoreHandle>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// 打开外部链接（设置窗版权行 → 作者站点 mscoder.cn）。安全约束（Mimosa
+/// 生成前条件）：仅允许 http/https scheme，且 host 拒绝本机/环回/内网/保留
+/// 地址——命令面不提供任意协议或内网地址的打开能力。
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), String> {
+    validate_public_http_url(&url)?;
+    #[cfg(target_os = "windows")]
+    {
+        use windows::core::{w, HSTRING};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        // SAFETY：仅打开一个经过校验的 http/https URL；句柄返回值被忽略
+        // （与 core.rs open_about 同语义）
+        unsafe {
+            ShellExecuteW(
+                None,
+                w!("open"),
+                &HSTRING::from(url.as_str()),
+                None,
+                None,
+                SW_SHOWNORMAL,
+            );
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = url;
+        Err("仅支持 Windows".into())
+    }
+}
+
+/// 公网 http/https URL 校验：scheme 白名单 + host 黑名单（本机/环回/内网/
+/// 保留地址段）。不引第三方 url crate，纯字符串解析按 authority 段取 host。
+fn validate_public_http_url(url: &str) -> Result<(), String> {
+    let u = url.trim();
+    let lower = u.to_ascii_lowercase();
+    let scheme_end = if lower.starts_with("https://") {
+        8
+    } else if lower.starts_with("http://") {
+        7
+    } else {
+        return Err("仅允许 http/https 链接".to_string());
+    };
+    if u.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("URL 含非法字符".to_string());
+    }
+    // host = authority 去掉 path/query/fragment、userinfo；IPv6 字面量 [..] 整体
+    // 保留（内部含 ':'，不能按端口切分），其余去掉端口后的裸主机名
+    let authority = &u[scheme_end..];
+    let host_no_path = authority
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .rsplit('@')
+        .next()
+        .unwrap_or("");
+    let host = if let Some(v6) = host_no_path.strip_prefix('[') {
+        format!("[{}", v6.split(']').next().unwrap_or(v6))
+    } else {
+        host_no_path.split(':').next().unwrap_or("").to_string()
+    }
+    .to_ascii_lowercase();
+    let loopback_or_reserved = host.is_empty()
+        || host == "localhost"
+        || host.ends_with(".localhost")
+        || host.starts_with("127.")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || host.starts_with("169.254.")
+        || host.starts_with("0.")
+        || (host.starts_with('[')
+            && (host.starts_with("[::1")
+                || host.starts_with("[::")
+                || host.starts_with("[fc")
+                || host.starts_with("[fd")
+                || host.starts_with("[fe80")));
+    if loopback_or_reserved {
+        return Err("不允许指向本机或内网地址".to_string());
+    }
+    // 172.16.0.0/12
+    if let Some(rest) = host.strip_prefix("172.") {
+        if let Ok(second) = rest.split('.').next().unwrap_or("").parse::<u8>() {
+            if (16..=31).contains(&second) {
+                return Err("不允许指向内网地址".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// bar 皮肤壳页的系统级拖动（皮肤 iframe 在 sandbox 内拿不到窗口 API，
 /// 经桥转到壳页后 invoke 本命令；语义 = GDI 条的 HTCAPTION 系统拖动）
 #[tauri::command]
@@ -358,4 +449,55 @@ pub async fn open_skins_folder() -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     let _ = dir;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_public_http_url;
+
+    #[test]
+    fn accepts_public_http_urls() {
+        for ok in [
+            "https://mscoder.cn",
+            "http://mscoder.cn/path?a=1",
+            "https://mscoder.cn:8080",
+            "https://www.giantapp.cn/post/eyenurse2",
+        ] {
+            assert!(validate_public_http_url(ok).is_ok(), "应放行 {ok}");
+        }
+    }
+
+    #[test]
+    fn rejects_non_http_schemes_and_garbage() {
+        for bad in [
+            "file:///C:/x",
+            "ftp://mscoder.cn",
+            "mscoder.cn",
+            "",
+            "https://",
+            "https://a b.cn",
+            "javascript:alert(1)",
+        ] {
+            assert!(validate_public_http_url(bad).is_err(), "应拒绝 {bad}");
+        }
+    }
+
+    #[test]
+    fn rejects_local_and_private_hosts() {
+        for bad in [
+            "http://localhost",
+            "https://sub.localhost",
+            "http://127.0.0.1:9222",
+            "http://[::1]/",
+            "http://10.0.0.5",
+            "http://192.168.1.1",
+            "http://172.16.0.1",
+            "http://169.254.1.1",
+            "http://[fe80::1]/",
+            "http://0.0.0.0",
+            "http://user@127.0.0.1/",
+        ] {
+            assert!(validate_public_http_url(bad).is_err(), "应拒绝 {bad}");
+        }
+    }
 }

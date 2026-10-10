@@ -160,6 +160,16 @@ async function changeLanguage(lan: string): Promise<void> {
   }
 }
 
+/** 版权行链接：经 Rust 侧 ShellExecute 打开作者站点（WebView 默认拦外导航，
+ * 且命令侧有公网 http/https 校验，见 commands.rs open_url） */
+async function openCopyrightLink(): Promise<void> {
+  try {
+    await invoke("open_url", { url: "https://mscoder.cn" });
+  } catch (e) {
+    console.error("open_url 失败", e);
+  }
+}
+
 // —— 事件/数据加载 ——
 
 /** 非编辑态刷新（§4.2）：自身保存的回写走 flushSave 回包，保存中跳过防覆盖草稿 */
@@ -330,7 +340,15 @@ const navItems = computed(() => [
         >
           <option v-for="lan in languages" :key="lan" :value="lan">{{ t(lan) }}</option>
         </select>
-        <span class="copyright" v-html="t('copyright')"></span>
+        <span class="copyright">
+          <a
+            class="copyright-link"
+            href="https://mscoder.cn"
+            title="mscoder.cn"
+            @click.prevent="openCopyrightLink"
+            v-html="t('copyright')"
+          ></a>
+        </span>
       </div>
     </aside>
 
@@ -474,6 +492,23 @@ const navItems = computed(() => [
 .copyright {
   font-size: var(--fs-caption);
   color: var(--text-3);
+}
+/* 版权行 → 作者站点链接：默认同弱化色，悬停浮出强调色提示可点 */
+.copyright-link {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    color var(--dur-fast) var(--ease),
+    text-decoration-color var(--dur-fast) var(--ease);
+}
+.copyright-link:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.copyright-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 
 /* —— 右侧模块页容器 —— */

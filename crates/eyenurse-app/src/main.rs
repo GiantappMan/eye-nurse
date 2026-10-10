@@ -146,6 +146,7 @@ fn main() {
             commands::get_skin_surface,
             commands::get_skin_preview,
             commands::open_settings,
+            commands::open_url,
             commands::bar_drag,
             commands::set_topmost,
             commands::bar_open_menu,
