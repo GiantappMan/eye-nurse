@@ -129,6 +129,7 @@ fn main() {
             commands::set_settings,
             commands::reset_settings,
             commands::rest_now,
+            commands::lock_now,
             commands::get_autostart,
             commands::get_current_language,
             commands::set_current_language,

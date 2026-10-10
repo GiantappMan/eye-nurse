@@ -171,6 +171,15 @@ pub async fn rest_now(state: State<'_, CoreHandle>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// 立即锁屏（设置窗锁屏页「立即锁屏」大按钮，与托盘「立即锁屏」同源动作）
+#[tauri::command]
+pub async fn lock_now(state: State<'_, CoreHandle>) -> Result<(), String> {
+    state
+        .tx
+        .send(CoreMsg::Tray(crate::tray::TrayAction::LockNow))
+        .map_err(|e| e.to_string())
+}
+
 /// 新增专用口：注册表实测自启态（无共享状态，命令线程直查，§4.1）
 #[tauri::command]
 pub async fn get_autostart() -> bool {

@@ -24,7 +24,7 @@ import RestModule from "./components/RestModule.vue";
 import LockModule from "./components/LockModule.vue";
 import StatsCard from "./components/StatsCard.vue";
 import SkinModule from "./components/SkinModule.vue";
-import GeneralModule from "./components/GeneralModule.vue";
+import SettingsModule from "./components/SettingsModule.vue";
 
 /** 防抖窗口（v2 Settings.vue：lodash/debounce 300ms，清单 I3） */
 const SAVE_DEBOUNCE_MS = 300;
@@ -38,12 +38,12 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const lockSettings = reactive<LockSettingsDto>(emptyLockSettings());
 let lockSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 保存成功的短暂提示（侧栏底部固定槽位，1.6s 后淡出） */
+/** 保存成功的短暂提示（设置页头部固定槽位，1.6s 后淡出） */
 const justSaved = ref(false);
 let savedFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 当前模块（方案 C：单选互斥，默认休息；不做持久化——每次打开回到休息页） */
-const activeModule = ref<"rest" | "lock" | "stats" | "skin" | "general">("rest");
+/** 当前模块（2026-10-10 IA：上部=功能 休息/锁屏/统计/皮肤，左下角=设置；默认休息） */
+const activeModule = ref<"rest" | "lock" | "stats" | "skin" | "settings">("rest");
 
 /** 页眉 Hero 实时状态（eyenurse://tick，core.rs 每拍下发） */
 interface TickPayload {
@@ -170,6 +170,15 @@ async function openCopyrightLink(): Promise<void> {
   }
 }
 
+/** 立即锁屏（锁屏功能页大按钮，与托盘同源 CoreMsg::Tray(LockNow)） */
+async function lockNow(): Promise<void> {
+  try {
+    await invoke("lock_now");
+  } catch (e) {
+    console.error("lock_now 失败", e);
+  }
+}
+
 // —— 事件/数据加载 ——
 
 /** 非编辑态刷新（§4.2）：自身保存的回写走 flushSave 回包，保存中跳过防覆盖草稿 */
@@ -237,13 +246,13 @@ onUnmounted(() => {
   for (const off of unlisteners.splice(0)) off();
 });
 
-/** 侧栏图标（16px 线性，stroke 继承 currentColor；DS3 克制装饰） */
+/** 侧栏图标（16px 线性，stroke 继承 currentColor；DS3 克制装饰）。
+ *  IA（2026-10-10）：上部 = 功能（休息/锁屏/统计/皮肤），左下角 = 设置 */
 const navItems = computed(() => [
   { id: "rest" as const, label: t("navRest") },
   { id: "lock" as const, label: t("lockTitle") },
   { id: "stats" as const, label: t("navStats") },
   { id: "skin" as const, label: t("navSkin") },
-  { id: "general" as const, label: t("navGeneral") },
 ]);
 </script>
 
@@ -308,8 +317,19 @@ const navItems = computed(() => [
             <circle cx="10.2" cy="6.4" r=".9" />
             <circle cx="6.4" cy="10.2" r=".9" />
           </svg>
+          {{ item.label }}
+        </button>
+      </nav>
+
+      <div class="side-foot">
+        <!-- 左下角：设置入口（全部配置归拢于设置页；语言移入通用卡） -->
+        <button
+          type="button"
+          class="nav-item"
+          :class="{ active: activeModule === 'settings' }"
+          @click="activeModule = 'settings'"
+        >
           <svg
-            v-else
             viewBox="0 0 16 16"
             fill="none"
             stroke="currentColor"
@@ -320,26 +340,8 @@ const navItems = computed(() => [
             <circle cx="8" cy="8" r="2.2" />
             <path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4" />
           </svg>
-          {{ item.label }}
+          {{ t("setting") }}
         </button>
-      </nav>
-
-      <div class="side-foot">
-        <!-- 保存 chip 固定槽位（§5.1.2）：chip 出现/消失不推动语言下拉 -->
-        <div class="saved-slot" role="status" aria-live="polite">
-          <Transition name="fade">
-            <span v-if="justSaved" class="saved-chip">{{ t("saved") }}</span>
-          </Transition>
-        </div>
-        <p class="autosave-hint">{{ t("modifyAutosave") }}</p>
-        <select
-          class="side-lang"
-          :value="currentLanguage"
-          :aria-label="t('language')"
-          @change="changeLanguage(($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="lan in languages" :key="lan" :value="lan">{{ t(lan) }}</option>
-        </select>
         <span class="copyright">
           <a
             class="copyright-link"
@@ -355,15 +357,10 @@ const navItems = computed(() => [
     <!-- 右侧：当前模块页（v-show 保持各页状态与滚动位置，切换零开销） -->
     <main class="pane">
       <div v-show="activeModule === 'rest'" class="module">
-        <RestModule :settings="settings" :tick="tick" @commit="scheduleSave" @rest-now="restNow" />
+        <RestModule :settings="settings" :tick="tick" @rest-now="restNow" />
       </div>
       <div v-show="activeModule === 'lock'" class="module">
-        <LockModule
-          :settings="settings"
-          :lock-settings="lockSettings"
-          @commit="scheduleSave"
-          @lock-commit="scheduleLockSave"
-        />
+        <LockModule :lock-settings="lockSettings" @lock-now="lockNow" />
       </div>
       <div v-show="activeModule === 'stats'" class="module">
         <StatsCard />
@@ -371,8 +368,18 @@ const navItems = computed(() => [
       <div v-show="activeModule === 'skin'" class="module">
         <SkinModule />
       </div>
-      <div v-show="activeModule === 'general'" class="module">
-        <GeneralModule :settings="settings" @commit="scheduleSave" @reset="resetDefaults" />
+      <div v-show="activeModule === 'settings'" class="module">
+        <SettingsModule
+          :settings="settings"
+          :lock-settings="lockSettings"
+          :languages="languages"
+          :current-language="currentLanguage"
+          :saved="justSaved"
+          @commit="scheduleSave"
+          @lock-commit="scheduleLockSave"
+          @reset="resetDefaults"
+          @change-language="changeLanguage"
+        />
       </div>
     </main>
   </div>
@@ -440,58 +447,12 @@ const navItems = computed(() => [
   flex-direction: column;
   gap: var(--sp-2);
   padding: var(--sp-2) 10px 2px;
-}
-/* 保存 chip 固定槽位：恒占高度，chip 出入只发生在槽内 */
-.saved-slot {
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-.saved-chip {
-  font-size: var(--fs-hint);
-  font-weight: var(--fw-medium);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  padding: 3px 10px;
-  border-radius: var(--r-full);
-  white-space: nowrap;
-}
-.autosave-hint {
-  margin: 0;
-  font-size: var(--fs-caption);
-  color: var(--text-3);
-  text-align: right;
-}
-.side-lang {
-  appearance: none;
-  height: var(--control-h-sm);
-  padding: 0 22px 0 10px;
-  font-size: var(--fs-hint);
-  font-family: inherit;
-  color: var(--text-2);
-  background-color: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
-    linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
-  background-position:
-    calc(100% - 12px) calc(50% - 1px),
-    calc(100% - 7px) calc(50% - 1px);
-  background-size: 5px 5px;
-  background-repeat: no-repeat;
-  transition:
-    color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-.side-lang:hover {
-  color: var(--text);
-  border-color: var(--accent);
+  border-top: 1px solid var(--border);
 }
 .copyright {
   font-size: var(--fs-caption);
   color: var(--text-3);
+  text-align: center;
 }
 /* 版权行 → 作者站点链接：默认同弱化色，悬停浮出强调色提示可点 */
 .copyright-link {
@@ -519,13 +480,5 @@ const navItems = computed(() => [
 }
 .module {
   min-height: 100%;
-}
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity var(--dur-slow) var(--ease);
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 </style>
