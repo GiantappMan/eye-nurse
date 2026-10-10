@@ -47,6 +47,8 @@ pub struct SkinColors {
     pub bar_check_hover_bg: String,
     pub mask_bg: String,
     pub mask_fg: String,
+    /// mask chrome 错误提示色（DS3 §5.3-5/§6：#FF8B8B 对 classic 底 8.15:1）
+    pub mask_error: String,
 }
 
 /// 悬浮条侧配色子集（可选键；磁盘/自定义的**部分**定义形态）
@@ -70,6 +72,7 @@ pub struct BarSkinDef {
 pub struct MaskSkinDef {
     pub bg: Option<String>,
     pub fg: Option<String>,
+    pub error: Option<String>,
 }
 
 /// 部分皮肤定义（磁盘 JSON 与用户自定义的存储形态；缺键 = 回退 classic）
@@ -375,7 +378,8 @@ pub fn is_valid_skin_id_pub(id: &str) -> bool {
 // classic 真源 + 内置预设
 // ============================================================================
 
-/// 经典皮肤：与 `crates/eyenurse-app/src/ui/theme.json` 同值（v2 颜色表，
+/// 经典皮肤：与 `crates/eyenurse-app/src/ui/theme.json` 同值（v2 颜色表为基准，
+/// bar 文字两键按 DS3 §6 校准：idle=#1A1A1A 软黑、暂停末态 to=#FF5252 过 WCAG AA；
 /// app 侧 `theme.rs` 的锚点测试与 build.rs 校验共同防漂移）
 pub fn classic() -> SkinColors {
     SkinColors {
@@ -385,13 +389,14 @@ pub fn classic() -> SkinColors {
         bar_progress_fill: "#3AC32E".into(),
         bar_progress_from: "#ECC071".into(),
         bar_progress_to: "#3E0D0D".into(),
-        bar_text_idle: "#000000".into(),
+        bar_text_idle: "#1A1A1A".into(),
         bar_text_from: "#080808".into(),
-        bar_text_to: "#F40000".into(),
+        bar_text_to: "#FF5252".into(),
         bar_check_glyph: "#444444".into(),
         bar_check_hover_bg: "#FFFFFF".into(),
         mask_bg: "#141418".into(),
         mask_fg: "#EEEEF2".into(),
+        mask_error: "#FF8B8B".into(),
     }
 }
 
@@ -543,6 +548,7 @@ pub fn resolve(def: &SkinDef, classic: &SkinColors) -> SkinColors {
         bar_check_hover_bg: pick(&def.bar.check_hover_bg, &classic.bar_check_hover_bg),
         mask_bg: pick(&def.mask.bg, &classic.mask_bg),
         mask_fg: pick(&def.mask.fg, &classic.mask_fg),
+        mask_error: pick(&def.mask.error, &classic.mask_error),
     }
 }
 
@@ -712,9 +718,13 @@ mod tests {
         assert_eq!(c.bar_progress_fill, "#3AC32E");
         assert_eq!(c.bar_progress_from, "#ECC071");
         assert_eq!(c.bar_progress_to, "#3E0D0D");
-        assert_eq!(c.bar_text_to, "#F40000");
+        // DS3 §6 校准值（对 #3E0D0D 填充 5.19:1，原 #F40000 仅 3.82）
+        assert_eq!(c.bar_text_to, "#FF5252");
+        assert_eq!(c.bar_text_idle, "#1A1A1A");
         assert_eq!(c.mask_bg, "#141418");
         assert_eq!(c.mask_fg, "#EEEEF2");
+        // DS3 §5.3-5/§6：mask chrome 错误色入真源（对 #141418 8.15:1）
+        assert_eq!(c.mask_error, "#FF8B8B");
     }
 
     #[test]
@@ -734,6 +744,7 @@ mod tests {
         assert_eq!(c.bar_progress_fill, "#FF6B35"); // 规范化大写
         assert_eq!(c.bar_progress_bg, "#F5F5DC"); // 非法回退
         assert_eq!(c.mask_bg, "#141418"); // 缺键回退
+        assert_eq!(c.mask_error, "#FF8B8B"); // 缺键回退
     }
 
     #[test]

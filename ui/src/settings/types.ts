@@ -61,6 +61,8 @@ export interface SkinMeta {
   id: string;
   name: string;
   name_en: string;
+  /** 包内皮肤（Tier1 = manifest.author）；内置包由后端填「巨应君」，缺省为空 */
+  author?: string;
   colors: SkinColors;
   has_bar: boolean;
   has_lock: boolean;
@@ -102,6 +104,7 @@ export interface SkinColors {
   bar_check_hover_bg: string;
   mask_bg: string;
   mask_fg: string;
+  mask_error: string;
 }
 
 /** 自定义配色载荷（set_custom_skin；嵌套结构与 Rust SkinDef 一致，缺省键回退经典） */
@@ -122,5 +125,6 @@ export interface SkinDefPayload {
   mask: {
     bg?: string | null;
     fg?: string | null;
+    error?: string | null;
   };
 }

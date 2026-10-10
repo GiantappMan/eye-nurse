@@ -2,11 +2,15 @@
 <!-- devtest 测试皮肤 · 锁屏表面：协议验证专用。紫红测试条纹 + 实时状态转储，
      把桥上能看到的一切画在脸上，肉眼即可核对：
      - state：remainingMs / resting / locked / hasPassword（1Hz 刷新）；
-     - texts：键数量（get_texts 整包到达即 +）；
+     - texts：键数量（get_texts 整包到达即 +，只计数不显示值——无键名泄漏面）；
      - colors：mask_bg 实际值（纯配色皮肤切到 devtest 时应跟随变化）；
-     - chrome 摆放：虚线占位框画在 manifest 声明的坐标上——宿主渲染的密码框
-       （y=74%）与解锁按钮（y=88%）应与虚线框重合（对齐 = chrome 协议通过）。
-     未锁定时点击任意处 = 结束休息（endRest）；已锁定必须走宿主密码框。 -->
+     - chrome 摆放：虚线占位框画在 manifest 声明的坐标上，尺寸镜像
+       mask.css 宿主控件实际几何（密码框 220×40、解锁钮 44×44）——宿主渲染的
+       密码框（y=74%）与解锁按钮（y=88%）应与虚线框重合（对齐 = chrome 协议通过）。
+     未锁定时点击任意处 = 结束休息（endRest）；已锁定必须走宿主密码框。
+     DS3 基本对齐（docs/design-system-v3.md §5.5.6）：转储框预置 7 行骨架
+     （首帧即终态尺寸，state 到达不跳动）、时间零填充不随 locale 漂移、
+     字重 ≤600、圆角入档（10→12px）。 -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -36,7 +40,7 @@
         top: 18px;
         left: 24px;
         font-size: 22px;
-        font-weight: 700;
+        font-weight: 600;
         letter-spacing: 4px;
         color: #ff41f8;
       }
@@ -47,7 +51,7 @@
         right: 0;
         text-align: center;
         font-size: 110px;
-        font-weight: 700;
+        font-weight: 600;
         letter-spacing: 6px;
         text-shadow: 0 0 28px rgb(118 255 3 / 0.35);
       }
@@ -57,9 +61,9 @@
         top: 50%;
         transform: translate(-50%, -50%);
         min-width: 340px;
-        padding: 14px 18px;
+        padding: 12px 16px; /* = --sp-3 / --sp-4（4pt 网；devtest 不镜像 token 表，直接写吸附值） */
         border: 1px solid #ff41f8;
-        border-radius: 8px;
+        border-radius: 12px;
         background: rgb(13 0 26 / 0.82);
         font-size: 13px;
         line-height: 1.7;
@@ -68,13 +72,14 @@
       #dump b {
         color: #ff41f8;
       }
-      /* chrome 占位对齐框（坐标 = 本皮肤 manifest 的 chrome 声明） */
+      /* chrome 占位对齐框（坐标 = 本皮肤 manifest 的 chrome 声明；
+         尺寸 = ui/src/mask/mask.css 宿主控件实际几何，边框重合才算协议通过） */
       .chrome-hint {
         position: absolute;
         left: 50%;
         transform: translate(-50%, -50%);
         border: 1px dashed rgb(255 65 248 / 0.55);
-        border-radius: 10px;
+        border-radius: 12px;
         color: rgb(255 65 248 / 0.8);
         font-size: 11px;
         letter-spacing: 2px;
@@ -84,20 +89,27 @@
       }
       #pwd-hint {
         top: 74%;
-        width: 248px;
-        height: 44px;
+        width: 220px; /* = mask.css #skin-pwd 实际宽 */
+        height: 40px; /* = mask.css #skin-pwd 实际高 */
       }
       #unlock-hint {
         top: 88%;
-        width: 60px;
-        height: 32px;
+        width: 44px; /* = mask.css #unlock 44×44 命中区（tokens.mask.unlockHit） */
+        height: 44px;
       }
     </style>
   </head>
   <body>
     <div id="tag">DEV-TEST LOCK</div>
     <div id="clock">--:--</div>
-    <div id="dump">waiting state…</div>
+    <!-- 骨架行数/结构与 render() 的 7 行输出一致：state 到达前后盒子尺寸不变 -->
+    <div id="dump"><b>ESP-1 state</b> (--)
+remainingMs : -
+resting     : -
+locked      : -
+hasPassword : -
+texts keys  : -
+colors.mask_bg : -</div>
     <div id="pwd-hint" class="chrome-hint">PWD @ 50%,74%</div>
     <div id="unlock-hint" class="chrome-hint">UNLOCK @ 50%,88%</div>
     <script src="/eyenurse-api.js"></script>
@@ -121,8 +133,9 @@
         function render() {
           if (!state) return;
           var keys = Object.keys(texts).length;
+          var now = new Date();
           var lines = [
-            "<b>ESP-1 state</b> (" + new Date().toLocaleTimeString() + ")",
+            "<b>ESP-1 state</b> (" + two(now.getHours()) + ":" + two(now.getMinutes()) + ":" + two(now.getSeconds()) + ")",
             "remainingMs : " + state.remainingMs,
             "resting     : " + state.resting,
             "locked      : " + state.locked,

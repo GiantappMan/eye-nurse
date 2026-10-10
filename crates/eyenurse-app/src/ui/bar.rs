@@ -46,8 +46,31 @@ pub const BAR_TITLE: &str = "CountdownWindow";
 const LOGICAL_WIDTH: f64 = 80.0;
 const LOGICAL_HEIGHT: f64 = 20.0;
 /// 复选命中区宽（18×18 复选 + 1px 右边距，来自 TopMostCheckBox 样式 / egui 版
-/// `rect.right - 18 - 1`，B4/B5）
+/// `rect.right - 18 - 1`，B4/B5）——交互契约（命中/tooltip/拖动分界），不改
 const CHECK_LOGICAL: f64 = 19.0;
+
+// —— 外观度量 token（DS3 §5.6-6：绘制不再出现内联魔法数；改外观只动这里。
+//    单位 = 逻辑 DIP，经 scale_px 按 DPI 换算；间距 4pt 网吸附，
+//    TEXT_ICON_GAP=6 为 DS3 §5.6-5 明定的唯一例外）——
+/// 主文字字高（DS3 --fs-body 13px；barweb 壳页 tokens.bar 同基准：20px 条 → 13px）
+const FONT_SIZE: f64 = 13.0;
+/// 暂停时钟图标半径（⌀13 = 字高：装饰不压过主数据，层级 1:1，DS3 §5.6-5；
+/// v2 为 ⌀15 > 文字 13 的层级倒置，已修）
+const ICON_RADIUS: f64 = 6.5;
+/// 图标左缘留白（= DS3 --sp-1；沿用 v2 XAML Margin 4）
+const ICON_MARGIN: f64 = 4.0;
+/// 暂停时图标与文字的最小分离（DS3 §5.6-5：文字矩形从图标右缘再让 6 逻辑px，
+/// 取代 v2 全宽居中压到图标边上的构图）
+const TEXT_ICON_GAP: f64 = 6.0;
+/// 复选框本体边长（v2 12×12 方框自绘）
+const CHECK_BOX: f64 = 12.0;
+/// 复选框在命中区内的左内缩（v2 3.5 → 4.0 入 4pt 网）
+const CHECK_INSET: f64 = 4.0;
+/// 复选悬停底色块边长（v2 18 → 16：20px 条身上下各留 2px 米边，DS3 §5.6-6，
+/// 消灭「白块贴满条身像补丁」的硬切观感；v2 XAML 原值 18 仅存于注释史）
+const CHECK_SIDE: f64 = 16.0;
+/// 悬停底色块距窗缘/命中区边缘的发丝内缩（物理 px；v2 硬编码 ±1 的命名化）
+const HAIRLINE_PX: i32 = 1;
 
 // —— CoreLoop → bar 的 WM_APP 控制消息（§6.4）——
 pub const WM_APP_TOPMOST: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 1; // wparam: 1=置顶 0=取消
@@ -270,6 +293,30 @@ fn dpi_at_point(_left: f64, _top: f64) -> u32 {
     96
 }
 
+/// DWM 圆角偏好（DS3 §5.6-4）：`DWMWA_WINDOW_CORNER_PREFERENCE`(33) = ROUND(2)，
+/// Win11 给 WS_POPUP 直角条上系统圆角 + 标准投影（分离深度线索）；Win10 的旧
+/// dwmapi 不认识该属性 → 返回错误码，静默忽略（保持直角回退）。
+/// windows crate 未启用 Win32_Graphics_Dwm feature——与文件头 WM_MOUSELEAVE /
+/// tooltip 常量同款「值稳定、就地声明」策略，免为一个调用拖入整个 feature。
+#[cfg(target_os = "windows")]
+fn set_rounded_corners(hwnd: isize) {
+    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+    const DWMWCP_ROUND: u32 = 2;
+    #[link(name = "dwmapi")]
+    extern "system" {
+        fn DwmSetWindowAttribute(hwnd: isize, attr: u32, value: *const u32, size: u32) -> i32;
+    }
+    // SAFETY：仅设置本进程窗口的 DWM 圆角偏好；失败（Win10）只丢圆角，不致命
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &DWMWCP_ROUND,
+            std::mem::size_of::<u32>() as u32,
+        );
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn bar_thread_main(
     cmd_tx: Sender<CoreMsg>,
@@ -341,6 +388,9 @@ fn bar_thread_main(
         // Alt-Tab 隐藏补丁（§5.4/B7：skip_taskbar 类机制只删任务栏按钮，这里同函数复用）
         crate::win::ensure_toolwindow(hwnd.0 as isize);
 
+        // Win11 圆角 + DWM 投影（DS3 §5.6-4；Win10 静默忽略保持直角）
+        set_rounded_corners(hwnd.0 as isize);
+
         // tooltip 控件（§6.2/B4：复选命中区显示 `always_on_top` 文案）。
         // 缓冲先于 ToolInfoW 存在且地址稳定，lpszText 才能长期指向它。
         let mut tooltip_text: Box<[u16]> = vec![0u16; TOOLTIP_TEXT_CCH].into_boxed_slice();
@@ -405,7 +455,7 @@ fn create_bar_font(dpi: u32) -> isize {
     // SAFETY：GDI 字体对象，由 WM_NCDESTROY 释放
     unsafe {
         let h = CreateFontW(
-            -(13.0 * dpi as f64 / 96.0).round() as i32, // 负值 = 字符高度
+            -(FONT_SIZE * dpi as f64 / 96.0).round() as i32, // 负值 = 字符高度
             0,
             0,
             0,
@@ -632,9 +682,9 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
     use windows::Win32::Graphics::Gdi::{
         BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
         CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect,
-        GetStockObject, LineTo, MoveToEx, Rectangle, SelectObject, SetBkMode, SetTextColor,
-        DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBITMAP, HGDIOBJ, NULL_BRUSH, PAINTSTRUCT, PS_SOLID,
-        SRCCOPY, TRANSPARENT,
+        FrameRect, GetStockObject, LineTo, MoveToEx, Rectangle, SelectObject, SetBkMode,
+        SetTextColor, DT_CALCRECT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBITMAP, HGDIOBJ,
+        NULL_BRUSH, PAINTSTRUCT, PS_SOLID, SRCCOPY, TRANSPARENT,
     };
     use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
@@ -672,41 +722,79 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
         FillRect(mem, &rc, bg);
         let _ = DeleteObject(bg.into());
 
-        // 2) 进度前景：remaining/interval，满→空（B3；interval=0 全宽，同 egui 守卫）
+        // 文案与字体先行：暂停警示需要按实测文字宽度为填充让位（见 2)）
+        let text = if bar.resting {
+            bar.texts.resting.clone()
+        } else {
+            format_mmss(paused.unwrap_or(bar.countdown))
+        };
+        let mut wtext: Vec<u16> = text.encode_utf16().collect();
+        SetBkMode(mem, TRANSPARENT);
+        let old_font = SelectObject(mem, HGDIOBJ(state.font as _));
+
+        // 2) 进度前景（B3；interval=0 全宽，同 egui 守卫）：
+        //    - 休息帧（含暂停+休息）填充不吃渐变，回 progress_fill 纯色——对齐
+        //      DS3 §5.4-1 barweb 语义（渐变是暂停专属表达），同帧只保留一套色彩
+        //      系统（差异 #6 的填充侧收口；否则 idle 深字会叠上渐变深棕填充）；
+        //    - 暂停警示填充设最小覆盖宽度（复审 (c)）：≥ 文字块 + ICON_MARGIN，
+        //      mm:ss 与时钟图标恒落在同一 ramp 场上——文字与填充由同一插值 t 配对
+        //      （起点 9.0:1 → 末态 #FF5252/#3E0D0D 5.19:1），杜绝文字落米色底
+        //      （#FF5252 对 #F5F5DC 仅 2.88:1，比 v2 #F40000 的 3.92 更差的回退）。
+        //      覆盖不足时 meter 让位于警示可读性（暂停中读数冻结，时长由 mm:ss 表达）。
+        let warning = paused.is_some() && !bar.resting;
         let percent = if bar.interval.is_zero() {
             1.0
         } else {
             (bar.countdown.as_secs_f64() / bar.interval.as_secs_f64()).clamp(0.0, 1.0)
         };
         let fill = match paused_secs {
-            // 暂停：进度前景 from→to 按 PausedTime 渐变（480s 走满，Q8）
-            Some(s) => theme::ramp(rgb(skin.progress_from), rgb(skin.progress_to), s),
-            None => rgb(skin.progress_fill),
+            Some(s) if !bar.resting => {
+                theme::ramp(rgb(skin.progress_from), rgb(skin.progress_to), s)
+            }
+            _ => rgb(skin.progress_fill),
         };
+        // 暂停文字矩形左缘（图标让位后的文字区起点，与 4) 的 DT_CENTER 同式）
+        let paused_text_left = scale_px(ICON_MARGIN, dpi)
+            + 2 * scale_px(ICON_RADIUS, dpi)
+            + scale_px(TEXT_ICON_GAP, dpi);
+        let mut fill_right = (cw as f64 * percent).round() as i32;
+        if warning {
+            let mut measure = RECT::default();
+            DrawTextW(mem, &mut wtext, &mut measure, DT_CALCRECT | DT_SINGLELINE);
+            let text_left = paused_text_left + (cw - paused_text_left - measure.right).max(0) / 2;
+            fill_right = fill_right
+                .max(text_left + measure.right + scale_px(ICON_MARGIN, dpi))
+                .min(cw);
+        }
         let fill_brush = CreateSolidBrush(colorref(fill));
         let fill_rect = RECT {
             left: 0,
             top: 0,
-            right: (cw as f64 * percent).round() as i32,
+            right: fill_right,
             bottom: ch,
         };
         FillRect(mem, &fill_rect, fill_brush);
         let _ = DeleteObject(fill_brush.into());
 
-        // 文字色：暂停时 from→to 渐变（Q8）；一致性差异 #6：休息文案不吃渐变
-        let text_color = match paused_secs {
+        // 前景色（文字与时钟图标**共用同一守卫**，一帧只有一套色彩系统——
+        // 一致性差异 #6 关闭）：暂停时 from→to 渐变（Q8）；休息文案不吃渐变，
+        // 连同图标一起回 idle（暂停+休息帧 = 单色 idle，无同帧双色）。
+        // 渐变分支的底已由 2) 保证是同一 t 的 ramp 场（文字色与其底配对）
+        let fg = match paused_secs {
             Some(s) if !bar.resting => theme::ramp(rgb(skin.text_from), rgb(skin.text_to), s),
             _ => rgb(skin.text_idle),
         };
 
-        // 3) 暂停态时钟图标（左侧 15×15 逻辑：表圈 + 两针，等价 egui paint_clock_icon；
-        //    Foreground 绑 txt.Foreground = 暂停渐变色，B9）
+        // 3) 暂停态时钟图标（左侧 ⌀13 = 字高：表圈 + 两针，等价 egui paint_clock_icon；
+        //    Foreground 绑 txt.Foreground = 同一前景守卫，B9。装饰不再大于主数据文字）
         if paused.is_some() {
-            let r = scale_px(7.5, dpi);
-            let cx = scale_px(4.0, dpi) + r; // XAML Margin="4,0,0,0"
+            let r = scale_px(ICON_RADIUS, dpi);
+            let cx = scale_px(ICON_MARGIN, dpi) + r; // XAML Margin="4,0,0,0"
             let cy = ch / 2;
             let old_brush = SelectObject(mem, GetStockObject(NULL_BRUSH));
-            let pen = CreatePen(PS_SOLID, 1i32.max((dpi / 48) as i32), colorref(text_color));
+            // DPI 描边统一（DS3 §5.6-1）：与复选框同式 96dpi→1px、200%→2px，
+            // 删除时钟特例 dpi/48（150%→3px、200%→4px 的失衡增粗）
+            let pen = CreatePen(PS_SOLID, 1i32.max((dpi / 96) as i32), colorref(fg));
             let old_pen = SelectObject(mem, pen.into());
             let _ = Ellipse(mem, cx - r, cy - r, cx + r, cy + r);
             let _ = MoveToEx(mem, cx, cy, None);
@@ -718,17 +806,16 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             let _ = DeleteObject(pen.into());
         }
 
-        // 4) 居中文字：休息文案 / PausedTime / mm:ss（B2/B10/D6）
-        let text = if bar.resting {
-            bar.texts.resting.clone()
-        } else {
-            format_mmss(paused.unwrap_or(bar.countdown))
-        };
-        let mut wtext: Vec<u16> = text.encode_utf16().collect();
-        SetBkMode(mem, TRANSPARENT);
-        SetTextColor(mem, colorref(text_color));
-        let old_font = SelectObject(mem, HGDIOBJ(state.font as _));
+        // 4) 文字：休息文案 / PausedTime / mm:ss（B2/B10/D6）。
+        //    暂停构图（DS3 §5.6-5）：图标让位——文字矩形 = 图标右缘 + TEXT_ICON_GAP
+        //    到右缘，在剩余空间内居中（v2 全宽 DT_CENTER 把 mm:ss 压向图标、重心
+        //    偏右的构图废除）；常态/休息无图标，仍全宽居中。
+        //    （文案与字体已在 2) 前构建/选入，measure 先行）
+        SetTextColor(mem, colorref(fg));
         let mut text_rect = rc;
+        if paused.is_some() {
+            text_rect.left = paused_text_left;
+        }
         DrawTextW(
             mem,
             &mut wtext,
@@ -736,29 +823,31 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             DT_CENTER | DT_VCENTER | DT_SINGLELINE,
         );
 
-        // 5) 置顶复选（18×18 + 1px 右边距；悬停浮现 + 0.7s 宽限后隐藏，B4。
+        // 5) 置顶复选（命中区 CHECK_LOGICAL=19 不变；悬停浮现 + 0.7s 宽限后隐藏，B4。
         //    0.3s 淡入淡出为观感增强项，先交付硬显隐，§6.2/§13）
         if state.check_shown {
-            let side = scale_px(18.0, dpi);
+            let side = scale_px(CHECK_SIDE, dpi); // 16：20px 条身上下各留 2px 米边
             let zx = cw - scale_px(CHECK_LOGICAL, dpi);
             let cy = ch / 2;
             if state.check_hovered {
-                // 悬停底色（经典皮肤 = #FFFFFF，v2 CheckBox.xaml 模板 MouseOver：仅复选上悬停）
+                // 悬停底色（经典皮肤 = #FFFFFF，v2 CheckBox.xaml 模板 MouseOver：仅复选上悬停；
+                // 块高 16 不再贴满 20px 条身——上下米边让白块成为「状态」而非「补丁」）
                 let check_bg = CreateSolidBrush(COLORREF(skin.check_hover_bg));
                 let hover_rect = RECT {
-                    left: zx + 1,
+                    left: zx + HAIRLINE_PX,
                     top: cy - side / 2,
-                    right: cw - 1,
+                    right: cw - HAIRLINE_PX,
                     bottom: cy + side / 2,
                 };
                 FillRect(mem, &hover_rect, check_bg);
                 let _ = DeleteObject(check_bg.into());
             }
             // 复选框本体：12×12 方框 + 勾（v2 用 40×40 PNG 缩放为 18 显示，自绘近似）
-            let box_side = scale_px(12.0, dpi);
-            let bl = zx + scale_px(3.5, dpi);
+            let box_side = scale_px(CHECK_BOX, dpi);
+            let bl = zx + scale_px(CHECK_INSET, dpi);
             let bt = cy - box_side / 2;
-            let pen = CreatePen(PS_SOLID, 1, COLORREF(skin.check_glyph));
+            // DPI 描边统一（DS3 §5.6-1）：与时钟同式，v2 恒 1px 在高分屏退化发丝线
+            let pen = CreatePen(PS_SOLID, 1i32.max((dpi / 96) as i32), COLORREF(skin.check_glyph));
             let old_pen = SelectObject(mem, pen.into());
             let old_brush = SelectObject(mem, GetStockObject(NULL_BRUSH));
             let _ = Rectangle(mem, bl, bt, bl + box_side, bt + box_side);
@@ -776,6 +865,18 @@ fn on_paint(hwnd: windows::Win32::Foundation::HWND, state: &BarState) {
             SelectObject(mem, old_pen);
             let _ = DeleteObject(pen.into());
         }
+
+        // 6) 1px 收边描边（DS3 §5.6-4）：底色逐通道 ×0.9（整除截断；classic 米色
+        //    #F5F5DC → #DCDCC6）——相近色系壁纸上给出分离线，近似色皮肤同吃此规则
+        //    （按运行时底色推导而非写死 #DCDCC6）。Win11 圆角由 DWM 裁掉方角描边。
+        let stroke = rgb(skin.progress_bg);
+        // ×0.9 必须在宽整型里算再截回 u8：245u8*9 直接乘会溢出（debug 下 panic，
+        // wndproc 是 extern "system" → 不可展开 → abort/0xc0000409，冒烟教训）
+        let darken = |c: u8| ((c as u16 * 9 / 10) as u8);
+        let stroke_dark = theme::Rgb::new(darken(stroke.r), darken(stroke.g), darken(stroke.b));
+        let edge_brush = CreateSolidBrush(colorref(stroke_dark));
+        let _ = FrameRect(mem, &rc, edge_brush);
+        let _ = DeleteObject(edge_brush.into());
 
         // 一次性上屏，释放离屏资源
         let _ = BitBlt(hdc, 0, 0, cw, ch, Some(mem), 0, 0, SRCCOPY);

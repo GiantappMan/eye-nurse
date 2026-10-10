@@ -1,26 +1,30 @@
 <script setup lang="ts">
-// 设置窗根组件（v3.1 重设计）。
+// 设置窗根组件（方案 C · 侧边栏模块导航，2026-10-10 用户拍板；取代 v3 的一页流式布局）：
+// 左侧模块列表（休息 / 锁屏 / 统计 / 皮肤 / 通用），右侧只显示当前模块——
+// 每个模块独占一页互不掺杂；语言切换与版权收进侧栏底部，不再设页内顶栏
+// （原生标题栏已承担品牌名）。独立「皮肤中心」窗口同日废弃，皮肤作为模块页迁入。
 //
-// 布局：放弃 v2 的可折叠侧栏 + 空页头条，改为「顶栏（品牌 + 保存态 + 语言切换）
-// + 单列内容」；唯一页面即设置页（v2 的 home 占位页无存在价值，一并去除）。
 // 数据管线与事件接线保持不变：
 //   控件提交 → 300ms 防抖 → invoke("set_settings") → 回包整体合并；
 //   i18n-changed → 重取文案；settings-changed → 非保存中重取设置；
 //   settings-shown → 重同步注册表实测勾选态；settings-closing → flush 防抖保存；
-//   eyenurse://tick → 页眉 Hero 实时倒计时/状态（core.rs 每拍下发）。
+//   eyenurse://tick → 休息页 Hero 实时倒计时/状态（core.rs 每拍下发）。
+// 皮肤数据管线（清单/预览/自定义色）整体归属 SkinModule 自管。
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { onMounted, onUnmounted, reactive, ref, toRaw } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, toRaw } from "vue";
 import { currentLanguage, languages, loadLanguageList, loadTexts, t } from "./i18n";
 import {
   emptyLockSettings,
   emptySettings,
   type LockSettingsDto,
   type SettingsDto,
-  type SkinMeta,
-  type SkinsDto,
 } from "./types";
-import SettingsView from "./components/SettingsView.vue";
+import RestModule from "./components/RestModule.vue";
+import LockModule from "./components/LockModule.vue";
+import StatsCard from "./components/StatsCard.vue";
+import SkinModule from "./components/SkinModule.vue";
+import GeneralModule from "./components/GeneralModule.vue";
 
 /** 防抖窗口（v2 Settings.vue：lodash/debounce 300ms，清单 I3） */
 const SAVE_DEBOUNCE_MS = 300;
@@ -34,9 +38,12 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const lockSettings = reactive<LockSettingsDto>(emptyLockSettings());
 let lockSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 保存成功的短暂提示（顶栏 ✓，1.6s 后淡出） */
+/** 保存成功的短暂提示（侧栏底部固定槽位，1.6s 后淡出） */
 const justSaved = ref(false);
 let savedFadeTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 当前模块（方案 C：单选互斥，默认休息；不做持久化——每次打开回到休息页） */
+const activeModule = ref<"rest" | "lock" | "stats" | "skin" | "general">("rest");
 
 /** 页眉 Hero 实时状态（eyenurse://tick，core.rs 每拍下发） */
 interface TickPayload {
@@ -45,37 +52,6 @@ interface TickPayload {
   resting: boolean;
 }
 const tick = ref<TickPayload | null>(null);
-
-// —— 皮肤（ESP-1：选择/编辑在独立皮肤中心窗口；本页只显示当前皮肤摘要）——
-const skins = ref<SkinMeta[]>([]);
-const currentSkinId = ref("");
-/** 当前皮肤展示名（按语言；卡片摘要用） */
-const currentSkinName = ref("");
-
-/** 清单一次取全（启动与 skin-changed 共用；skincenter 窗口自管编辑管线） */
-async function refreshSkins(): Promise<void> {
-  try {
-    const dto = await invoke<SkinsDto>("get_skins");
-    skins.value = dto.skins;
-    currentSkinId.value = dto.current;
-    const meta = dto.skins.find((s) => s.id === dto.current);
-    if (meta) {
-      currentSkinName.value =
-        meta.id === "custom"
-          ? t("skinCustom")
-          : currentLanguage.value === "zh"
-            ? meta.name
-            : meta.name_en;
-    }
-  } catch (e) {
-    console.error("get_skins 失败", e);
-  }
-}
-
-/** 打开皮肤中心窗口（独立常驻，关闭即藏） */
-function openSkinCenter(): void {
-  invoke("open_skin_center").catch((e) => console.error("open_skin_center 失败", e));
-}
 
 // —— 保存管线 ——
 
@@ -218,13 +194,12 @@ async function syncAutostart(): Promise<void> {
 const unlisteners: Array<() => void> = [];
 
 onMounted(async () => {
-  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）+ 锁屏设置 + 皮肤
+  // 启动依赖一次取全：整包文案 + 语言清单 + 设置（含注册表实测覆盖）+ 锁屏设置
   await Promise.all([
     loadTexts().catch((e) => console.error("get_texts 失败", e)),
     loadLanguageList().catch((e) => console.error("语言清单加载失败", e)),
     refreshFromBackend(),
     refreshLockSettings(),
-    refreshSkins(),
   ]);
   unlisteners.push(
     await listen("eyenurse://i18n-changed", () => {
@@ -245,60 +220,142 @@ onMounted(async () => {
     await listen<TickPayload>("eyenurse://tick", (e) => {
       tick.value = e.payload;
     }),
-    await listen("eyenurse://skin-changed", () => {
-      // 清单/当前名重取（custom 槽首现/磁盘皮肤增删/选中变化）
-      void refreshSkins();
-    }),
   );
 });
 
 onUnmounted(() => {
   for (const off of unlisteners.splice(0)) off();
 });
+
+/** 侧栏图标（16px 线性，stroke 继承 currentColor；DS3 克制装饰） */
+const navItems = computed(() => [
+  { id: "rest" as const, label: t("navRest") },
+  { id: "lock" as const, label: t("lockTitle") },
+  { id: "stats" as const, label: t("navStats") },
+  { id: "skin" as const, label: t("navSkin") },
+  { id: "general" as const, label: t("navGeneral") },
+]);
 </script>
 
 <template>
   <div class="app-root">
-    <!-- 顶栏：品牌 + 保存成功提示 + 语言切换 -->
-    <header class="topbar">
-      <div class="brand">
-        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 5C6.5 5 2.6 9.6 1.5 12c1.1 2.4 5 7 10.5 7s9.4-4.6 10.5-7C21.4 9.6 17.5 5 12 5Z"
-            class="mark-eye"
-          />
-          <circle cx="12" cy="12" r="3.2" class="mark-pupil" />
-        </svg>
-        <span class="brand-name">{{ t("app_name") }}</span>
-      </div>
-      <div class="top-right">
-        <Transition name="fade">
-          <span v-if="justSaved" class="saved-chip">✓ {{ t("saved") }}</span>
-        </Transition>
+    <!-- 模块①：侧边栏（方案 C）——模块列表 + 底部（保存提示槽 / 语言 / 版权） -->
+    <aside class="sidebar">
+      <nav class="nav" :aria-label="t('setting')">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          type="button"
+          class="nav-item"
+          :class="{ active: activeModule === item.id }"
+          @click="activeModule = item.id"
+        >
+          <svg
+            v-if="item.id === 'rest'"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="6.3" />
+            <path d="M8 4.5V8l2.4 1.6" />
+          </svg>
+          <svg
+            v-else-if="item.id === 'lock'"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <rect x="3.5" y="7" width="9" height="6" rx="1.5" />
+            <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+          </svg>
+          <svg
+            v-else-if="item.id === 'stats'"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 13.5v-5M8 13.5V2.5M13.5 13.5v-8" />
+          </svg>
+          <svg
+            v-else-if="item.id === 'skin'"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="6.3" />
+            <circle cx="6" cy="6" r=".9" />
+            <circle cx="10.2" cy="6.4" r=".9" />
+            <circle cx="6.4" cy="10.2" r=".9" />
+          </svg>
+          <svg
+            v-else
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="2.2" />
+            <path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4" />
+          </svg>
+          {{ item.label }}
+        </button>
+      </nav>
+
+      <div class="side-foot">
+        <!-- 保存 chip 固定槽位（§5.1.2）：chip 出现/消失不推动语言下拉 -->
+        <div class="saved-slot" role="status" aria-live="polite">
+          <Transition name="fade">
+            <span v-if="justSaved" class="saved-chip">{{ t("saved") }}</span>
+          </Transition>
+        </div>
+        <p class="autosave-hint">{{ t("modifyAutosave") }}</p>
         <select
-          class="lang"
+          class="side-lang"
           :value="currentLanguage"
-          :aria-label="t('setting')"
+          :aria-label="t('language')"
           @change="changeLanguage(($event.target as HTMLSelectElement).value)"
         >
           <option v-for="lan in languages" :key="lan" :value="lan">{{ t(lan) }}</option>
         </select>
+        <span class="copyright" v-html="t('copyright')"></span>
       </div>
-    </header>
+    </aside>
 
-    <main class="content">
-      <SettingsView
-        :settings="settings"
-        :saving="saving"
-        :tick="tick"
-        :lock-settings="lockSettings"
-        :current-skin-name="currentSkinName"
-        @commit="scheduleSave"
-        @reset="resetDefaults"
-        @rest-now="restNow"
-        @lock-commit="scheduleLockSave"
-        @open-skin-center="openSkinCenter"
-      />
+    <!-- 右侧：当前模块页（v-show 保持各页状态与滚动位置，切换零开销） -->
+    <main class="pane">
+      <div v-show="activeModule === 'rest'" class="module">
+        <RestModule :settings="settings" :tick="tick" @commit="scheduleSave" @rest-now="restNow" />
+      </div>
+      <div v-show="activeModule === 'lock'" class="module">
+        <LockModule
+          :settings="settings"
+          :lock-settings="lockSettings"
+          @commit="scheduleSave"
+          @lock-commit="scheduleLockSave"
+        />
+      </div>
+      <div v-show="activeModule === 'stats'" class="module">
+        <StatsCard />
+      </div>
+      <div v-show="activeModule === 'skin'" class="module">
+        <SkinModule />
+      </div>
+      <div v-show="activeModule === 'general'" class="module">
+        <GeneralModule :settings="settings" @commit="scheduleSave" @reset="resetDefaults" />
+      </div>
     </main>
   </div>
 </template>
@@ -306,88 +363,131 @@ onUnmounted(() => {
 <style scoped>
 .app-root {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   background: var(--bg);
 }
-.topbar {
+
+/* —— 模块①：侧边栏 —— */
+.sidebar {
+  width: 172px;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 52px;
-  padding: 0 20px;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2);
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
-.brand {
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  min-width: 0;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--r-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
-.mark {
-  width: 22px;
-  height: 22px;
+.nav-item svg {
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
-.mark-eye {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.8;
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
-.mark-pupil {
-  fill: var(--accent);
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
 }
-.brand-name {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 10px 2px;
 }
-.top-right {
+/* 保存 chip 固定槽位：恒占高度，chip 出入只发生在槽内 */
+.saved-slot {
+  height: 22px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
 }
 .saved-chip {
-  font-size: 12px;
+  font-size: var(--fs-hint);
+  font-weight: var(--fw-medium);
   color: var(--accent-strong);
   background: var(--accent-soft);
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
 }
-.lang {
+.autosave-hint {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  text-align: right;
+}
+.side-lang {
   appearance: none;
-  font-size: 12px;
+  height: var(--control-h-sm);
+  padding: 0 22px 0 10px;
+  font-size: var(--fs-hint);
+  font-family: inherit;
   color: var(--text-2);
-  background: transparent;
+  background-color: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 5px 26px 5px 10px;
+  border-radius: var(--r-md);
   cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
     linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
   background-position:
-    calc(100% - 14px) calc(50% - 1px),
-    calc(100% - 9px) calc(50% - 1px);
+    calc(100% - 12px) calc(50% - 1px),
+    calc(100% - 7px) calc(50% - 1px);
   background-size: 5px 5px;
   background-repeat: no-repeat;
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
 }
-.lang:hover {
+.side-lang:hover {
   color: var(--text);
   border-color: var(--accent);
 }
-.content {
+.copyright {
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+}
+
+/* —— 右侧模块页容器 —— */
+.pane {
   flex: 1 1 0%;
-  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+}
+.module {
+  min-height: 100%;
 }
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--dur-slow) var(--ease);
 }
 .fade-enter-from,
 .fade-leave-to {

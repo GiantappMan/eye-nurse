@@ -12,7 +12,7 @@
 // 文案走 i18n：get_texts 整包 + i18n-changed 重取，缺键回退 key 原文。
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { applySkinVars } from "../shared/theme";
+import { applySkinVars, tokens } from "../shared/theme";
 import { createSkinHost, type SkinSurfaceDto } from "../shared/skinHost";
 import "./mask.css";
 
@@ -48,6 +48,8 @@ function applyTexts(map: TextMap): void {
   unlockEl.title = label;
   unlockEl.setAttribute("aria-label", label);
   skinPwdEl.placeholder = map["lockUnlockPlaceholder"] ?? "lockUnlockPlaceholder";
+  // 可访问名与文案同源（lockPassword=「锁屏密码」）——HTML 不再硬编码英文
+  skinPwdEl.setAttribute("aria-label", map["lockPassword"] ?? "lockPassword");
   setLockError(false, map["lockWrongPassword"] ?? "lockWrongPassword");
   skinHost.postTexts(map); // 整包转发给皮肤页（皮肤自取所需键）
 }
@@ -105,7 +107,9 @@ function applyChrome(dto: SkinSurfaceDto): void {
   skinPwdRow.style.left = `${dto.lock_chrome.password_x}%`;
   skinPwdRow.style.top = `${dto.lock_chrome.password_y}%`;
   skinLockErr.style.left = `${dto.lock_chrome.password_x}%`;
-  skinLockErr.style.top = `${Math.min(dto.lock_chrome.password_y + 6, 100)}%`;
+  // 错误行挂在密码框正下方：定值 28px（= 密码框半高 20 + 间距 8，tokens.mask.errGap）
+  // 经 calc 与百分比相加——分辨率无关，不再随视口高度缩放
+  skinLockErr.style.top = `calc(${dto.lock_chrome.password_y}% + ${tokens.mask.errGap}px)`;
   const ux = dto.lock_chrome.unlock_x;
   const uy = dto.lock_chrome.unlock_y;
   if (ux !== null && uy !== null) {
@@ -118,7 +122,7 @@ function applyChrome(dto: SkinSurfaceDto): void {
   }
 }
 
-/** 退出皮肤模式/未声明位置：还原解锁按钮默认右下 12px 定角（classic 外观） */
+/** 退出皮肤模式/未声明位置：还原解锁按钮默认右下 8px 贴角（classic 外观） */
 function resetUnlockPos(): void {
   unlockEl.style.left = "";
   unlockEl.style.top = "";

@@ -1,12 +1,24 @@
-/* bar 皮肤壳页样式：透明窗体（Rust 侧 transparent(true)），回退迷你条复刻
-   GDI 条的视觉语义（底色 = bar_progress_bg，填充 = progress_fill 渐变
-   from→to，文字三段色随剩余时间——回退场景从简，只保底色+填充+可读文字） */
+/* ============================================================================
+   barweb 皮肤壳页样式（回退迷你条）——语义对齐 GDI 孪生条（bar.rs on_paint）：
+   - 直角矩形：GDI FillRect 画底无圆角，圆角词汇表不收 3px（规范 §2.3：条形仿样 = 0）；
+   - 常态/休息：纯 progress_fill 按剩余比例填充，无空间渐变（GDI None 分支纯色）；
+   - 暂停：填充与文字色由 JS 按暂停秒数做时间插值 progress_from→progress_to /
+     text_from→text_to（480s 走满，同 GDI theme::ramp），CSS 不参与；
+   - 休息文案与常态数字 = text_idle 纯色（GDI 一致性差异 #6：休息不吃渐变）。
+   本页不 import design.css：活色来自皮肤运行时（applySkinVars 注入
+   --eyenurse-*，下方 :root 仅首帧兜底数据），几何/字号数值对齐
+   docs/design-system-v3.md §2 同名 token。
+   ============================================================================ */
 :root {
+  /* 首帧兜底数据（= classic 皮肤配色，skin.rs classic() 同值；运行时被
+     applySkinVars 用当前皮肤逐键回退值覆盖）——是数据不是样式，允许字面量 */
   --eyenurse-bar-progress-bg: #f5f5dc;
   --eyenurse-bar-progress-fill: #3ac32e;
   --eyenurse-bar-progress-from: #ecc071;
   --eyenurse-bar-progress-to: #3e0d0d;
-  --eyenurse-bar-text-idle: #000000;
+  --eyenurse-bar-text-idle: #1a1a1a;
+  --eyenurse-bar-text-from: #080808;
+  --eyenurse-bar-text-to: #ff5252;
 }
 html,
 body {
@@ -19,28 +31,32 @@ body {
 }
 #skin-frame {
   position: absolute;
-  inset: 0;
+  inset: 0; /* 全覆盖由 left/right(top/bottom) 约束得出——孪生壳页 mask.css 同构，不写第二份 width/height */
   display: none; /* 握手通过（body.skin-alive）才显示——防损坏皮肤白屏遮脸 */
-  width: 100%;
-  height: 100%;
   border: 0;
   background: transparent;
 }
 body.skin-alive #skin-frame {
   display: block;
 }
+/* 回退条本体：层级 = 底色 → 进度轨道 → 文字（DOM 顺序即 z 序，不用 z-index） */
 #builtin {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   background: var(--eyenurse-bar-progress-bg);
-  border-radius: 3px;
+  border-radius: 0; /* GDI FillRect 直角是真源；出圈的 3px 已删除 */
   overflow: hidden;
+  cursor: pointer; /* 双击开设置 / 右键菜单——回退安全网必须可点击可感知 */
+}
+#builtin:active {
+  filter: brightness(0.96); /* 按压反馈；hover 不加装饰（克制，规范 §5.4.5） */
 }
 #builtin[hidden] {
   display: none;
 }
+/* 层 1：进度轨道（JS 只在暂停时覆写纯色，常态走 CSS 变量） */
 #progress {
   position: absolute;
   inset: 0;
@@ -48,21 +64,30 @@ body.skin-alive #skin-frame {
 #fill {
   height: 100%;
   width: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--eyenurse-bar-progress-fill),
-    var(--eyenurse-bar-progress-from),
-    var(--eyenurse-bar-progress-to)
-  );
-  transition: width 1s linear;
+  background: var(--eyenurse-bar-progress-fill);
+  transition: width 1s linear; /* 1Hz 状态节拍的平滑收缩——§1.7 动效白名单的唯一明文例外（恒速语义，见 design-system-v3.md §1.7/§5.4-6） */
 }
+@media (prefers-reduced-motion: reduce) {
+  #fill {
+    transition: none;
+  }
+}
+/* 层 2：信息层——休息文案（CJK）与 mm:ss 同元素，用 UI 栈（design.css
+   --font-ui 同款字面；等宽栈无 CJK 字形，中文会掉进不可控的 generic
+   monospace）。数字不抖靠 tabular-nums；字号由 JS 按 tokens.bar 随条高缩放
+   （20px 条 = 13px，与 GDI CreateFontW 13px 同基准），此处 13px = --fs-body
+   兜底 */
 #label {
   position: relative;
   flex: 1;
   text-align: center;
-  font-family: Consolas, monospace;
-  font-size: 12px;
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    "PingFang SC", sans-serif;
+  font-size: 13px;
+  font-weight: 400; /* GDI FW_NORMAL 同权重 */
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--eyenurse-bar-text-idle);
-  cursor: default;
+  color: var(--eyenurse-bar-text-idle); /* 暂停时由 JS 覆写为时间插值色 */
+  white-space: nowrap;
+  user-select: none;
 }

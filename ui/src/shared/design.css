@@ -1,21 +1,53 @@
-/* 设计系统共享 tokens（settings / skincenter 两窗口共用；护眼绿点缀，浅/深
-   随系统——原 App.vue 内联块迁出，避免两窗口漂移） */
+/* ============================================================================
+   EyeNurse Design System v3（DS3）— 共享 token 单一真源
+   ----------------------------------------------------------------------------
+   消费方：settings 窗口（2026-10-10 单窗口化后为唯一 WebView 设置界面；
+   皮肤中心窗口已废弃）。mask / barweb 壳页、皮肤包、GDI 条不 import 本文件——
+   它们的"活色"来自 theme.json / 皮肤运行时（--eyenurse-*），但几何与字号数值
+   必须取自本文件的同名 token（对照 docs/design-system-v3.md §2）。
+
+   分层规则（改样式先找层，禁止跨层取值）：
+     L1 原语色   —— 调色板本体（本文件私有，页面不直接引用）
+     L2 语义变量 —— --bg/--surface/--text/--accent…（页面唯一取色入口）
+     L3 几何 token —— 字阶/间距/圆角/阴影/动效/控件规格
+     L4 组件类   —— .en-* 开箱即用的共享控件类，页面优先复用，不再手写数值
+   旧变量名（v3.1 的 --bg 等）全部保留且值不变——已落地页面零破坏。
+   ============================================================================ */
+
+/* ── L1+L2：语义色（浅色默认；值沿用 v3.1，仅 danger 按 WCAG 校准） ─────── */
 :root {
-  --bg: #f3f5f7;
-  --surface: #ffffff;
-  --surface-2: #f7f9fa;
-  --border: #e4e8ec;
-  --text: #1b2129;
-  --text-2: #67727e;
+  /* 中性面 */
+  --bg: #f3f5f7; /* 窗口底 */
+  --surface: #ffffff; /* 卡片/顶栏面 */
+  --surface-2: #f7f9fa; /* 次级面：输入底/轨道/chip 底 */
+  --border: #e4e8ec; /* 1px 描边（装饰级） */
+  --border-strong: #c6cdd4; /* hover 描边 / 图表轨道描边（新增） */
+
+  /* 文字 */
+  --text: #1b2129; /* 主文字 */
+  --text-2: #67727e; /* 次级文字/图标（白底 4.9:1） */
+  --text-3: #98a1ac; /* 弱化文字：版权/占位/禁用（新增，最低档） */
+
+  /* 护眼绿（唯一强调色） */
   --accent: #0e9f6e;
-  --accent-soft: #e2f6ee;
-  --accent-strong: #0b7f58;
-  --danger: #dc4b4b;
+  --accent-strong: #0b7f58; /* hover / 白底小字 */
+  --accent-soft: #e2f6ee; /* 选中底 / 焦点 ring */
+
+  /* 语义状态 */
+  --danger: #d23c3c; /* 白底 4.72:1（原 #dc4b4b 仅 4.08，已校准） */
+  --danger-strong: #b52f2f;
   --danger-soft: #fdeeee;
+
+  /* 图表（新增：解决"灰画灰"不可见问题——work 条对轨道 ≥3:1） */
+  --chart-work: #7d8792; /* 亮态对 surface-2 3.46:1 */
+  --chart-rest: var(--accent);
+
+  /* Hero 渐变 */
   --hero-from: #10715a;
   --hero-to: #0e9f6e;
   --hero-text: #f2fbf7;
   --hero-dim: #cfe9de;
+
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -24,13 +56,17 @@
     --surface: #1f2227;
     --surface-2: #262a30;
     --border: #30353c;
+    --border-strong: #4a5058;
     --text: #e7eaee;
     --text-2: #99a1ab;
+    --text-3: #6b7480;
     --accent: #34c48d;
-    --accent-soft: #1d332b;
     --accent-strong: #2aa877;
+    --accent-soft: #1d332b;
     --danger: #f07171;
+    --danger-strong: #f68b8b;
     --danger-soft: #3a2426;
+    --chart-work: #79838e; /* 暗态对 surface-2 3.74:1 */
     --hero-from: #17453a;
     --hero-to: #1d5c47;
     --hero-text: #eafaf3;
@@ -38,20 +74,303 @@
     color-scheme: dark;
   }
 }
+
+/* ── L3：几何 token ──────────────────────────────────────────────────────── */
+:root {
+  /* 字阶（7 档，下限 11px——10px 微文字一律升到 caption） */
+  --fs-caption: 11px; /* 版权/徽章/角标 */
+  --fs-hint: 12px; /* 分组标题/辅助说明/chip */
+  --fs-body: 13px; /* 正文/行标题/按钮（全局基准） */
+  --fs-subtitle: 15px; /* 弹窗标题/强调数值 */
+  --fs-title: 18px; /* 窗口标题 */
+  --fs-display: 40px; /* 设置页 Hero 倒计时 */
+  --fs-clock: 64px; /* 锁屏时钟（皮肤包） */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600; /* 全站字重上限，不用 700 */
+
+  /* 字体栈：UI 用系统栈（与 GDI 条同款雅黑 UI）；数字/时间一律 num 栈 */
+  --font-ui:
+    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    sans-serif;
+  --font-num: Consolas, "Cascadia Mono", monospace;
+
+  /* 间距刻度（4pt 网，8 档——9/13/14/18/22/26 等孤值一律吸附到本表） */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+
+  /* 圆角（4 档：3/4/5/10/14px 等出圈值一律替换；GDI/条形仿样 = 0 直角） */
+  --r-sm: 6px; /* 色板小件 */
+  --r-md: 8px; /* 按钮/输入/横幅/小面板 */
+  --r-lg: 12px; /* 卡片/编辑器/弹窗/预览舞台 */
+  --r-full: 999px; /* chip/徽章/开关轨道/进度条 */
+
+  /* 阴影（仅两档：hover 高程与浮层；深色下靠 border 分离，不叠阴影） */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.08); /* 卡片 hover/下拉 */
+  --shadow-2: 0 12px 40px rgb(0 0 0 / 0.32); /* 弹窗 */
+
+  /* 焦点 ring（键盘导航统一语言；输入类用 box-shadow，按钮类用 outline） */
+  --ring-accent: 0 0 0 3px var(--accent-soft);
+  --ring-danger: 0 0 0 3px var(--danger-soft);
+  --ring-onaccent: 0 0 0 3px rgb(255 255 255 / 0.35); /* 深色底上的按钮 */
+
+  /* 动效 */
+  --dur-fast: 120ms; /* hover/press/颜色 */
+  --dur-slow: 180ms; /* 开关滑块/弹层 */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* 层级 */
+  --z-frame: 10; /* 皮肤 iframe */
+  --z-chrome: 20; /* 宿主 chrome（密码框/解锁钮） */
+  --z-modal: 50;
+  --z-toast: 60;
+
+  /* 控件规格 */
+  --control-h-sm: 28px; /* ghost 按钮/小输入 */
+  --control-h-md: 30px; /* 主按钮/标准输入 */
+  --switch-w: 40px; /* 开关（与 SwitchToggle.vue 对齐） */
+  --switch-h: 22px;
+  --switch-knob: 18px;
+}
+
+/* ── L4：共享组件类（.en- 前缀命名空间，避免与页面 scoped 类冲突） ───────── */
+
+/* 主按钮：全站唯一主 CTA 规格（设置页入口/皮肤中心 apply/apply-btn 合一） */
+.en-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: var(--control-h-md);
+  padding: 0 var(--sp-4);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.en-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.en-btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.en-btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.en-btn-primary:active:not(:disabled) {
+  box-shadow: var(--ring-accent);
+}
+/* 深色/渐变底上的白色主按钮（Hero「立刻休息」） */
+.en-btn-onhero {
+  height: var(--control-h-md);
+  padding: 0 var(--sp-4);
+  background: var(--hero-text);
+  color: var(--hero-from);
+}
+.en-btn-onhero:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
+}
+/* 幽灵按钮：次级操作（恢复默认/打开文件夹/返回设置） */
+.en-btn-ghost {
+  height: var(--control-h-sm);
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-hint);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: transparent;
+}
+.en-btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.en-btn-ghost.is-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  font-weight: var(--fw-semibold);
+}
+.en-btn-ghost.is-danger:hover:not(:disabled) {
+  color: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+/* 输入框：时间/密码/文本通用（红 invalid 态只在用户触碰后由页面控制） */
+.en-input {
+  height: var(--control-h-md);
+  padding: 0 var(--sp-3);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.en-input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring-accent);
+}
+.en-input.is-invalid {
+  border-color: var(--danger);
+  box-shadow: var(--ring-danger);
+}
+.en-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.en-input-mono {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* 卡片 + 行（设置页分组卡片的共享骨架） */
+.en-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-1) var(--sp-4);
+}
+.en-card-title {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: var(--fs-hint);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.5px;
+  color: var(--text-2);
+}
+.en-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--border);
+}
+.en-row:first-of-type {
+  border-top: none;
+}
+.en-row-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+}
+.en-row-hint {
+  margin: 2px 0 0;
+  font-size: var(--fs-hint);
+  color: var(--text-2);
+}
+
+/* chip / 徽章 */
+.en-chip {
+  font-size: var(--fs-hint);
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.en-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.en-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
+}
+.en-badge {
+  display: inline-block;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* ── 基础样式 ─────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
 }
 html,
 body {
   margin: 0;
-  font-family:
-    "Segoe UI",
-    "Microsoft YaHei",
-    "PingFang SC",
-    sans-serif;
-  font-size: 14px;
+}
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-body); /* 全站基准 13px（原 14px 基准几乎无人使用） */
+  line-height: 1.5;
   color: var(--text);
 }
-button {
+button,
+input,
+select,
+textarea {
   font-family: inherit;
+}
+
+/* 键盘焦点统一绿描边：:where() 零特异性——各页面已自定义 ring 的控件
+   （switch / .hms 输入）按其 scoped 规则渲染，其余控件回落到这里 */
+:where(button, [role="switch"], input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 细滚动条（WebView2 默认粗滚动条与 900px 小窗不称） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+  background-clip: content-box;
+}
+
+/* 前庭安全：系统开启"减弱动态效果"时全站动效归零（皮肤包同款规则见规范 §5.5） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

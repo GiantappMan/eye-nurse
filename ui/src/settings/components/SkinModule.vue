@@ -1,32 +1,27 @@
 <script setup lang="ts">
-// 皮肤中心（ESP-1 独立窗口）：大卡片墙 = 浏览/预览/应用皮肤的一站式界面。
-// 布局自上而下：工具栏（标题 + 打开皮肤文件夹 + 设置）→ bar 重启提示横幅 →
-// 卡片网格（点卡片 = 打开预览弹窗）→ 自定义颜色编辑器（折叠）。
+// 皮肤模块（方案 C 侧边栏布局；由独立「皮肤中心」窗口迁入，2026-10-10 用户拍板
+// 单窗口化）。卡片墙 = 浏览/预览/应用皮肤的一站式界面：
+// bar 重启提示横幅 → 卡片网格（点卡片 = 打开预览弹窗）→ 自定义颜色编辑器。
 //
 // **预览弹窗**：加载真实皮肤页 iframe（eyenurse-skin 协议 + sandbox，与生产
 // 同管线），握手后灌入**模拟桥状态**（ESP-1 皮肤页是 (state, texts, colors) 的
 // 纯函数渲染——预览即真实效果，第三方皮肤零适配）：
-// - 锁屏效果：1280×800 视口按比例缩放嵌入（纯锁屏脸：时钟 + 标题）；
+// - 锁屏效果：1280×800 视口按比例缩放嵌入（锁屏脸按本机配置取真）；
 // - 悬浮条效果：manifest 逻辑尺寸 ×2 放大居中；GDI 配色皮肤无 HTML 表面 →
-//   CSS 1:1 仿样（与 GDI 条同构：底色 + 渐变填充 + mm:ss）。
+//   CSS 1:1 仿样（与 GDI 条同构：底色 + 渐变填充 + mm:ss，直角是真源）。
 // 预览是**惰性**的：皮肤页的动作消息（drag/setTopmost/endRest…）一律忽略。
+// 文案由宿主（App.vue）加载与刷新；本组件只管皮肤数据与预览桥。
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import {
-  currentLanguage,
-  loadTexts,
-  loadLanguageList,
-  t,
-  texts as i18nTexts,
-} from "../settings/i18n";
+import { currentLanguage, t, texts as i18nTexts } from "../i18n";
 import {
   skinPreviewUrl,
   type SkinColors,
   type SkinDefPayload,
   type SkinMeta,
   type SkinPreviewDto,
-} from "../settings/types";
+} from "../types";
 
 const skins = ref<SkinMeta[]>([]);
 const currentId = ref("");
@@ -40,7 +35,7 @@ async function refresh(): Promise<void> {
     skins.value = dto.skins;
     currentId.value = dto.current;
   } catch {
-    /* 窗口早于 CoreLoop 就绪时静默，下个广播会再来 */
+    /* CoreLoop 未就绪时静默，下个广播会再来 */
   }
   try {
     effective.value = await invoke<SkinColors>("get_skin");
@@ -74,9 +69,6 @@ async function select(id: string): Promise<void> {
 function openSkinsFolder(): void {
   invoke("open_skins_folder").catch(() => {});
 }
-function openSettings(): void {
-  invoke("open_settings").catch(() => {});
-}
 
 function displayName(meta: SkinMeta): string {
   if (meta.id === "custom") return t("skinCustom");
@@ -106,7 +98,9 @@ const barFrame = ref<HTMLIFrameElement | null>(null);
 /** 锁屏预览视口（真实比例，缩放嵌入）与缩放系数 */
 const LOCK_VW = 1280;
 const LOCK_VH = 800;
-const LOCK_SCALE = 0.469; // 600 / 1280（弹窗内容宽固定 600px）
+const LOCK_SCALE = 0.4765625; // 610 / 1280（body 内容宽 620 − 10 滚动条槽；槽由
+// .modal-body 的 scrollbar-gutter: stable 恒占位，滚动/非滚动两态宽度一致，
+// 预览不被裁切——design.css ::-webkit-scrollbar 宽 10px）
 
 /** 预览用模拟显示态：锁屏脸**按本机锁屏配置取真**（AutoRest → 休息+锁屏叠加态，
  * 否则纯锁屏脸——预览与实际锁屏所见一致，openPreview 时刷新）；bar = 45min
@@ -119,6 +113,17 @@ const BAR_DEMO = {
   resting: false,
   topmost: false,
 };
+
+/** mm:ss 演示读数：一律由状态推导生成，禁止手写字面量（杜绝与填充比例漂移） */
+function formatMmss(ms: number): string {
+  const total = Math.round(ms / 1000);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** GDI 仿样演示三要素同源自洽：45min 间隔剩 17:00 → 已流逝 62%（填充），右侧留 38%。
+ *  倒计时文案与填充 inset 都从 BAR_DEMO 推导，同一状态只讲一个故事 */
+const BAR_MOCK_TEXT = formatMmss(BAR_DEMO.countdownMs);
+const BAR_MOCK_FILL_INSET = `0 ${100 - Math.round((1 - BAR_DEMO.countdownMs / BAR_DEMO.intervalMs) * 100)}% 0 0`;
 
 async function openPreview(meta: SkinMeta): Promise<void> {
   previewMeta.value = meta;
@@ -169,7 +174,7 @@ function onKeydown(ev: KeyboardEvent): void {
   if (ev.key === "Escape" && previewMeta.value) closePreview();
 }
 
-/** GDI 配色皮肤的 bar 仿样（与原生条同构：底色 + 三段渐变填充 62% + mm:ss） */
+/** GDI 配色皮肤的 bar 仿样（与原生条同构：底色 + 三段渐变填充 + mm:ss） */
 const barMockStyle = computed(() => {
   const c = previewMeta.value?.colors;
   if (!c) return {};
@@ -183,23 +188,27 @@ const barMockFillStyle = computed(() => {
   if (!c) return {};
   return {
     background: `linear-gradient(90deg, ${c.bar_progress_fill}, ${c.bar_progress_from}, ${c.bar_progress_to})`,
+    inset: BAR_MOCK_FILL_INSET, // 与 BAR_MOCK_TEXT 同源（BAR_DEMO 推导）
   };
 });
 
-// —— 自定义颜色编辑器（自设置页迁入；展开时从生效配色预填）——
+// —— 自定义颜色编辑器（展开时从生效配色预填）——
+// draft 默认值 = get_skin 失败时（effective 为 null、watch 不回填）用户可保存的
+// 兜底配色，必须与 theme.json / skin.rs classic() 同步（DS3 §6 同步点）。
 const editorOpen = ref(false);
 const draft = reactive({
   bar_progress_bg: "#F5F5DC",
   bar_progress_fill: "#3AC32E",
   bar_progress_from: "#ECC071",
   bar_progress_to: "#3E0D0D",
-  bar_text_idle: "#000000",
+  bar_text_idle: "#1A1A1A",
   bar_text_from: "#080808",
-  bar_text_to: "#F40000",
+  bar_text_to: "#FF5252",
   bar_check_glyph: "#444444",
   bar_check_hover_bg: "#FFFFFF",
   mask_bg: "#141418",
   mask_fg: "#EEEEF2",
+  mask_error: "#FF8B8B",
 });
 watch([editorOpen, effective], ([open, eff]) => {
   if (open && eff) Object.assign(draft, eff);
@@ -239,7 +248,7 @@ async function saveCustom(): Promise<void> {
           check_glyph: draft.bar_check_glyph,
           check_hover_bg: draft.bar_check_hover_bg,
         },
-        mask: { bg: draft.mask_bg, fg: draft.mask_fg },
+        mask: { bg: draft.mask_bg, fg: draft.mask_fg, error: draft.mask_error },
       } satisfies SkinDefPayload,
     });
     currentId.value = "custom";
@@ -252,12 +261,9 @@ async function saveCustom(): Promise<void> {
 onMounted(async () => {
   window.addEventListener("message", onPreviewMessage);
   window.addEventListener("keydown", onKeydown);
-  await loadTexts();
-  void loadLanguageList();
   await refresh();
   await listen("eyenurse://skin-changed", () => void refresh());
   await listen("eyenurse://skin-surface-changed", () => void refresh());
-  await listen("eyenurse://i18n-changed", () => void loadTexts());
 });
 onUnmounted(() => {
   window.removeEventListener("message", onPreviewMessage);
@@ -266,25 +272,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="center">
-    <!-- 工具栏：标题 + 安装入口 + 返回设置 -->
-    <header class="toolbar">
-      <div>
-        <h2 class="title">{{ t("skin_center") }}</h2>
-        <p class="subtitle">{{ t("skinsFolderHint") }}</p>
+  <div class="page">
+    <header class="page-head">
+      <div class="head-text">
+        <h2 class="page-title">{{ t("navSkin") }}</h2>
+        <p class="page-hint">{{ t("skinsFolderHint") }}</p>
       </div>
-      <div class="actions">
-        <button type="button" class="ghost-btn" @click="openSkinsFolder">
-          {{ t("openSkinsFolder") }}
-        </button>
-        <button type="button" class="ghost-btn" @click="openSettings">
-          {{ t("settings") }}
-        </button>
-      </div>
+      <button type="button" class="en-btn en-btn-ghost" @click="openSkinsFolder">
+        {{ t("openSkinsFolder") }}
+      </button>
     </header>
 
-    <!-- bar 形态变化需要重启（换色即时生效） -->
-    <p v-if="restartHint" class="banner">{{ t("skinRestartHint") }}</p>
+    <!-- bar 形态变化需要重启（换色即时生效）。固定槽恒占位：出现/消失不推动
+         卡片墙（§1.5 布局稳定三禁；隐藏态 visibility:hidden 退出无障碍树） -->
+    <p class="banner" :class="{ shown: restartHint }">{{ t("skinRestartHint") }}</p>
 
     <!-- 卡片墙：点卡片 = 预览（应用在预览弹窗里） -->
     <main class="grid">
@@ -306,18 +307,36 @@ onUnmounted(() => {
         />
         <span v-else class="pv pv-fallback" :style="fallbackStyle(meta)">
           <span class="fake-bar" :style="{ background: meta.colors.bar_progress_bg }">
-            <span class="fake-fill" :style="{ background: meta.colors.bar_progress_fill }" />
+            <span
+              class="fake-fill"
+              :style="{ background: meta.colors.bar_progress_fill, inset: BAR_MOCK_FILL_INSET }"
+            />
           </span>
           <span class="fake-ring" :style="{ borderColor: meta.colors.mask_fg }" />
         </span>
         <span class="meta">
           <span class="name-row">
             <span class="name">{{ displayName(meta) }}</span>
-            <span v-if="meta.id === currentId" class="active-chip">✓ {{ t("skinActive") }}</span>
+            <span v-if="meta.id === currentId" class="active-chip">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+              {{ t("skinActive") }}
+            </span>
           </span>
           <span v-if="authorLine(meta)" class="author">{{ authorLine(meta) }}</span>
           <span v-if="badges(meta).length" class="badges">
-            <span v-for="b in badges(meta)" :key="b" class="badge">{{ b }}</span>
+            <span v-for="b in badges(meta)" :key="b" class="en-badge">{{ b }}</span>
           </span>
         </span>
       </button>
@@ -325,8 +344,27 @@ onUnmounted(() => {
 
     <!-- 自定义颜色编辑器（折叠） -->
     <section class="editor">
-      <button type="button" class="editor-toggle" @click="editorOpen = !editorOpen">
-        <span class="tri" :class="{ open: editorOpen }">▸</span>
+      <button
+        type="button"
+        class="editor-toggle"
+        :aria-expanded="editorOpen"
+        @click="editorOpen = !editorOpen"
+      >
+        <svg
+          class="chev"
+          :class="{ open: editorOpen }"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
         {{ t("customColor") }}
       </button>
       <div v-if="editorOpen" class="editor-body">
@@ -351,19 +389,21 @@ onUnmounted(() => {
             <span>{{ t(c.label) }}</span>
           </label>
         </div>
-        <button
-          type="button"
-          class="apply"
-          :disabled="!draftValid"
-          :title="draftValid ? '' : t('colorInvalid')"
-          @click="saveCustom"
-        >
-          {{ t("skinSave") }}
-        </button>
+        <div class="editor-actions">
+          <button
+            type="button"
+            class="en-btn en-btn-primary"
+            :disabled="!draftValid"
+            :title="draftValid ? '' : t('colorInvalid')"
+            @click="saveCustom"
+          >
+            {{ t("skinSave") }}
+          </button>
+        </div>
       </div>
     </section>
 
-    <!-- 预览弹窗：真实皮肤页 iframe + 模拟桥状态（ESC / 点遮罩关闭） -->
+    <!-- 预览弹窗：head + 可滚 body + 恒可见 foot（ESC / 点遮罩关闭） -->
     <div v-if="previewMeta" class="modal-mask" @click.self="closePreview">
       <div class="modal">
         <header class="modal-head">
@@ -371,7 +411,26 @@ onUnmounted(() => {
             <h3 class="modal-title">{{ displayName(previewMeta) }}</h3>
             <p v-if="authorLine(previewMeta)" class="modal-author">{{ authorLine(previewMeta) }}</p>
           </div>
-          <button type="button" class="modal-close" :title="t('skinApply')" @click="closePreview">✕</button>
+          <button
+            type="button"
+            class="modal-close"
+            :title="t('close')"
+            :aria-label="t('close')"
+            @click="closePreview"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </header>
 
         <div class="modal-body">
@@ -404,7 +463,7 @@ onUnmounted(() => {
             <template v-else>
               <div class="bar-mock" :style="barMockStyle">
                 <span class="bar-mock-fill" :style="barMockFillStyle" />
-                <span class="bar-mock-text">32:15</span>
+                <span class="bar-mock-text">{{ BAR_MOCK_TEXT }}</span>
               </div>
               <span class="mock-note">{{ t("skinNativeBar") }}</span>
             </template>
@@ -413,9 +472,9 @@ onUnmounted(() => {
 
         <footer class="modal-foot">
           <span class="foot-badges">
-            <span v-for="b in badges(previewMeta)" :key="b" class="badge">{{ b }}</span>
+            <span v-for="b in badges(previewMeta)" :key="b" class="en-badge">{{ b }}</span>
           </span>
-          <button type="button" class="apply-btn" @click="applyPreview">
+          <button type="button" class="en-btn en-btn-primary" @click="applyPreview">
             {{ t("skinApply") }}
           </button>
         </footer>
@@ -425,60 +484,60 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.center {
-  min-height: 100vh;
-  background: var(--bg);
-  padding: 18px 24px 26px;
-}
-.toolbar {
+/* 布局按 docs/design-system-v3.md §3/§5.2：间距全走 --sp-*，圆角四档，
+   字阶下限 11px，按钮/徽章复用 design.css 的 .en-* 共享类，
+   页面不写 #rrggbb（皮肤数据与 --eyenurse-* 兜底除外）。 */
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 100%;
+}
+.page-head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
 }
-.title {
+.head-text {
+  min-width: 0;
+}
+.page-title {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--fs-subtitle);
+  font-weight: var(--fw-semibold);
 }
-.subtitle {
-  margin: 4px 0 0;
-  font-size: 12px;
+.page-hint {
+  margin: 2px 0 0;
+  font-size: var(--fs-hint);
   color: var(--text-2);
 }
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.ghost-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ghost-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent-strong);
-}
+
+/* —— 重启提示横幅：固定槽（§1.5）——隐藏时原位占位，卡片墙位置恒定 */
 .banner {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  font-size: 12px;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-hint);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   background: var(--surface-2);
   color: var(--text-2);
+  visibility: hidden;
 }
+.banner.shown {
+  visibility: visible;
+}
+
+/* —— 卡片墙 —— */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
 }
 .card {
   display: flex;
@@ -487,18 +546,22 @@ onUnmounted(() => {
   overflow: hidden;
   text-align: left;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: var(--surface);
   cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .card:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-1); /* 悬停高程升级（§5.2.4） */
 }
 .card.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: var(--ring-accent); /* 选中 ring 压过 hover 阴影（后声明优先） */
 }
 .pv {
   display: block;
@@ -512,152 +575,136 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .fake-bar {
   position: relative;
   width: 64px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: 0; /* GDI 条直角是真源（§2.3） */
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .fake-fill {
-  position: absolute;
-  inset: 0 38% 0 0;
+  position: absolute; /* inset 由 BAR_MOCK_FILL_INSET 内联提供（与倒计时同源） */
 }
 .fake-ring {
   width: 26px;
   height: 26px;
-  border-radius: 999px;
-  border: 3px solid #fff;
+  border-radius: var(--r-full);
+  border: 3px solid transparent; /* 颜色一律来自内联 mask_fg（皮肤数据），这里只定几何 */
   opacity: 0.9;
 }
 .meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 12px;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
 }
 .name-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
 }
 .author {
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--text-2);
 }
 .badges {
   display: flex;
-  gap: 4px;
-  margin-top: 2px;
+  gap: var(--sp-1);
 }
-.badge {
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
+
+/* —— 自定义颜色编辑器 —— */
 .editor {
-  margin-top: 18px;
+  margin-top: var(--sp-1);
 }
 .editor-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: var(--sp-2);
+  font-size: var(--fs-body);
   color: var(--text-2);
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 0;
+  padding: var(--sp-2) 0; /* 垂直打击区 ≥28px（§1.6） */
+  font-family: inherit;
 }
 .editor-toggle:hover {
   color: var(--text);
 }
-.tri {
-  display: inline-block;
-  transition: transform 0.15s ease;
+.chev {
+  flex-shrink: 0;
+  transition: transform var(--dur-slow) var(--ease);
 }
-.tri.open {
+.chev.open {
   transform: rotate(90deg);
 }
 .editor-body {
-  margin-top: 8px;
-  padding: 14px;
+  margin-top: var(--sp-2);
+  padding: var(--sp-4);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: var(--surface);
 }
 .group-label {
-  margin: 0 0 6px;
-  font-size: 11px;
-  letter-spacing: 1px;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-hint);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.5px;
   color: var(--text-2);
 }
 .color-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 10px;
+  gap: var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.editor-actions {
+  display: flex;
+  justify-content: flex-end; /* 保存 CTA 右下，与弹窗 foot 的主 CTA 同构 */
 }
 .color-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--sp-2);
+  font-size: var(--fs-hint);
   color: var(--text);
 }
 .color-item input[type="color"] {
   width: 28px;
-  height: 22px;
+  height: var(--control-h-sm); /* 28px 打击区下限（§1.6） */
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: transparent;
   cursor: pointer;
 }
-.apply {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-.apply:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.apply:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
 
-/* —— 预览弹窗 —— */
+/* —— 预览弹窗：head + 可滚 body + 恒可见 foot（§3） —— */
 .modal-mask {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -667,58 +714,80 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   width: 660px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  border-radius: 14px;
+  max-width: calc(100vw - var(--sp-6) * 2);
+  max-height: calc(100vh - var(--sp-6) * 2);
+  overflow: hidden;
+  border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-2);
 }
 .modal-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px 10px;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
 }
 .modal-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-subtitle);
+  font-weight: var(--fw-semibold);
 }
 .modal-author {
-  margin: 3px 0 0;
-  font-size: 11px;
+  margin: 2px 0 0;
+  font-size: var(--fs-hint);
   color: var(--text-2);
 }
 .modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
   border: none;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-2);
-  font-size: 15px;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
+  transition:
+    color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
 }
 .modal-close:hover {
   color: var(--text);
   background: var(--surface-2);
 }
 .modal-body {
-  padding: 0 20px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto; /* 滚动只发生在 body：主 CTA 永不被滚走（§3） */
+  /* 滚动条槽恒占位（§3）：LOCK_SCALE 按 610（= 内容宽 620 − 槽 10）调定，
+     两态宽一致，锁屏预览永不因滚动条出现/消失被裁切 */
+  scrollbar-gutter: stable;
+  padding: 0 var(--sp-5) var(--sp-3);
 }
 .section-label {
-  margin: 10px 0 6px;
-  font-size: 11px;
-  letter-spacing: 1px;
+  margin: var(--sp-3) 0 var(--sp-2);
+  font-size: var(--fs-hint);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.5px;
   color: var(--text-2);
 }
+.section-label:first-child {
+  margin-top: 0;
+}
 .lock-wrap {
-  width: 600px;
-  max-width: 100%;
+  width: 100%;
   aspect-ratio: 1280 / 800;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #000;
+  border-radius: var(--r-lg);
+  /* 舞台底 = 皮肤遮罩默认底色（theme.json 真源经 applyThemeVars 注入；
+     兜底值即其默认数据，非样式字面量） */
+  background: var(--eyenurse-mask-bg, #141418);
 }
 .lock-frame {
   display: block;
@@ -730,10 +799,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 22px 0 18px;
+  gap: var(--sp-2);
+  padding: var(--sp-5) 0 var(--sp-4);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface) 0% 50%) 50% / 18px 18px;
 }
 .bar-frame {
@@ -745,50 +814,40 @@ onUnmounted(() => {
   position: relative;
   width: 160px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: 0; /* GDI 仿样直角（§2.3） */
   overflow: hidden;
   display: flex;
   align-items: center;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .bar-mock-fill {
-  position: absolute;
-  inset: 0 38% 0 0;
+  position: absolute; /* inset 由 barMockFillStyle 内联提供（BAR_DEMO 推导） */
 }
 .bar-mock-text {
   position: relative;
   flex: 1;
   text-align: center;
-  font-family: Consolas, monospace;
-  font-size: 15px;
-  font-weight: 700;
+  font-family: var(--font-num);
+  font-size: var(--fs-subtitle);
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 .mock-note {
-  font-size: 10px;
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 .modal-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px 16px;
+  gap: var(--sp-3);
+  flex-shrink: 0; /* footer 永不被滚走（§3） */
+  padding: var(--sp-3) var(--sp-5) var(--sp-4);
+  border-top: 1px solid var(--border);
 }
 .foot-badges {
   display: flex;
-  gap: 4px;
-}
-.apply-btn {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 22px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-.apply-btn:hover {
-  background: var(--accent-strong);
+  flex-wrap: wrap;
+  gap: var(--sp-1);
 }
 </style>

@@ -1,6 +1,6 @@
 {
   "identifier": "default",
   "description": "页面仅监听事件；invoke 的自定义命令不受 ACL 门控（未声明 AppManifest 权限，tauri 架构文档 §4.3）",
-  "windows": ["settings", "skincenter", "mask*", "barweb"],
+  "windows": ["settings", "mask*", "barweb"],
   "permissions": ["core:event:default"]
 }

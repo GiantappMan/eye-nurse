@@ -1,11 +1,25 @@
 /* 休息/锁屏遮罩壳页样式（ESP-1 headless）：本页无内置界面——画面来自皮肤
    iframe。只保留：壳页底色（皮肤加载前的首帧）、皮肤 iframe 层级、宿主独占
    chrome（密码框/错误提示/解锁按钮——配色走 --eyenurse-* 变量，由 skinHost
-   的 colors 推送注入，与皮肤同色）。 */
+   的 colors 推送注入，与皮肤同色）。
+
+   本页不 import shared/design.css（headless 壳页零依赖）；几何与字号数值照抄
+   design.css 同名 token（docs/design-system-v3.md §2，注释以「= --token」标注）；
+   活色一律 var(--eyenurse-*)，chrome 内禁止出现第二份色值字面量——皮肤运行时
+   可整体换色（如 devtest 的 mask_fg #76FF03），白 alpha 一律改
+   color-mix(in srgb, var(--eyenurse-mask-fg) N%, transparent) 推导，
+   任何皮肤下同一控件只有一种主题语言。
+
+   层级模型（design.css --z-* 同名值）：皮肤 iframe = 10（--z-frame），
+   宿主 chrome = 20（--z-chrome，恒在 iframe 之上）。 */
+
 :root {
   --eyenurse-mask-bg: #141418;
   --eyenurse-mask-fg: #eeeef2;
 }
+
+/* —— 基础：字体栈字面写入（同 design.css --font-ui；不声明则表单控件与
+   正文掉进 WebView2 UA 衬线，中文环境即宋体）—— */
 html,
 body {
   margin: 0;
@@ -14,8 +28,24 @@ body {
   overflow: hidden;
   background: var(--eyenurse-mask-bg);
   color: var(--eyenurse-mask-fg);
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    "PingFang SC", sans-serif;
+  font-size: 13px; /* = --fs-body */
+  line-height: 1.5;
   user-select: none;
 }
+/* 表单控件不吃 UA 默认字体——统一随壳页字体栈 */
+input,
+button {
+  font-family: inherit;
+}
+/* 盒模型基线同 design.css：chrome 几何（密码框 40px 含边框）依赖 border-box */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 #mask {
   position: relative;
   width: 100%;
@@ -32,76 +62,120 @@ body {
   position: absolute;
   inset: 0;
   display: none;
-  width: 100%;
-  height: 100%;
   border: 0;
   background: transparent;
-  z-index: 10;
+  z-index: 10; /* = --z-frame */
 }
 body.skin-alive #skin-frame {
   display: block;
 }
 
-/* —— 宿主独占 chrome：皮肤模式下由 JS 按 manifest chrome 声明写百分比内联
-   样式；z 序在 iframe 之上 —— */
+/* —— 宿主独占 chrome（z=20 = --z-chrome）：皮肤模式下由 JS 按 manifest
+   chrome 声明写百分比内联样式 ——
+
+   密码框行：manifest (x%, y%) 即行中心 */
 #skin-pwd-row {
   position: absolute;
   transform: translate(-50%, -50%);
   z-index: 20;
   margin: 0;
 }
+
+/* 错误提示：挂密码框正下方，JS 定 top = calc(y% + 28px)——28 = 密码框半高
+   20 + 间距 8（theme.ts tokens.mask.errGap），定值不随视口缩放；
+   translateX 仅水平居中：top 锚定行盒顶边，= 密码框底边（y%+20）+ 8px */
 #skin-lock-err {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   z-index: 20;
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: #ff8b8b;
+  margin: 0; /* 抵消 <p> UA 边距（绝对定位下 top 定位的是 margin 边） */
+  font-size: 13px; /* = --fs-body */
+  color: var(--eyenurse-mask-error, #ff8b8b); /* 活色 = 配色真源 theme.json 的 mask_error（尾参仅为皮肤桥未注入时的兜底数据） */
   white-space: nowrap;
 }
+
+/* 密码框：display:block 令所在行高恰为自身盒高（行中心定位不失真）、
+   border-box 令 40px 含 1px 边框（半高恰 20，与上方错误间距公式配对）；
+   背景/边框/占位符全部由 mask_fg 推导 */
 #skin-pwd {
+  display: block;
   width: 220px;
-  padding: 10px 14px;
-  font-family: inherit;
+  height: 40px;
+  padding: 0 12px; /* = --sp-3（4pt 网格；.en-input 家族同规格） */
   font-size: 16px;
   text-align: center;
   letter-spacing: 2px;
   color: var(--eyenurse-mask-fg);
-  background: rgb(255 255 255 / 0.08);
-  border: 1px solid rgb(255 255 255 / 0.28);
-  border-radius: 10px;
+  background: color-mix(in srgb, var(--eyenurse-mask-fg) 8%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--eyenurse-mask-fg) 28%, transparent);
+  border-radius: 8px; /* = --r-md */
   outline: none;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition:
+    border-color 120ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 120ms cubic-bezier(0.2, 0, 0, 1); /* = --dur-fast + --ease */
 }
+/* 焦点态 = 边框提亮 + 3px fg ring 二级强化（深色皮肤底亦可感知） */
 #skin-pwd:focus {
-  border-color: rgb(255 255 255 / 0.7);
-  background: rgb(255 255 255 / 0.12);
+  border-color: color-mix(in srgb, var(--eyenurse-mask-fg) 70%, transparent);
+  background: color-mix(in srgb, var(--eyenurse-mask-fg) 12%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--eyenurse-mask-fg) 25%, transparent);
 }
 #skin-pwd::placeholder {
   letter-spacing: 0;
-  font-size: 13px;
-  color: rgb(238 238 242 / 0.45);
+  font-size: 13px; /* = --fs-body */
+  color: color-mix(in srgb, var(--eyenurse-mask-fg) 45%, transparent);
 }
 
-/* —— 解锁逃生按钮（宿主恒有；默认右下 12px 定角 = classic 外观；皮肤
-   manifest 声明 chrome.unlock 时由 JS 改百分比定位） —— */
+/* —— 解锁逃生按钮（宿主恒有 = 任何皮肤损坏时的逃生口；默认右下 8px 贴角 =
+   classic 外观，皮肤 manifest 声明 chrome.unlock 时由 JS 改百分比定位）。
+   44×44 命中区（theme.ts tokens.mask.unlockHit，桌面最小标准）、内嵌 24px
+   图标 1:1 整数渲染（高 DPI 不发虚）—— */
 #unlock {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 25px;
-  height: 25px;
+  right: 8px; /* = tokens.mask.unlockInset */
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: none;
+  border-radius: 8px; /* = --r-md */
   background: transparent;
   color: var(--eyenurse-mask-fg);
   cursor: pointer;
-  opacity: 0.8;
-  z-index: 20;
+  opacity: 0.6;
+  z-index: 20; /* = --z-chrome */
+  transition:
+    opacity 120ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 #unlock:hover {
   opacity: 1;
+  background: color-mix(in srgb, var(--eyenurse-mask-fg) 10%, transparent);
 }
-body.skin-alive #unlock {
-  z-index: 20;
+/* 键盘焦点 ring：本页不 import design.css（无全局 :focus-visible 兜底），
+   与 #skin-pwd:focus 同语法同语言；box-shadow 非动效，无需 reduced-motion 分支 */
+#unlock:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--eyenurse-mask-fg) 25%, transparent);
+}
+/* 图标尺寸唯一由本处定义（HTML 不写 width/height，消灭双处定义） */
+#unlock svg {
+  display: block;
+  width: 24px; /* = tokens.mask.unlockIcon，24 网格 1:1 */
+  height: 24px;
+}
+
+/* 前庭安全：系统开启「减弱动态效果」时动效归零（design.css 同款规则） */
+@media (prefers-reduced-motion: reduce) {
+  #skin-pwd,
+  #unlock {
+    transition: none;
+  }
 }

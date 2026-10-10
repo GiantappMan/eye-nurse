@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- classic 内置皮肤 · 锁屏表面（ESP-1 headless）：原 mask 壳页内置界面的皮肤化
-     迁移——视觉与 v3.2 之前完全一致（旋转圈 + mm:ss 倒计时 + 锁屏时钟面板）。
+<!-- classic 内置皮肤 · 锁屏表面（ESP-1 headless）：DS3 布局重做（docs/design-system-v3.md §5.5）。
+     构图 = 两个信息组：休息组（旋转圈 + mm:ss 倒计时）与锁屏组（状态标题 + 64px 主时钟 + 日期），
+     组间 28px 定距、组内 8px 节奏；层级 13 → 18 → 64px 三档，时钟独大。
      与第三方皮肤同管线：sandbox iframe 加载、状态/文案/配色全走 eyenurse 桥。
      密码框与右下解锁按钮是宿主独占 chrome（不归本皮肤渲染）；配色经
      eyenurse-colors 推送（night/sakura 等纯配色皮肤 = 本皮肤 + 换色）。
@@ -10,9 +11,21 @@
     <meta charset="UTF-8" />
     <style>
       :root {
-        /* 兜底 = theme.json classic 值；eyenurse-colors 到达后被覆盖 */
+        /* 运行时活色兜底 = theme.json classic 值（数据非样式，eyenurse-colors 到达后覆盖） */
         --eyenurse-mask-bg: #141418;
         --eyenurse-mask-fg: #eeeef2;
+
+        /* DS3 token 镜像：与 ui/src/shared/design.css §2/§3 同名同值（皮肤包不 import
+           design.css，几何/字号按规范对照表内联）；--eyenurse-* 为唯一取色入口 */
+        --font-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+        --font-num: Consolas, "Cascadia Mono", monospace;
+        --fs-body: 13px;
+        --fs-title: 18px;
+        --fs-clock: 64px;
+        --fw-semibold: 600;
+        --sp-2: 8px;
+        /* 组间定距 28px = 密码框半高 20 + 间距 8（theme.ts tokens.mask.errGap 同源） */
+        --gap-group: 28px;
       }
       html,
       body {
@@ -22,6 +35,7 @@
         overflow: hidden;
         background: var(--eyenurse-mask-bg);
         color: var(--eyenurse-mask-fg);
+        font-family: var(--font-ui);
         user-select: none;
       }
       #mask {
@@ -32,13 +46,14 @@
         align-items: center;
         justify-content: center;
       }
+      /* 组间：休息组 / 锁屏组（28px 定距 = 主辅分组的全部表达） */
       .center-stack {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 28px;
+        gap: var(--gap-group);
       }
-      /* 70×70 CSS 旋转加载圈 + 叠放其上的 mm:ss（C3/C4） */
+      /* 休息组：70×70 CSS 旋转加载圈 + 叠放其上的 mm:ss（C3/C4） */
       .spinner-stack {
         position: relative;
         width: 70px;
@@ -61,36 +76,49 @@
           transform: rotate(360deg);
         }
       }
+      /* 倒计时：数字一律 num 栈（栈内两字体成对出现）+ tabular，18px/600 升级后
+         与 64px 时钟之间为 18→64 两档，不再 16px 被双面压制 */
       #countdown {
-        font-family: Consolas, monospace;
-        font-size: 16px;
+        font-family: var(--font-num);
+        font-size: var(--fs-title);
+        font-weight: var(--fw-semibold);
         font-variant-numeric: tabular-nums;
       }
+      /* 锁屏组：标题 / 时钟 / 日期三行 8px 节奏；标题与日期同权（13px·0.65·无字距），
+         时钟独大（64px·600） */
       #lock-panel {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 8px;
+        gap: var(--sp-2);
       }
       #lock-panel[hidden] {
         display: none;
       }
       #locked-title {
         margin: 0;
-        font-size: 14px;
-        letter-spacing: 2px;
+        font-size: var(--fs-body);
         opacity: 0.65;
       }
       #clock {
-        font-family: Consolas, "Cascadia Mono", monospace;
-        font-size: 64px;
+        font-family: var(--font-num);
+        font-size: var(--fs-clock);
         line-height: 1.1;
-        font-weight: 600;
+        font-weight: var(--fw-semibold);
         font-variant-numeric: tabular-nums;
       }
+      /* 日期是数字读数：同样 num 栈 + tabular；内容为零填充「2026/10/09」，宽度日日恒定 */
       #lock-date {
-        font-size: 14px;
+        font-family: var(--font-num);
+        font-size: var(--fs-body);
+        font-variant-numeric: tabular-nums;
         opacity: 0.65;
+      }
+      /* 前庭安全（DS3 §1.7）：减弱动态效果时旋转归零——静止双弧仍是加载表达 */
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation: none;
+        }
       }
     </style>
   </head>
@@ -102,7 +130,8 @@
           <div id="countdown">00:00</div>
         </div>
         <div id="lock-panel" hidden>
-          <p id="locked-title"></p>
+          <!-- 预置默认文案（zh.json lockedTitle 同值）：文案包到达前后高度不变，禁首帧跳动 -->
+          <p id="locked-title">已锁定</p>
           <div id="clock">--:--</div>
           <div id="lock-date"></div>
         </div>
@@ -131,7 +160,8 @@
 
         function applyTexts(t) {
           texts = t || {};
-          lockedTitle.textContent = texts["lockedTitle"] ?? "lockedTitle";
+          // 兜底用真实默认文案，绝不把协议键名漏到 UI（DS3 §5.5.1）
+          lockedTitle.textContent = texts["lockedTitle"] ?? "已锁定";
         }
 
         function two(n) {
@@ -150,11 +180,16 @@
           lockPanel.hidden = !s.locked;
         });
 
-        // 锁屏时钟：本地时间 HH:MM + 日期（1s 刷新；仅 locked 可见）
+        // 锁屏时钟：本地时间 HH:MM + 固定 zh-CN 零填充日期（1s 刷新；仅 locked 可见）。
+        // 日期不随操作系统 locale 漂移，与 tabular 时钟并置宽度稳定（DS3 §5.5.5）
         function renderClock() {
           var now = new Date();
           clockEl.textContent = two(now.getHours()) + ":" + two(now.getMinutes());
-          lockDateEl.textContent = now.toLocaleDateString();
+          lockDateEl.textContent = now.toLocaleDateString("zh-CN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
         }
         setInterval(renderClock, 1000);
         renderClock();

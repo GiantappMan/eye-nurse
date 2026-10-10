@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>模块 01 · 顶栏</title>
+<style>
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --surface-2: #f7f9fa;
+  --border: #e4e8ec; --border-strong: #c6cdd4;
+  --text: #1b2129; --text-2: #67727e; --text-3: #98a1ac;
+  --accent: #0e9f6e; --accent-strong: #0b7f58; --accent-soft: #e2f6ee;
+  --hero-from: #10715a; --hero-to: #0e9f6e;
+  --font-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-num: Consolas, monospace;
+  --sp-4: 16px; --sp-5: 20px; --r-md: 8px; --r-lg: 12px;
+  --control-h-sm: 28px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px 24px 56px; background: linear-gradient(160deg, #dfe4ea, #cdd4dc);
+  font-family: var(--font-ui); font-size: 13px; color: var(--text);
+  display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+.note { width: 900px; font-size: 12px; color: #3a4450; background: rgb(255 255 255 / .72);
+  border: 1px solid rgb(255 255 255 / .8); border-radius: var(--r-md); padding: 10px 14px;
+  backdrop-filter: blur(4px); margin-bottom: 20px; }
+h2 { font-size: 14px; margin: 0 0 4px; width: 900px; }
+.desc { font-size: 12px; color: var(--text-2); margin: 0 0 10px; width: 900px; }
+
+.slice { width: 900px; background: var(--bg); border-radius: var(--r-lg); overflow: hidden;
+  box-shadow: 0 16px 48px rgb(0 0 0 / .22); margin-bottom: 30px; flex-shrink: 0; }
+.titlebar { height: 40px; display: flex; align-items: center; background: var(--surface);
+  border-bottom: 1px solid var(--border); padding-left: 12px; user-select: none; }
+.brand { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.logo { width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--accent) 0 4px, transparent 4px);
+  border: 2px solid var(--accent); }
+.tb-btns { margin-left: auto; display: flex; height: 100%; }
+.tb-btns span { width: 46px; display: grid; place-items: center; color: var(--text-2); font-size: 12px; }
+
+/* 现状：52px 顶栏 + 页内大标题 */
+.topbar-old { height: 52px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--sp-5); background: var(--surface); border-bottom: 1px solid var(--border); }
+.topbar-old h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.lang { appearance: none; height: var(--control-h-sm); padding: 0 24px 0 12px; font-size: 12px;
+  color: var(--text-2); background-color: transparent; border: 1px solid var(--border);
+  border-radius: var(--r-md); cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 14px) calc(50% - 1px), calc(100% - 9px) calc(50% - 1px);
+  background-size: 5px 5px; background-repeat: no-repeat; }
+
+/* 提案A：40px 语境小标签 */
+.topbar-a { height: 40px; display: flex; align-items: center; gap: 12px;
+  padding: 0 var(--sp-5); background: var(--surface); border-bottom: 1px solid var(--border); }
+.ctx-title { font-size: 13px; font-weight: 600; }
+.ctx-sub { font-size: 11px; color: var(--text-3); }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.saved-chip { font-size: 12px; font-weight: 500; color: var(--accent-strong);
+  background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; }
+
+/* 提案B：44px 分段标签页 */
+.topbar-b { height: 44px; display: flex; align-items: center; gap: 12px;
+  padding: 0 var(--sp-5); background: var(--surface); border-bottom: 1px solid var(--border); }
+.tabs { display: flex; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 2px; }
+.tab { height: 26px; padding: 0 16px; border: none; background: transparent; font-size: 13px;
+  font-weight: 500; color: var(--text-2); border-radius: 6px; cursor: pointer; font-family: inherit; }
+.tab.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+
+/* 内容预览条（只露 36px Hero 边，给上下文） */
+.peek { height: 36px; background: linear-gradient(105deg, var(--hero-from), var(--hero-to)); }
+.callout { font-size: 12px; color: var(--accent-strong); background: var(--accent-soft);
+  display: inline-block; padding: 2px 8px; border-radius: 999px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="note"><b>模块 01 · 顶栏</b> — 三种形态，只看窗口最上面两条。原生标题栏（眼睛护士3）在三种形态里都不变，变的是它下面的页内顶栏。</div>
+
+<h2>现状</h2>
+<p class="desc">页内 52px 顶栏 + 15px 加粗「设置」——原生标题栏已经写着"眼睛护士3"，两行标题重复抢层级；顶栏 90% 的宽度是空的，只有右侧一个语言下拉。</p>
+<div class="slice">
+  <div class="titlebar"><div class="brand"><span class="logo"></span>眼睛护士3</div>
+    <div class="tb-btns"><span>─</span><span>▢</span><span>✕</span></div></div>
+  <div class="topbar-old"><h1>设置</h1><select class="lang"><option>简体中文</option></select></div>
+  <div class="peek"></div>
+</div>
+
+<h2>提案 A · 语境小标签（40px）</h2>
+<p class="desc">「设置」降为 13px 普通权重 + 右侧补一句弱化的「修改自动保存」（顺手解决"改了存不存"的疑问），高度 52→40px。语言下拉与保存 chip 位置不变。</p>
+<div class="slice">
+  <div class="titlebar"><div class="brand"><span class="logo"></span>眼睛护士3</div>
+    <div class="tb-btns"><span>─</span><span>▢</span><span>✕</span></div></div>
+  <div class="topbar-a">
+    <span class="ctx-title">设置</span><span class="ctx-sub">修改自动保存</span>
+    <div class="top-right"><span class="saved-chip">已保存</span><select class="lang"><option>简体中文</option></select></div>
+  </div>
+  <div class="peek"></div>
+</div>
+
+<h2>提案 B · 分段标签页导航（44px）</h2>
+<p class="desc">为方案 B（皮肤整页）准备：顶栏即导航 [设置 | 皮肤]，不再放"设置"两个字——当前在哪个页由标签高亮表达。空间略还 8px 给标签的可点区域。</p>
+<div class="slice">
+  <div class="titlebar"><div class="brand"><span class="logo"></span>眼睛护士3</div>
+    <div class="tb-btns"><span>─</span><span>▢</span><span>✕</span></div></div>
+  <div class="topbar-b">
+    <div class="tabs"><button class="tab active">设置</button><button class="tab">皮肤</button></div>
+    <div class="top-right"><select class="lang"><option>简体中文</option></select></div>
+  </div>
+  <div class="peek"></div>
+</div>
+
+</body>
+</html>

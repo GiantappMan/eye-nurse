@@ -14,6 +14,10 @@
 //   （DurationSecond=480，8 分钟走完 From→To）：
 //   progreeBGConverter From="#ECC071" To="#3E0D0D"（进度前景），
 //   timeBGConverter From="#080808" To="#F40000"（时间文字，暂停态）。
+// - DS3 校准（docs/design-system-v3.md §5.6/§6）：暂停末态文字 #F40000→#FF5252
+//   （对 #3E0D0D 填充 3.82→5.19:1，过 WCAG AA）；idle #000000→#1A1A1A 软黑
+//   （18.98→15.73:1，仍远超 AA）；暂停文字渐变键名弃用旧「time」前缀，统一为
+//   bar_text_from/to（与 SkinColors 字段/皮肤中心编辑器键同名）。
 
 /// RGB 三元组（egui::Color32 的 GDI 等价物；值恒来自 theme.json）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,13 +78,17 @@ mod tests {
 
     #[test]
     fn theme_consts_match_json_values() {
-        // 代码生成与 theme.json 的锚点值一致（改 json 必须过本测试）
+        // 代码生成与 theme.json 的锚点值一致（改 json 必须过本测试；
+        // BAR_TEXT_* 锚定 DS3 校准后的暂停文字渐变，见文件头注释）
         assert_eq!(MASK_BG, Rgb::new(0x14, 0x14, 0x18));
         assert_eq!(MASK_FG, Rgb::new(0xEE, 0xEE, 0xF2));
         assert_eq!(BAR_PROGRESS_BG, Rgb::new(0xF5, 0xF5, 0xDC));
         assert_eq!(BAR_PROGRESS_FILL, Rgb::new(0x3A, 0xC3, 0x2E));
         assert_eq!(BAR_PROGRESS_FROM, Rgb::new(0xEC, 0xC0, 0x71));
-        assert_eq!(BAR_TIME_TO, Rgb::new(0xF4, 0x00, 0x00));
+        assert_eq!(BAR_TEXT_IDLE, Rgb::new(0x1A, 0x1A, 0x1A));
+        assert_eq!(BAR_TEXT_FROM, Rgb::new(0x08, 0x08, 0x08));
+        assert_eq!(BAR_TEXT_TO, Rgb::new(0xFF, 0x52, 0x52));
+        assert_eq!(MASK_ERROR, Rgb::new(0xFF, 0x8B, 0x8B));
     }
 
     #[test]

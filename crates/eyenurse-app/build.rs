@@ -81,6 +81,7 @@ impl Anchors {
 const THEME_KEYS: &[&str] = &[
     "mask_bg",
     "mask_fg",
+    "mask_error",
     "bar_progress_bg",
     "bar_text_idle",
     "bar_progress_fill",
@@ -88,8 +89,8 @@ const THEME_KEYS: &[&str] = &[
     "bar_check_hover_bg",
     "bar_progress_from",
     "bar_progress_to",
-    "bar_time_from",
-    "bar_time_to",
+    "bar_text_from",
+    "bar_text_to",
 ];
 
 fn generate_theme_consts() {

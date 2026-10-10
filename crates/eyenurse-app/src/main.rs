@@ -146,7 +146,6 @@ fn main() {
             commands::get_skin_surface,
             commands::get_skin_preview,
             commands::open_settings,
-            commands::open_skin_center,
             commands::bar_drag,
             commands::set_topmost,
             commands::bar_open_menu,
@@ -161,12 +160,9 @@ fn main() {
 
             // 设置窗初始标题 = 本地化 app_name（v2 MainWindow.xaml
             // `lan:Xaml.Key="app_name"` 绑定的等价；切语言由 CoreLoop
-            // set_language 持续刷新，清单 E7）；皮肤中心窗口标题同步本地化
+            // set_language 持续刷新，清单 E7）
             if let Some(w) = handle.get_webview_window("settings") {
                 let _ = w.set_title(&texts.app_name);
-            }
-            if let Some(w) = handle.get_webview_window("skincenter") {
-                let _ = w.set_title(&texts.skin_center);
             }
 
             // 4.2) 悬浮条（ESP-1 双模式：皮肤声明 bar HTML → WebView 壳窗 barweb；
@@ -275,13 +271,6 @@ fn main() {
                         let _ = window
                             .app_handle()
                             .emit_to("settings", "eyenurse://settings-closing", ());
-                        api.prevent_close();
-                        let _ = window.hide();
-                    }
-                }
-                "skincenter" => {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // 皮肤中心与 settings 同款常驻策略：点 X = 隐藏不销毁
                         api.prevent_close();
                         let _ = window.hide();
                     }

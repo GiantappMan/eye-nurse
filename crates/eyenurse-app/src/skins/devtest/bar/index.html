@@ -4,7 +4,10 @@
      - manifest bar.size → 窗口尺寸；1Hz bar-state → 倒计时/暂停/置顶态；
      - mousedown → eyenurse.drag() 系统拖动；contextmenu → eyenurse.openMenu()
        （托盘同源菜单：暂停/恢复/重置/立即休息/设置/关于/退出）；
-     - ⚙ → openSettings；⬆ → setTopmost（回显按钮态）。 -->
+     - ⚙ → openSettings；⬆ → setTopmost（回显按钮态）。
+     DS3 基本对齐（docs/design-system-v3.md §5.5.6）：字号下限 11px、字重 ≤600、
+     num 栈两字体成对出现、圆角入档（chip/full、小件 6、面板 12）、
+     reduced-motion 时进度过渡归零。霓虹配色是测试身份标识，保持原样。 -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -23,7 +26,7 @@
         height: 100%;
         box-sizing: border-box;
         border: 2px dashed #00e676;
-        border-radius: 10px;
+        border-radius: 12px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -37,16 +40,16 @@
         position: absolute;
         top: 2px;
         left: 6px;
-        font-size: 9px;
+        font-size: 11px;
         letter-spacing: 1px;
         color: #101014;
         background: #00e676;
         padding: 0 4px;
-        border-radius: 2px;
+        border-radius: 999px;
       }
       #time {
-        font-size: 17px;
-        font-weight: 700;
+        font-size: 18px;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
         color: #00e676;
       }
@@ -54,7 +57,7 @@
         color: #ff1744;
       }
       #sub {
-        font-size: 9px;
+        font-size: 11px;
         color: #5a6b60;
         letter-spacing: 1px;
       }
@@ -63,14 +66,15 @@
         right: 4px;
         top: 4px;
         display: flex;
-        gap: 3px;
+        gap: 4px;
       }
       .btn {
         border: 1px solid #00e676;
         background: transparent;
         color: #00e676;
-        font: 10px Consolas, monospace;
-        border-radius: 4px;
+        font-family: Consolas, "Cascadia Mono", monospace;
+        font-size: 11px;
+        border-radius: 6px;
         padding: 1px 4px;
         cursor: pointer;
       }
@@ -85,14 +89,20 @@
         bottom: 3px;
         height: 3px;
         background: #1b2e24;
-        border-radius: 2px;
+        border-radius: 999px;
       }
       #fill {
         height: 100%;
         width: 100%;
-        border-radius: 2px;
+        border-radius: 999px;
         background: linear-gradient(90deg, #00e676, #ffd600, #ff1744);
         transition: width 1s linear;
+      }
+      /* 前庭安全（DS3 §1.7）：减弱动态效果时进度过渡归零 */
+      @media (prefers-reduced-motion: reduce) {
+        #fill {
+          transition: none;
+        }
       }
     </style>
   </head>

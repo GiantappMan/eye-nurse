@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>模块 03 · 护眼统计卡</title>
+<style>
+:root {
+  --surface: #ffffff; --surface-2: #f7f9fa; --border: #e4e8ec; --border-strong: #c6cdd4;
+  --text: #1b2129; --text-2: #67727e; --text-3: #98a1ac;
+  --accent: #0e9f6e; --accent-strong: #0b7f58; --accent-soft: #e2f6ee;
+  --chart-work: #7d8792;
+  --font-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-num: Consolas, "Cascadia Mono", monospace;
+  --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px;
+  --r-sm: 6px; --r-lg: 12px; --r-full: 999px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .06), 0 4px 12px rgb(0 0 0 / .08);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px 24px 56px; background: linear-gradient(160deg, #dfe4ea, #cdd4dc);
+  font-family: var(--font-ui); font-size: 13px; color: var(--text);
+  display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+.note { width: 640px; font-size: 12px; color: #3a4450; background: rgb(255 255 255 / .72);
+  border: 1px solid rgb(255 255 255 / .8); border-radius: 8px; padding: 10px 14px;
+  backdrop-filter: blur(4px); margin-bottom: 20px; }
+h2 { font-size: 14px; margin: 0 0 10px; width: 640px; }
+.desc { font-size: 12px; color: #67727e; margin: -6px 0 10px; width: 640px; }
+
+.card { width: 640px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: var(--sp-1) var(--sp-4); margin-bottom: 30px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .14); }
+.card-title { margin: var(--sp-3) 0 var(--sp-1); font-size: 12px; font-weight: 600; letter-spacing: .5px; color: var(--text-2); }
+.today { display: flex; gap: var(--sp-6); padding: var(--sp-3) 0; }
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 96px; }
+.stat-num { font-family: var(--font-num); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-num.accent { color: var(--accent-strong); }
+.stat-label { font-size: 12px; color: var(--text-2); }
+.bars { padding: var(--sp-3) 0; border-top: 1px solid var(--border); }
+.bars-head { display: flex; align-items: center; margin-bottom: var(--sp-2); }
+.bars-title { margin: 0; font-size: 12px; color: var(--text-2); }
+.legend { margin-left: auto; display: flex; gap: var(--sp-3); font-size: 11px; color: var(--text-2); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.brow { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-radius: var(--r-sm); position: relative; }
+.brow:hover { background: var(--surface-2); }
+.bdate { width: 46px; flex-shrink: 0; font-family: var(--font-num); font-size: 12px; color: var(--text-2); }
+.btrack { position: relative; flex: 1; height: 10px; border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
+.btrack::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--border-strong); pointer-events: none; }
+.bfill { height: 100%; background: var(--chart-work); }
+.brest { height: 100%; background: var(--accent); }
+.bcnt { width: 64px; flex-shrink: 0; text-align: right; font-family: var(--font-num); font-size: 12px; color: var(--text-2); }
+/* 提案：空数据日 */
+.brow.empty .bdate { color: var(--text-3); }
+.brow.empty .btrack { background: transparent; }
+.brow.empty .btrack::after { box-shadow: inset 0 0 0 1px var(--border); }
+.brow.empty::before { content: "—"; position: absolute; left: 56px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; color: var(--text-3); z-index: 1; }
+.hide-empty .brow.empty { display: none; }
+.footnote { display: none; font-size: 11px; color: var(--text-3); padding: 4px 0 2px; }
+.hide-empty .footnote { display: block; }
+/* 悬浮明细 */
+.tip { display: none; position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 5;
+  background: var(--text); color: #fff; font-size: 12px; line-height: 1.6;
+  padding: 6px 10px; border-radius: var(--r-sm); white-space: nowrap; box-shadow: var(--shadow-1); }
+.tip b { color: #7ee2bd; font-family: var(--font-num); }
+.brow:hover .tip { display: block; }
+/* 开关 */
+.toggle-row { width: 640px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); margin-bottom: 30px; }
+.toggle-row input { accent-color: var(--accent); width: 15px; height: 15px; }
+</style>
+</head>
+<body>
+
+<div class="note"><b>模块 03 · 护眼统计卡</b> — 只看图表本身。数据完全一致：近 7 天里 10-04~10-08 无记录，10-09 工作 5h12m + 休息 17 次，10-10（今天）工作 35 分钟。</div>
+
+<h2>现状（复刻）</h2>
+<p class="desc">无数据的日子渲染成一根根完整的空心长条（像坏了）；灰条绿段无图例；「×17」无解释；「0 分钟 / 休息 · 0」数字标签重复。</p>
+<div class="card">
+  <h3 class="card-title">护眼统计</h3>
+  <div class="today">
+    <div class="stat"><span class="stat-num">35 分钟</span><span class="stat-label">工作</span></div>
+    <div class="stat"><span class="stat-num accent">0 分钟</span><span class="stat-label">休息 · 0</span></div>
+    <div class="stat"><span class="stat-num">0 分钟</span><span class="stat-label">锁屏</span></div>
+  </div>
+  <div class="bars">
+    <div class="bars-head"><p class="bars-title">近 7 天</p></div>
+    <div class="brow"><span class="bdate">10-04</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow"><span class="bdate">10-05</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow"><span class="bdate">10-06</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow"><span class="bdate">10-07</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow"><span class="bdate">10-08</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow"><span class="bdate">10-09</span><div class="btrack"><div class="bfill" style="width:78%"><div class="brest" style="width:12%"></div></div></div><span class="bcnt">×17</span></div>
+    <div class="brow"><span class="bdate">10-10</span><div class="btrack"><div class="bfill" style="width:14%"></div></div><span class="bcnt"></span></div>
+  </div>
+</div>
+
+<h2>提案</h2>
+<p class="desc">①图例常驻右上有数据日行悬浮出明细（试试悬停 10-09）④「休息 · 0」→「休息（0 次）」。下面的开关可以切换"无数据日"的两种处理，看哪种顺眼。</p>
+<div class="toggle-row">
+  <input type="checkbox" id="tg" checked>
+  <label for="tg">显示无数据的日子（弱化为虚线；不勾则整行隐藏，只留脚注）</label>
+</div>
+<div class="card" id="prop">
+  <h3 class="card-title">护眼统计</h3>
+  <div class="today">
+    <div class="stat"><span class="stat-num">35 分钟</span><span class="stat-label">工作</span></div>
+    <div class="stat"><span class="stat-num accent">0 分钟</span><span class="stat-label">休息（0 次）</span></div>
+    <div class="stat"><span class="stat-num">0 分钟</span><span class="stat-label">锁屏</span></div>
+  </div>
+  <div class="bars">
+    <div class="bars-head">
+      <p class="bars-title">近 7 天</p>
+      <div class="legend"><span><i style="background:var(--chart-work)"></i>工作</span><span><i style="background:var(--accent)"></i>休息</span></div>
+    </div>
+    <div class="brow empty"><span class="bdate">10-04</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow empty"><span class="bdate">10-05</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow empty"><span class="bdate">10-06</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow empty"><span class="bdate">10-07</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow empty"><span class="bdate">10-08</span><div class="btrack"></div><span class="bcnt"></span></div>
+    <div class="brow">
+      <span class="bdate">10-09</span>
+      <div class="btrack"><div class="bfill" style="width:78%"><div class="brest" style="width:12%"></div></div></div>
+      <span class="bcnt">休息 ×17</span>
+      <div class="tip">10-09　工作 <b>5 小时 12 分钟</b>　休息 <b>41 分钟 / 17 次</b></div>
+    </div>
+    <div class="brow">
+      <span class="bdate">10-10</span>
+      <div class="btrack"><div class="bfill" style="width:14%"></div></div>
+      <span class="bcnt"></span>
+      <div class="tip">10-10（今天）　工作 <b>35 分钟</b>　休息 <b>0 分钟</b></div>
+    </div>
+    <p class="footnote">10-04 至 10-08 无使用记录</p>
+  </div>
+</div>
+
+<script>
+document.getElementById("tg").addEventListener("change", (e) => {
+  document.getElementById("prop").classList.toggle("hide-empty", !e.target.checked);
+});
+</script>
+</body>
+</html>

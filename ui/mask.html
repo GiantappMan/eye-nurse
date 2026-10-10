@@ -16,12 +16,12 @@
     <div id="mask">
       <iframe id="skin-frame" sandbox="allow-scripts" title="skin"></iframe>
       <div id="skin-pwd-row" hidden>
-        <input id="skin-pwd" type="password" autocomplete="off" spellcheck="false"
-               aria-label="lock password" />
+        <input id="skin-pwd" type="password" autocomplete="off" spellcheck="false" />
       </div>
       <p id="skin-lock-err" hidden></p>
       <button id="unlock">
-        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        <!-- 图标 24px 1:1 渲染，尺寸唯一由 mask.css #unlock svg 定义 -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="11" width="16" height="10" rx="2" />
           <path d="M8 11V7a4 4 0 0 1 7.9-.8" />

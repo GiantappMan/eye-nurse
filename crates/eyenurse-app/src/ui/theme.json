@@ -1,14 +1,15 @@
 {
-  "$comment": "配色单一真源（C 所有，tauri 架构文档 §3 评审修订）。build.rs 严格校验（#RRGGBB + 必备键，失败即 panic=编译期红）并生成 RGB 常量到 OUT_DIR 供 ui/theme.rs include!；页面侧 ui/src 直接 import 本文件注入 :root CSS 变量。唯一允许的改色入口 = 改本文件，两态自动一致。值取自 v2 XAML。",
+  "$comment": "配色单一真源（C 所有，tauri 架构文档 §3 评审修订）。build.rs 严格校验（#RRGGBB + 必备键，失败即 panic=编译期红）并生成 RGB 常量到 OUT_DIR 供 ui/theme.rs include!；页面侧 ui/src 直接 import 本文件注入 :root CSS 变量。唯一允许的改色入口 = 改本文件，两态自动一致。基准值取自 v2 XAML；bar 文字色按 DS3 校准（docs/design-system-v3.md §5.6/§6）：暂停末态 to=#FF5252（对 #3E0D0D 填充 5.19:1，原 #F40000 仅 3.82）、idle=#1A1A1A 软黑（15.73:1）；键名统一 bar_text_from/to（弃用旧「time」前缀键名，与 SkinColors 字段/皮肤中心编辑器键同名）。",
   "mask_bg": "#141418",
   "mask_fg": "#EEEEF2",
+  "mask_error": "#FF8B8B",
   "bar_progress_bg": "#F5F5DC",
-  "bar_text_idle": "#000000",
+  "bar_text_idle": "#1A1A1A",
   "bar_progress_fill": "#3AC32E",
   "bar_check_glyph": "#444444",
   "bar_check_hover_bg": "#FFFFFF",
   "bar_progress_from": "#ECC071",
   "bar_progress_to": "#3E0D0D",
-  "bar_time_from": "#080808",
-  "bar_time_to": "#F40000"
+  "bar_text_from": "#080808",
+  "bar_text_to": "#FF5252"
 }
