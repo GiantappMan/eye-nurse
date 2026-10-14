@@ -128,3 +128,40 @@ export interface SkinDefPayload {
     error?: string | null;
   };
 }
+
+// —— v3.3 应用内更新（get_update_* / eyenurse://app-update；字段与 Rust 侧
+//    serde rename_all=camelCase 对齐）——
+
+/** 远程更新信息（stable.json/preview.json 清单的客户端子集） */
+export interface AppUpdateInfo {
+  version: string;
+  notes: string;
+  date: string;
+  channel: string;
+}
+
+/** 更新状态快照（phase: idle | available | downloading | downloaded | error） */
+export interface AppUpdateState {
+  channel: string;
+  autoDownload: boolean;
+  phase: string;
+  percent: number;
+  info: AppUpdateInfo | null;
+  error: string | null;
+  downloadedVersion: string | null;
+}
+
+/** 更新配置（Update.json 的 Channel/AutoDownload） */
+export interface UpdateConfigDto {
+  channel: string;
+  autoDownload: boolean;
+}
+
+/** eyenurse://app-update 事件载荷（tag = state，按分支解构） */
+export type AppUpdateEvent =
+  | { state: "checking" }
+  | { state: "upToDate" }
+  | { state: "available"; version: string; notes: string; channel: string }
+  | { state: "progress"; percent: number; receivedBytes: number; totalBytes: number }
+  | { state: "downloaded"; version: string }
+  | { state: "error"; message: string };

@@ -14,6 +14,7 @@
     windows_subsystem = "windows"
 )]
 
+mod app_update;
 mod commands;
 mod core;
 mod events;
@@ -154,6 +155,12 @@ fn main() {
             commands::set_topmost,
             commands::bar_open_menu,
             commands::open_skins_folder,
+            commands::get_update_state,
+            commands::get_update_config,
+            commands::set_update_config,
+            commands::check_update,
+            commands::download_update,
+            commands::install_update,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -250,6 +257,13 @@ fn main() {
             //      handle / bar_handle.hwnd 在那里被 move，之后无从克隆
             if smoke {
                 smoke::run(handle.clone(), bar_hwnd);
+            }
+            // 4.6) 启动自动检查更新（--smoke 跳过：冒烟不打真实网络）：延迟 30s
+            //      避开 WebView2 冷启动高峰，通道开启 + 有新版时按配置自动下载；
+            //      安装始终等用户在设置页确认。必须放在 CoreLoop::new 之前——
+            //      handle 在那里被 move，之后无从克隆
+            if !smoke {
+                app_update::start_background(handle.clone());
             }
             let core_loop = CoreLoop::new(
                 handle,

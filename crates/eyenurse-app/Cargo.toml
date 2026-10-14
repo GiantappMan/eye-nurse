@@ -20,6 +20,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 crossbeam-channel = { workspace = true }
 sys-locale = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
 windows = { workspace = true }
 
 [build-dependencies]

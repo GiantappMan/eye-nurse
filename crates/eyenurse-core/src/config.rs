@@ -174,6 +174,38 @@ impl ConfigFile for LockScreenJson {
 /// 仿锁屏默认激活快捷键（LockScreen.json Hotkey 的缺省值；显示序 Alt 在 Win 前）
 pub const DEFAULT_LOCK_HOTKEY: &str = "Alt+Win+L";
 
+/// Update.json —— v3.3 应用内更新（无 v2 对应文件）。通道语义与家族发布约定
+/// 一致（stable/preview 双通道清单，off 关闭检查）；AppUrl 空 = 默认发布源
+/// （[`DEFAULT_UPDATE_BASE`]，giantapp-release 技能的多产品共用桶产品前缀），
+/// 手改可指向自建更新源——命令侧按 http/https 公网地址校验，非法回默认。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct UpdateJson {
+    /// stable | preview | off（非法值运行时回 stable）
+    pub Channel: String,
+    /// 发现新版本自动下载（安装始终需用户在设置页确认）
+    pub AutoDownload: bool,
+    /// 自定义更新源 base（清单地址 = <base>/stable.json|preview.json）
+    pub AppUrl: String,
+}
+
+impl Default for UpdateJson {
+    fn default() -> Self {
+        Self {
+            Channel: "stable".into(),
+            AutoDownload: true,
+            AppUrl: String::new(),
+        }
+    }
+}
+
+impl ConfigFile for UpdateJson {
+    const FILE_NAME: &'static str = "Update.json";
+}
+
+/// 默认更新源 base（清单 = <base>/stable.json；发布侧约定见 giantapp-release 技能）
+pub const DEFAULT_UPDATE_BASE: &str = "https://releases.giantapp.cc/eyenurse3";
+
 /// 可移植修饰键位掩码（`HotkeyCombo::parse` 产物；到 Win32 `MOD_*` 的映射在
 /// app 层钩子线程做，core 保持无窗口依赖）
 pub const HK_CTRL: u8 = 1;

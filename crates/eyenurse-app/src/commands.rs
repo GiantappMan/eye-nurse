@@ -364,7 +364,8 @@ pub async fn open_url(url: String) -> Result<(), String> {
 
 /// 公网 http/https URL 校验：scheme 白名单 + host 黑名单（本机/环回/内网/
 /// 保留地址段）。不引第三方 url crate，纯字符串解析按 authority 段取 host。
-fn validate_public_http_url(url: &str) -> Result<(), String> {
+/// open_url 与 app_update 清单/安装包地址共用（crate 内可见）。
+pub(crate) fn validate_public_http_url(url: &str) -> Result<(), String> {
     let u = url.trim();
     let lower = u.to_ascii_lowercase();
     let scheme_end = if lower.starts_with("https://") {
@@ -468,6 +469,51 @@ pub async fn open_skins_folder() -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     let _ = dir;
     Ok(())
+}
+
+// —— v3.3 应用内更新（app_update 家族模式；Update.json/update/ 均不经
+//    CoreLoop，与 get_autostart 无状态例外同模式直调）——
+
+/// 更新状态快照（设置页打开时拉取初始态；后续经 eyenurse://app-update 事件刷新）
+#[tauri::command]
+pub async fn get_update_state() -> crate::app_update::AppUpdateState {
+    crate::app_update::current_state()
+}
+
+/// 更新配置读取（Update.json 的通道与自动下载）
+#[tauri::command]
+pub async fn get_update_config() -> crate::app_update::UpdateConfigDto {
+    crate::app_update::current_config()
+}
+
+/// 更新配置保存（通道 + 自动下载，即时落盘——不走主设置 300ms 防抖管线）
+#[tauri::command]
+pub async fn set_update_config(dto: crate::app_update::UpdateConfigDto) -> Result<(), String> {
+    crate::app_update::save_config(&dto.channel, dto.auto_download)
+}
+
+/// 手动检查更新（设置页「检查更新」按钮；结果也经事件广播）
+#[tauri::command]
+pub async fn check_update(
+    app: tauri::AppHandle,
+) -> Result<crate::app_update::AppUpdateState, String> {
+    crate::app_update::check(&app).await?;
+    Ok(crate::app_update::current_state())
+}
+
+/// 手动下载（自动下载关闭时的「下载更新」按钮）
+#[tauri::command]
+pub async fn download_update(
+    app: tauri::AppHandle,
+) -> Result<crate::app_update::AppUpdateState, String> {
+    crate::app_update::download(&app, None).await?;
+    Ok(crate::app_update::current_state())
+}
+
+/// 安装已下载的更新：分离批处理静默安装 + 走托盘退出语义收尾退出
+#[tauri::command]
+pub async fn install_update(state: State<'_, CoreHandle>) -> Result<(), String> {
+    crate::app_update::install(&state.tx)
 }
 
 #[cfg(test)]
