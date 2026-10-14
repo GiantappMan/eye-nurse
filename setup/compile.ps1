@@ -1,4 +1,4 @@
-# v3 一键打包（一致性差异 #8 / 清单 J4；对齐 v2 src/setup/compile.ps1 的职责）：
+﻿# v3 一键打包（一致性差异 #8 / 清单 J4；对齐 v2 src/setup/compile.ps1 的职责）：
 # cargo release 构建 → 暂存 publish/（exe + Assets/Languages，与 build.rs 的
 # cargo dev 拷贝同源：crates/eyenurse-core/assets/languages/）→
 # 检测到 Inno Setup（ISCC.exe）时生成安装包，否则输出绿色包并提示。
