@@ -31,3 +31,7 @@ desktop.ini
 node_modules/
 bun.lockb
 package-lock.json
+
+# 本地打包产物（compile.ps1 / ISCC 生成，不入库）
+setup/publish/
+setup/dist/

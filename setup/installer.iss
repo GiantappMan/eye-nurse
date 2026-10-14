@@ -78,10 +78,10 @@ Filename: "{cmd}"; Parameters: "/C ""taskkill /im {#MyAppExeName} /f /t"; RunOnc
 // 检测：Evergreen Runtime 的注册表指纹（EdgeUpdate\Clients\{F3017226-…} 的 pv 值，
 // 非空且非占位 0.0.0.0），覆盖 per-user（HKCU）与 machine（HKLM 原生视图 +
 // WOW6432Node，与 64/32 位注册表视图无关地全覆盖）。
-// 引导：缺失 → 询问用户 → 经 ServerXMLHTTP 下载官方 Evergreen Bootstrapper
-// （fwlink 2124703）到 {tmp} 并执行（不静默：bootstrapper 自带进度 UI；本安装包
-// PrivilegesRequired=lowest，无提权时 bootstrapper 自动走 per-user 安装）→ 装完
-// 复检，仍缺失则终止安装。
+// 引导：缺失 → 询问用户 → 经 Inno 内置 DownloadTemporaryFile 下载官方 Evergreen
+// Bootstrapper（fwlink 2124703）到 {tmp} 并执行（不静默：bootstrapper 自带进度
+// UI；本安装包 PrivilegesRequired=lowest，无提权时 bootstrapper 自动走 per-user
+// 安装）→ 装完复检，仍缺失则终止安装。
 const
   WebView2ClientId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
   WebView2BootstrapperUrl = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
@@ -105,28 +105,10 @@ begin
     Result := WebView2PvAt(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + WebView2ClientId);
 end;
 
-function DownloadToFile(const Url, Dest: String): Boolean;
-var
-  Http, Stream: Variant;
+// 下载进度回调：不打断下载（Inno 官方 InitializeSetup 示例模式）
+function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
 begin
-  Result := False;
-  try
-    Http := CreateOleObject('Msxml2.ServerXMLHTTP.6.0');
-    Http.Open('GET', Url, False);
-    Http.Send('');
-    if Http.Status <> 200 then
-      Exit;
-    Stream := CreateOleObject('ADODB.Stream');
-    Stream.Type := 1; // adTypeBinary
-    Stream.Open;
-    Stream.Write(Http.ResponseBody);
-    Stream.SaveToFile(Dest, 2); // adSaveCreateOverWrite
-    Stream.Close;
-    Result := True;
-  except
-    on E: Exception do
-      Result := False; // 网络/COM 异常一律按下载失败处理（下方给出手动安装指引后终止）
-  end;
+  Result := True;
 end;
 
 function InitializeSetup(): Boolean;
@@ -145,13 +127,17 @@ begin
     Exit;
   end;
 
-  Bootstrapper := ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe');
-  if not DownloadToFile(WebView2BootstrapperUrl, Bootstrapper) then
-  begin
+  // 经 Inno 内置下载（支持 HTTPS/重定向/系统代理，失败抛异常）。不能用
+  // ServerXMLHTTP+ADODB：Pascal Script 把 ADODB.Stream 的 .Type 属性当保留字，
+  // 编译直接报 Identifier expected
+  try
+    DownloadTemporaryFile(WebView2BootstrapperUrl, 'MicrosoftEdgeWebview2Setup.exe', '', @OnDownloadProgress);
+  except
     MsgBox(ExpandConstant('{cm:WebView2DownloadFailed}'), mbError, MB_OK);
     Result := False;
     Exit;
   end;
+  Bootstrapper := ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe');
 
   if not Exec(Bootstrapper, '/install', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) or
      (WebView2RuntimeVersion = '') then
